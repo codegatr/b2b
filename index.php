@@ -62,11 +62,14 @@ if ($dealer) {
 
 function renderPage(string $page, array $vars = []): void {
     extract($vars);
-    $file = B2B_ROOT . '/pages/' . $page . '.php';
+    // 'order' → 'orders' (tek ürün detayı orders.php içinde)
+    $alias = ['order' => 'orders'];
+    $page  = $alias[$page] ?? $page;
+    $file  = B2B_ROOT . '/pages/' . $page . '.php';
     if (file_exists($file)) {
         require $file;
     } else {
-        echo '<div class="page-body"><div class="empty-state"><div class="empty-icon">🔍</div><p>Sayfa bulunamadı.</p></div></div>';
+        echo '<div class="page-body"><div class="empty-state"><div class="empty-icon">🔍</div><p>Sayfa bulunamadı: <code>' . htmlspecialchars($page) . '</code></p></div></div>';
     }
 }
 

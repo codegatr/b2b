@@ -64,7 +64,7 @@ if ($action === 'list') {
     <tbody>
     <?php foreach ($orders as $o): ?>
     <tr>
-        <td class="font-medium"><a href="?page=orders&action=detail&id=<?= $o['id'] ?>"><?= h($o['order_number']) ?></a></td>
+        <td class="font-medium"><a href="?page=orders&action=detail&id=<?= $o['id'] ?>"><?= h($o['order_no']) ?></a></td>
         <td class="text-sm"><?= fmtDate($o['created_at']) ?></td>
         <td><?= money($o['grand_total']) ?></td>
         <td class="text-sm text-muted"><?= dbVal("SELECT COUNT(*) FROM b2b_order_items WHERE order_id=?",[$o['id']]) ?> kalem</td>
@@ -86,7 +86,7 @@ if ($action === 'list') {
 <?php elseif ($action === 'detail' && $order): ?>
 <div class="page-header">
     <div>
-        <h1 class="page-title"><?= h($order['order_number']) ?></h1>
+        <h1 class="page-title"><?= h($order['order_no']) ?></h1>
         <p class="page-sub"><?= fmtDate($order['created_at']) ?> — <?= orderStatusLabel($order['status']) ?></p>
     </div>
     <div class="btn-group">
