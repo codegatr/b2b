@@ -317,8 +317,13 @@ html,body{height:100%;font-family:'Inter',-apple-system,sans-serif;font-size:14p
   <div class="tacos-stage">
     <?php
     $loginImg = setting('login_image', '');
-    // Varsayilan: logo SVG
-    if (!$loginImg || !file_exists(dirname(__DIR__).'/uploads/logo/'.$loginImg)) {
+    // Dosya yoksa DB'yi temizle ve varsayılana düş
+    if ($loginImg && !file_exists(dirname(__DIR__).'/uploads/logo/'.$loginImg)) {
+        settingSave('login_image', '');
+        settingClearCache();
+        $loginImg = '';
+    }
+    if (!$loginImg) {
         $loginImg = 'login_hero_logo.svg';
     }
     if (file_exists(dirname(__DIR__).'/uploads/logo/'.$loginImg)):

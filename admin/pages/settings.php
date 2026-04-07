@@ -214,10 +214,22 @@ foreach ($tabs as $k => $v):
 <h4 style="font-size:14px;font-weight:600;margin-bottom:16px">Giriş Ekranı Görseli</h4>
 <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
     <div>
-    <?php $li = setting('login_image',''); ?>
-    <?php if ($li && file_exists(dirname(__DIR__).'/uploads/logo/'.$li)): ?>
+    <?php
+$li    = setting('login_image','');
+$liPath = $li ? dirname(__DIR__).'/uploads/logo/'.$li : '';
+// Dosya yoksa DB kaydını temizle
+if ($li && !file_exists($liPath)) {
+    settingSave('login_image', '');
+    settingClearCache();
+    $li = '';
+    $liPath = '';
+}
+?>
+    <?php if ($li && $liPath): ?>
         <div style="position:relative;display:inline-block">
-            <img src="/uploads/logo/<?= htmlspecialchars($li) ?>" style="width:140px;height:140px;object-fit:contain;border-radius:10px;border:1px solid var(--border);background:var(--bg)">
+            <img src="/uploads/logo/<?= htmlspecialchars($li) ?>"
+                 style="width:140px;height:140px;object-fit:contain;border-radius:10px;border:1px solid var(--border);background:var(--bg)"
+                 onerror="this.parentElement.innerHTML='<div style=\'width:140px;height:140px;border:2px dashed #e4e6ea;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#9aa5b4\'>Dosya bulunamadı</div>'">
             <form method="post" style="position:absolute;top:6px;right:6px">
                 <?= csrfField() ?>
                 <input type="hidden" name="tab" value="general">
@@ -231,18 +243,6 @@ foreach ($tabs as $k => $v):
         <div style="width:140px;height:140px;border:2px dashed var(--border);border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px">Görsel Yok</div>
     <?php endif; ?>
     </div>
-    <div style="flex:1;min-width:220px">
-        <form method="post" enctype="multipart/form-data">
-            <?= csrfField() ?>
-            <input type="hidden" name="tab" value="general">
-            <div class="form-group">
-                <label class="form-label">Yeni Görsel (PNG, JPG, SVG — max 5MB)</label>
-                <input type="file" name="login_image" class="form-control" accept="image/png,image/jpeg,image/webp,image/svg+xml,.svg">
-            </div>
-            <button type="submit" class="btn btn-secondary">Yükle</button>
-        </form>
-    </div>
-</div>
 </div>
 </div></div>
 
