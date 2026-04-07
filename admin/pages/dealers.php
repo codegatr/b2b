@@ -14,10 +14,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $act = $_POST['form_action'] ?? '';
 
     if ($act === 'save') {
+        // DB kolonlarına birebir uyan veri dizisi (install.sql şeması)
+        $contactRaw = trim($_POST['contact_name'] ?? '');
+        $nameParts  = explode(' ', $contactRaw, 2);
         $data = [
+            'type'               => $_POST['dealer_type'] ?? 'kurumsal',
             'company_name'       => trim($_POST['company_name']),
-            'dealer_type'        => $_POST['dealer_type'] ?? 'kurumsal',
-            'contact_name'       => trim($_POST['contact_name']),
+            'first_name'         => $nameParts[0] ?? '',
+            'last_name'          => $nameParts[1] ?? '',
             'email'              => trim($_POST['email']),
             'phone'              => trim($_POST['phone']),
             'tax_number'         => trim($_POST['tax_number']),
@@ -25,29 +29,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'address'            => trim($_POST['address']),
             'city'               => trim($_POST['city']),
             'price_list_id'      => intval($_POST['price_list_id']) ?: null,
-            'credit_limit'       => floatval($_POST['credit_limit']),
-            'payment_term_days'  => intval($_POST['payment_term_days']),
+            'credit_limit'       => floatval($_POST['credit_limit'] ?? 0),
+            'payment_term_days'  => intval($_POST['payment_term_days'] ?? 30),
             'order_approval'     => $_POST['order_approval'] ?? 'manual',
+            'notes'              => trim($_POST['notes'] ?? ''),
             'is_active'          => isset($_POST['is_active']) ? 1 : 0,
         ];
 
-        if (empty($data['company_name']) || empty($data['email'])) {
-            $error = 'Firma adı ve e-posta zorunludur.';
+        $label = $data['company_name'] ?: ($data['first_name'] . ' ' . $data['last_name']);
+
+        if (empty($data['email'])) {
+            $error = 'E-posta zorunludur.';
+        } elseif (empty($label)) {
+            $error = 'Firma adı veya ad soyad zorunludur.';
         } else {
             if ($id) {
                 dbUpdateRow('b2b_dealers', $data, 'id', $id);
-                auditLog('dealer_updated', 'b2b_dealers', $id, ['company_name' => $data['company_name']]);
+                auditLog('dealer_updated', 'b2b_dealers', $id, ['label' => $label]);
                 $success = 'Bayi güncellendi.';
             } else {
-                // Şifre zorunlu
+                // Yeni bayi — şifre zorunlu
                 $pass = trim($_POST['password'] ?? '');
-                if (strlen($pass) < 6) { $error = 'Şifre en az 6 karakter olmalıdır.'; }
-                else {
-                    $data['password_hash'] = password_hash($pass, PASSWORD_DEFAULT);
-                    $data['created_at']    = date('Y-m-d H:i:s');
+                // E-posta benzersizlik kontrolü
+                $exists = dbVal("SELECT COUNT(*) FROM b2b_dealers WHERE email=?", [$data['email']]);
+                if ($exists) {
+                    $error = 'Bu e-posta zaten kayıtlı.';
+                } elseif (strlen($pass) < 6) {
+                    $error = 'Şifre en az 6 karakter olmalıdır.';
+                } else {
+                    $data['password']   = password_hash($pass, PASSWORD_DEFAULT);
+                    $data['created_at'] = date('Y-m-d H:i:s');
                     $newId = dbInsertRow('b2b_dealers', $data);
-                    auditLog('dealer_created', 'b2b_dealers', $newId, ['company_name' => $data['company_name']]);
-                    // Paraşüt sync
+                    auditLog('dealer_created', 'b2b_dealers', $newId, ['label' => $label]);
                     try { parasut()->syncDealer($newId); } catch (Exception $e) {}
                     $success = 'Bayi eklendi.';
                     $id = 0;
@@ -83,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pass = trim($_POST['new_password']);
         if (strlen($pass) < 6) { $error = 'Şifre en az 6 karakter.'; }
         else {
-            dbExec("UPDATE b2b_dealers SET password_hash=? WHERE id=?", [password_hash($pass, PASSWORD_DEFAULT), $did]);
+            dbExec("UPDATE b2b_dealers SET password=? WHERE id=?", [password_hash($pass, PASSWORD_DEFAULT), $did]);
             auditLog('dealer_password_reset', 'b2b_dealers', $did, []);
             $success = 'Şifre sıfırlandı.';
         }
@@ -110,7 +123,7 @@ if ($action === 'list') {
 
     $where = ['1=1']; $params = [];
     if ($search) {
-        $where[]  = '(d.company_name LIKE ? OR d.email LIKE ? OR d.contact_name LIKE ? OR d.phone LIKE ?)';
+        $where[]  = '(d.company_name LIKE ? OR d.email LIKE ? OR d.first_name LIKE ? OR d.phone LIKE ?)';
         $s = "%$search%";
         array_push($params, $s, $s, $s, $s);
     }
@@ -188,8 +201,8 @@ if ($action === 'list') {
             <a href="?page=dealers&action=detail&id=<?= $d['id'] ?>" class="font-medium text-primary"><?= h($d['company_name']) ?></a>
             <br><small class="text-muted"><?= h($d['email']) ?></small>
         </td>
-        <td><span class="badge badge-<?= $d['dealer_type']==='kurumsal'?'blue':'purple' ?>"><?= h($d['dealer_type']) ?></span></td>
-        <td><?= h($d['contact_name']) ?><br><small><?= h($d['phone']) ?></small></td>
+        <td><span class="badge badge-<?= ($d['type']??'kurumsal')==='kurumsal'?'blue':'purple' ?>"><?= h($d['type']??'kurumsal') ?></span></td>
+        <td><?= h(trim(($d['first_name']??'').' '.($d['last_name']??''))) ?: '—' ?><br><small><?= h($d['phone']??'') ?></small></td>
         <td><?= $d['price_list_name'] ? h($d['price_list_name']) : '<span class="text-muted">—</span>' ?></td>
         <td class="<?= $d['open_balance']>0?'text-danger':($d['open_balance']<0?'text-success':'') ?> font-medium">
             <?= money($d['open_balance']) ?>
@@ -231,7 +244,7 @@ $payments= dbRows("SELECT * FROM b2b_payments WHERE dealer_id=? ORDER BY created
 <div class="page-header">
     <div>
         <h1 class="page-title"><?= h($dealer['company_name']) ?></h1>
-        <p class="page-sub"><?= h($dealer['dealer_type']) ?> — <?= h($dealer['city']) ?></p>
+        <p class="page-sub"><?= h($dealer['type']??'kurumsal') ?> — <?= h($dealer['city']??'') ?></p>
     </div>
     <div class="btn-group">
         <a href="?page=dealers" class="btn btn-ghost">← Geri</a>
@@ -256,7 +269,7 @@ $payments= dbRows("SELECT * FROM b2b_payments WHERE dealer_id=? ORDER BY created
             <dl class="info-list">
                 <dt>E-posta</dt><dd><?= h($dealer['email']) ?></dd>
                 <dt>Telefon</dt><dd><?= h($dealer['phone']) ?></dd>
-                <dt>İletişim Kişisi</dt><dd><?= h($dealer['contact_name']) ?></dd>
+                <dt>İletişim Kişisi</dt><dd><?= h(trim(($dealer['first_name']??'').' '.($dealer['last_name']??''))) ?></dd>
                 <dt>Vergi No</dt><dd><?= h($dealer['tax_number']) ?> / <?= h($dealer['tax_office']) ?></dd>
                 <dt>Adres</dt><dd><?= h($dealer['address']) ?>, <?= h($dealer['city']) ?></dd>
                 <dt>Fiyat Listesi</dt><dd><?= dbVal("SELECT name FROM b2b_price_lists WHERE id=?",[$dealer['price_list_id']]) ?: '—' ?></dd>
@@ -345,8 +358,8 @@ $payments= dbRows("SELECT * FROM b2b_payments WHERE dealer_id=? ORDER BY created
         <div class="form-group">
             <label>Bayi Tipi *</label>
             <select name="dealer_type" class="form-control">
-                <option value="kurumsal" <?= ($dealer['dealer_type']??'kurumsal')==='kurumsal'?'selected':'' ?>>Kurumsal</option>
-                <option value="bireysel" <?= ($dealer['dealer_type']??'')==='bireysel'?'selected':'' ?>>Bireysel</option>
+                <option value="kurumsal" <?= ($dealer['type']??'kurumsal')==='kurumsal'?'selected':'' ?>>Kurumsal</option>
+                <option value="bireysel" <?= ($dealer['type']??'')==='bireysel'?'selected':'' ?>>Bireysel</option>
             </select>
         </div>
         <div class="form-group">
@@ -355,7 +368,7 @@ $payments= dbRows("SELECT * FROM b2b_payments WHERE dealer_id=? ORDER BY created
         </div>
         <div class="form-group">
             <label>İletişim Kişisi</label>
-            <input type="text" name="contact_name" value="<?= h($dealer['contact_name']??'') ?>" class="form-control">
+            <input type="text" name="contact_name" value="<?= h(trim(($dealer['first_name']??'').' '.($dealer['last_name']??''))) ?>" class="form-control">
         </div>
         <div class="form-group">
             <label>E-posta *</label>

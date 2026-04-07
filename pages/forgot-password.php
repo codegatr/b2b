@@ -37,8 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // E-posta gönder
             $settings = [];
-            $rows = $pdo->query("SELECT skey, svalue FROM b2b_settings")->fetchAll();
-            foreach ($rows as $r) $settings[$r['skey']] = $r['svalue'];
+            $rows = $pdo->query("SELECT skey, sval FROM b2b_settings")->fetchAll();
+            foreach ($rows as $r) $settings[$r['skey']] = $r['sval'];
 
             $siteName   = $settings['site_name'] ?? 'B2B Portal';
             $siteUrl    = rtrim($settings['site_url'] ?? 'http://localhost', '/');

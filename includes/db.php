@@ -72,10 +72,19 @@ function dbInsertRow(string $table, array $data): int {
     return dbInsert("INSERT INTO `$table` ($cols) VALUES ($plh)", array_values($data));
 }
 
-/** Tablo'da dinamik UPDATE — $where dizi: ['col'=>'val', ...] */
-function dbUpdateRow(string $table, array $data, array $where): int {
-    $sets  = implode(',', array_map(fn($k) => "`$k`=?", array_keys($data)));
-    $conds = implode(' AND ', array_map(fn($k) => "`$k`=?", array_keys($where)));
+/** Tablo'da dinamik UPDATE
+ * Kullanım A — dizi where: dbUpdateRow('tablo', $data, ['id'=>5])
+ * Kullanım B — eski format: dbUpdateRow('tablo', $data, 'id', 5)
+ */
+function dbUpdateRow(string $table, array $data, string|array $whereOrCol, mixed $whereVal = null): int {
+    // Eski 4-arg format: ('table', $data, 'id', 5) → where = ['id'=>5]
+    if (is_string($whereOrCol)) {
+        $where = [$whereOrCol => $whereVal];
+    } else {
+        $where = $whereOrCol;
+    }
+    $sets   = implode(',', array_map(fn($k) => "`$k`=?", array_keys($data)));
+    $conds  = implode(' AND ', array_map(fn($k) => "`$k`=?", array_keys($where)));
     $params = array_merge(array_values($data), array_values($where));
     return dbExec("UPDATE `$table` SET $sets WHERE $conds", $params);
 }
