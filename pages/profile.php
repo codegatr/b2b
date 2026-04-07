@@ -17,34 +17,30 @@ $successPass = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_info') {
     csrfCheck();
 
-    $contactName  = trim($_POST['contact_name']  ?? '');
-    $contactPhone = trim($_POST['contact_phone'] ?? '');
-    $contactEmail = trim($_POST['contact_email'] ?? '');
+    $contactRaw   = trim($_POST['contact_name']  ?? '');
+    $cparts       = explode(' ', $contactRaw, 2);
+    $firstName    = $cparts[0] ?? '';
+    $lastName     = $cparts[1] ?? '';
+    $phone        = trim($_POST['contact_phone'] ?? '');
     $address      = trim($_POST['address']        ?? '');
     $taxOffice    = trim($_POST['tax_office']     ?? '');
 
-    if (!$contactName)  $errors[] = 'Yetkili adı zorunludur.';
-    if (!$contactPhone) $errors[] = 'Telefon numarası zorunludur.';
-    if ($contactEmail && !filter_var($contactEmail, FILTER_VALIDATE_EMAIL)) {
-        $errors[] = 'Geçerli bir e-posta adresi girin.';
-    }
+    if (!$contactRaw) $errors[] = 'Yetkili adı zorunludur.';
+    if (!$phone)      $errors[] = 'Telefon numarası zorunludur.';
 
     if (empty($errors)) {
-        $db->query(
+        dbExec(
             "UPDATE b2b_dealers
-             SET contact_name = ?, contact_phone = ?, contact_email = ?,
+             SET first_name = ?, last_name = ?, phone = ?,
                  address = ?, tax_office = ?, updated_at = NOW()
              WHERE id = ?",
-            [$contactName, $contactPhone, $contactEmail, $address, $taxOffice, $dealer['id']]
+            [$firstName, $lastName, $phone, $address, $taxOffice, $dealer['id']]
         );
-
         // Session'ı yenile
-        $_SESSION['b2b_dealer'] = $db->fetch(
-            "SELECT * FROM b2b_dealers WHERE id = ?", [$dealer['id']]
-        );
-        $dealer      = $_SESSION['b2b_dealer'];
+        $dealer = dbRow("SELECT * FROM b2b_dealers WHERE id = ?", [$dealer['id']]);
+        $_SESSION['dealer_name'] = trim(($dealer['first_name']??'').' '.($dealer['last_name']??'')) ?: $dealer['company_name'];
         $successInfo = 'Profil bilgileriniz güncellendi.';
-        auditLog('dealer', $dealer['id'], 'update_profile', 'Profil bilgileri güncellendi');
+        auditLog('profile_update', 'b2b_dealers', $dealer['id'], ['by' => 'dealer']);
     }
 }
 
@@ -62,29 +58,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'chang
 
     if (empty($errors)) {
         // Mevcut şifreyi doğrula
-        $row = $db->fetch("SELECT password FROM b2b_dealers WHERE id = ?", [$dealer['id']]);
+        $row = dbRow("SELECT password FROM b2b_dealers WHERE id = ?", [$dealer['id']]);
         if (!password_verify($currentPass, $row['password'])) {
             $errors[] = 'Mevcut şifre hatalı.';
         } else {
             $hash = password_hash($newPass, PASSWORD_DEFAULT);
-            $db->query(
-                "UPDATE b2b_dealers SET password = ?, updated_at = NOW() WHERE id = ?",
-                [$hash, $dealer['id']]
-            );
+            dbExec("UPDATE b2b_dealers SET password = ?, updated_at = NOW() WHERE id = ?", [$hash, $dealer['id']]);
             $successPass = 'Şifreniz başarıyla değiştirildi.';
-            auditLog('dealer', $dealer['id'], 'change_password', 'Şifre değiştirildi');
+            auditLog('password_change', 'b2b_dealers', $dealer['id'], []);
         }
     }
 }
 
 // ─── Son işlemler (cari) ─────────────────────────────────────────────────────
-$recentLedger = $db->fetchAll(
+$recentLedger = dbRows(
     "SELECT * FROM b2b_ledger WHERE dealer_id = ? ORDER BY created_at DESC LIMIT 5",
     [$dealer['id']]
 );
 
 // Hesap özeti
-$summary = $db->fetch(
+$summary = dbRow(
     "SELECT
         COALESCE(SUM(CASE WHEN type='borc'   THEN amount ELSE 0 END),0) AS total_debit,
         COALESCE(SUM(CASE WHEN type='alacak' THEN amount ELSE 0 END),0) AS total_credit
@@ -132,7 +125,7 @@ $balance = ($summary['total_debit'] ?? 0) - ($summary['total_credit'] ?? 0);
                     <?= htmlspecialchars($dealer['contact_email']) ?>
                 </div>
                 <?php
-                $typeLabel = match($dealer['dealer_type'] ?? 'bireysel') {
+                $typeLabel = match($dealer['type'] ?? 'kurumsal') {
                     'kurumsal' => ['Kurumsal', 'badge-primary'],
                     default    => ['Bireysel', 'badge-secondary'],
                 };
@@ -233,7 +226,7 @@ $balance = ($summary['total_debit'] ?? 0) - ($summary['total_credit'] ?? 0);
                         <small style="color:var(--text-muted);">Firma adını değiştirmek için admin ile iletişime geçin.</small>
                     </div>
 
-                    <?php if (($dealer['dealer_type'] ?? '') === 'kurumsal'): ?>
+                    <?php if (($dealer['type'] ?? '') === 'kurumsal'): ?>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
                         <div class="form-group">
                             <label class="form-label">Vergi No</label>
@@ -252,7 +245,7 @@ $balance = ($summary['total_debit'] ?? 0) - ($summary['total_credit'] ?? 0);
                         <div class="form-group">
                             <label class="form-label">Yetkili Ad Soyad *</label>
                             <input type="text" name="contact_name" class="form-control" required
-                                   value="<?= htmlspecialchars($dealer['contact_name'] ?? '') ?>">
+                                   value="<?= htmlspecialchars(trim(($dealer['first_name']??'').' '.($dealer['last_name']??''))) ?>">
                         </div>
                         <div class="form-group">
                             <label class="form-label">Telefon *</label>

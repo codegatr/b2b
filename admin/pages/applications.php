@@ -14,15 +14,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pass = bin2hex(random_bytes(4)); // Geçici şifre
             $did  = dbInsertRow('b2b_dealers', [
                 'company_name'      => $app['company_name'],
-                'dealer_type'       => $app['applicant_type'],
-                'contact_name'      => $app['contact_name'],
+                'type'              => $app['type'],
+                'first_name'      => $app['first_name'],
+                'last_name'       => $app['last_name'] ?? '',
                 'email'             => $app['email'],
                 'phone'             => $app['phone'],
                 'tax_number'        => $app['tax_number'],
                 'tax_office'        => $app['tax_office'],
                 'address'           => $app['address'],
                 'city'              => $app['city'],
-                'password_hash'     => password_hash($pass, PASSWORD_DEFAULT),
+                'password'          => password_hash($pass, PASSWORD_DEFAULT),
                 'order_approval'    => 'manual',
                 'credit_limit'      => 0,
                 'payment_term_days' => 30,
@@ -81,13 +82,13 @@ $pendingCount = dbVal("SELECT COUNT(*) FROM b2b_applications WHERE status='bekli
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px">
             <div>
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-                    <span class="badge badge-<?= $a['applicant_type']==='kurumsal'?'blue':'purple' ?>"><?= h($a['applicant_type']) ?></span>
+                    <span class="badge badge-<?= $a['type']==='kurumsal'?'blue':'purple' ?>"><?= h($a['type']) ?></span>
                     <span class="badge badge-<?= $a['status']==='bekliyor'?'yellow':($a['status']==='onaylandi'?'green':'red') ?>"><?= h($a['status']) ?></span>
                     <span class="text-muted text-sm"><?= fmtDate($a['created_at']) ?></span>
                 </div>
                 <h3 class="font-semibold mb-1"><?= h($a['company_name']) ?></h3>
                 <div class="text-sm text-muted" style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px 16px">
-                    <span>👤 <?= h($a['contact_name']) ?></span>
+                    <span>👤 <?= h($a['first_name']) ?></span>
                     <span>📧 <?= h($a['email']) ?></span>
                     <span>📞 <?= h($a['phone']) ?></span>
                     <span>🏢 <?= h($a['tax_number']) ?> / <?= h($a['tax_office']) ?></span>

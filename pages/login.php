@@ -9,7 +9,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'E-posta ve sifre zorunludur.';
     } else {
         $dealer = dbRow("SELECT * FROM b2b_dealers WHERE email=? AND is_active=1", [$email]);
-        if ($dealer && password_verify($pass, $dealer['password_hash'])) {
+        if ($dealer && password_verify($pass, $dealer['password'])) {
             dealerLogin($dealer);
             header('Location: ?page=dashboard'); exit;
         } else {

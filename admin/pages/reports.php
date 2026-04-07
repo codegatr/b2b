@@ -102,7 +102,7 @@ $rows->execute([$from, $to]);
 $rows = $rows->fetchAll();
 if (isset($out)) {
     fputcsv($out, ['Sipariş No','Tarih','Bayi','Tutar','Durum','Ödeme']);
-    foreach ($rows as $r) fputcsv($out, [$r['order_no'], $r['created_at'], $r['company_name'], $r['total_amount'], $r['status'], $r['payment_status']]);
+    foreach ($rows as $r) fputcsv($out, [$r['order_no'], $r['created_at'], $r['company_name'], $r['grand_total'], $r['status'], $r['payment_status']]);
     fclose($out); exit;
 }
 ?>
@@ -117,7 +117,7 @@ if (isset($out)) {
             <td><?= fmtDate($r['created_at']) ?></td>
             <td><?= htmlspecialchars($r['company_name']) ?></td>
             <td><?= $r['item_count'] ?></td>
-            <td><strong><?= fmtPrice($r['total_amount']) ?> ₺</strong></td>
+            <td><strong><?= fmtPrice($r['grand_total']) ?> ₺</strong></td>
             <td><?= $r['status'] ?></td>
             <td><?= $r['payment_status'] ?></td>
         </tr>

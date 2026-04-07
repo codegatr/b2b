@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Cari kayıt
             $dealer = dbRow("SELECT * FROM b2b_dealers WHERE id=?", [$order['dealer_id']]);
             $dueDate = date('Y-m-d', strtotime("+{$dealer['payment_term_days']} days"));
-            ledgerAdd($order['dealer_id'], 'borc', $order['total_amount'], "Sipariş: {$order['order_number']}", $dueDate, $oid, 'order');
+            ledgerAdd($order['dealer_id'], 'borc', $order['grand_total'], "Sipariş: {$order['order_number']}", $dueDate, $oid, 'order');
             // Paraşüt fatura
             try { parasut()->createInvoice($oid); } catch (Exception $e) {}
             // Bildirim
@@ -166,7 +166,7 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
         <td><a href="?page=orders&action=detail&id=<?= $o['id'] ?>" class="font-medium"><?= h($o['order_number']) ?></a></td>
         <td><?= h($o['company_name']) ?></td>
         <td><?= fmtDate($o['created_at']) ?></td>
-        <td class="font-medium"><?= money($o['total_amount']) ?></td>
+        <td class="font-medium"><?= money($o['grand_total']) ?></td>
         <td><?= orderStatusLabel($o['status']) ?></td>
         <td><span class="badge badge-<?= $o['payment_status']==='odendi'?'green':($o['payment_status']==='bekliyor'?'yellow':'blue') ?>"><?= h($o['payment_status']) ?></span></td>
         <td class="text-right"><a href="?page=orders&action=detail&id=<?= $o['id'] ?>" class="btn btn-xs btn-secondary">Detay →</a></td>
@@ -203,7 +203,7 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
 
 <div class="grid grid-cols-3 gap-4 mb-6">
     <div class="stat-card"><div class="stat-label">Durum</div><div class="stat-value"><?= orderStatusLabel($order['status']) ?></div></div>
-    <div class="stat-card"><div class="stat-label">Toplam</div><div class="stat-value"><?= money($order['total_amount']) ?></div></div>
+    <div class="stat-card"><div class="stat-label">Toplam</div><div class="stat-value"><?= money($order['grand_total']) ?></div></div>
     <div class="stat-card"><div class="stat-label">Vade Tarihi</div><div class="stat-value"><?= $order['due_date'] ? fmtDate($order['due_date']) : '—' ?></div></div>
 </div>
 
@@ -214,7 +214,7 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
         <div class="card-body">
             <dl class="info-list">
                 <dt>Firma</dt><dd><?= h($order['company_name']) ?></dd>
-                <dt>İletişim</dt><dd><?= h($order['contact_name']) ?></dd>
+                <dt>Bayi</dt><dd><?= h($order['dealer_company'] ?? $order['dealer_id']) ?></dd>
                 <dt>E-posta</dt><dd><?= h($order['dealer_email']) ?></dd>
                 <dt>Telefon</dt><dd><?= h($order['dealer_phone']) ?></dd>
                 <dt>Adres</dt><dd><?= h($order['address']) ?>, <?= h($order['city']) ?></dd>
@@ -268,7 +268,7 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
             <td colspan="5" class="text-right">KDV</td><td><?= money($tax) ?></td>
         </tr>
         <tr class="table-footer font-bold">
-            <td colspan="5" class="text-right">Genel Toplam</td><td><?= money($order['total_amount']) ?></td>
+            <td colspan="5" class="text-right">Genel Toplam</td><td><?= money($order['grand_total']) ?></td>
         </tr>
         </tbody>
     </table>

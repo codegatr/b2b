@@ -49,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
                     'order_number'   => $orderNo,
                     'status'         => $autoApprove ? 'onaylandi' : 'bekliyor',
                     'payment_status' => 'bekliyor',
-                    'total_amount'   => $total,
+                    'grand_total'    => $total,
                     'notes'          => $notes,
                     'due_date'       => date('Y-m-d', strtotime("+{$dealer['payment_term_days']} days")),
                     'created_at'     => date('Y-m-d H:i:s'),

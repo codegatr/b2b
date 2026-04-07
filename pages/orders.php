@@ -66,7 +66,7 @@ if ($action === 'list') {
     <tr>
         <td class="font-medium"><a href="?page=orders&action=detail&id=<?= $o['id'] ?>"><?= h($o['order_number']) ?></a></td>
         <td class="text-sm"><?= fmtDate($o['created_at']) ?></td>
-        <td><?= money($o['total_amount']) ?></td>
+        <td><?= money($o['grand_total']) ?></td>
         <td class="text-sm text-muted"><?= dbVal("SELECT COUNT(*) FROM b2b_order_items WHERE order_id=?",[$o['id']]) ?> kalem</td>
         <td><?= orderStatusLabel($o['status']) ?></td>
         <td>
@@ -156,7 +156,7 @@ if ($order['status'] !== 'iptal' && $order['status'] !== 'iade'):
         <?php endforeach; ?>
         <tr class="table-footer"><td colspan="3" class="text-right">Ara Toplam</td><td><?= money($sub) ?></td></tr>
         <tr class="table-footer"><td colspan="3" class="text-right">KDV</td><td><?= money($taxTotal) ?></td></tr>
-        <tr class="table-footer font-bold"><td colspan="3" class="text-right">Toplam</td><td><?= money($order['total_amount']) ?></td></tr>
+        <tr class="table-footer font-bold"><td colspan="3" class="text-right">Toplam</td><td><?= money($order['grand_total']) ?></td></tr>
         </tbody>
     </table>
 </div>

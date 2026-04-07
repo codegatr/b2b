@@ -306,7 +306,7 @@ $payments= dbRows("SELECT * FROM b2b_payments WHERE dealer_id=? ORDER BY created
         <tr>
             <td><a href="?page=orders&action=detail&id=<?= $o['id'] ?>"><?= h($o['order_number']) ?></a></td>
             <td><?= fmtDate($o['created_at']) ?></td>
-            <td><?= money($o['total_amount']) ?></td>
+            <td><?= money($o['grand_total']) ?></td>
             <td><?= orderStatusLabel($o['status']) ?></td>
             <td><span class="badge badge-<?= $o['payment_status']==='odendi'?'green':($o['payment_status']==='bekliyor'?'yellow':'blue') ?>"><?= h($o['payment_status']) ?></span></td>
         </tr>

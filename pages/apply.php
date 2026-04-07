@@ -8,6 +8,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $type     = $_POST['applicant_type'] ?? 'kurumsal';
     $company  = trim($_POST['company_name'] ?? '');
     $contact  = trim($_POST['contact_name'] ?? '');
+    $cparts   = explode(' ', $contact, 2);
     $email    = trim($_POST['email'] ?? '');
     $phone    = trim($_POST['phone'] ?? '');
     $taxNo    = trim($_POST['tax_number'] ?? '');
@@ -26,9 +27,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Bu e-posta ile bekleyen bir başvurunuz bulunmakta.';
     } else {
         dbInsertRow('b2b_applications', [
-            'applicant_type' => $type,
+            'type'          => $type,
             'company_name'   => $company,
-            'contact_name'   => $contact,
+            'first_name'     => $cparts[0] ?? $contact,
+            'last_name'      => $cparts[1] ?? '',
             'email'          => $email,
             'phone'          => $phone,
             'tax_number'     => $taxNo,

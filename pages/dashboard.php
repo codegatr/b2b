@@ -34,7 +34,7 @@ $upcomingDue = dbRows(
 
 <div class="page-header">
     <div>
-        <h1 class="page-title">Merhaba, <?= h($dealer['contact_name'] ?: $dealer['company_name']) ?> 👋</h1>
+        <h1 class="page-title">Merhaba, <?= h(trim(($dealer['first_name']??'').' '.($dealer['last_name']??'')) ?: ($dealer['company_name']??'Bayi')) ?> 👋</h1>
         <p class="page-sub"><?= fmtDate(date('Y-m-d H:i:s')) ?></p>
     </div>
     <a href="?page=products" class="btn btn-primary">🛒 Sipariş Ver</a>
@@ -97,7 +97,7 @@ $upcomingDue = dbRows(
             <tr>
                 <td><a href="?page=orders&action=detail&id=<?= $o['id'] ?>"><?= h($o['order_number']) ?></a></td>
                 <td class="text-sm"><?= fmtDate($o['created_at']) ?></td>
-                <td><?= money($o['total_amount']) ?></td>
+                <td><?= money($o['grand_total']) ?></td>
                 <td><?= orderStatusLabel($o['status']) ?></td>
             </tr>
             <?php endforeach; ?>
