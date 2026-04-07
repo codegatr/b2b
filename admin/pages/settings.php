@@ -401,14 +401,14 @@ $_sha = updater()->getInstalledSha();
 <div class="card-header"><h3 class="card-title">💳 Rubikpara (PF Gateway) Ayarları</h3></div>
 <div class="card-body">
 
-<?php
+<?php if (!function_exists('rubikpara')): ?>
+<div class="alert alert-warning">Rubikpara modülü henüz yüklenmemiş. Güncelleme Merkezi'nden güncelleyin.</div>
+<?php else:
 $_rb = rubikpara();
-if ($_rb->ayarliMi() && isset($_GET['test_rb'])): ?>
-<?php
-    $_rbTest = $_rb->baglantiTest();
-?>
+if ($_rb->ayarliMi() && isset($_GET['test_rb'])):
+    $_rbTest = $_rb->baglantiTest(); ?>
 <div class="alert alert-<?= $_rbTest['ok']?'success':'danger' ?>"><?= h($_rbTest['message']) ?></div>
-<?php endif; ?>
+<?php endif; endif; ?>
 
 <form method="post">
     <?= csrfField() ?>
@@ -443,14 +443,14 @@ if ($_rb->ayarliMi() && isset($_GET['test_rb'])): ?>
     </div>
     <div class="form-actions">
         <button type="submit" class="btn btn-primary">Kaydet</button>
-        <?php if (rubikpara()->ayarliMi()): ?>
+        <?php if (function_exists('rubikpara') && rubikpara()->ayarliMi()): ?>
         <a href="?page=settings&tab=rubikpara&test_rb=1" class="btn btn-secondary">Bağlantıyı Test Et</a>
         <?php endif; ?>
         <a href="https://developer.rubikpara.com" target="_blank" class="btn btn-ghost">📖 API Dökümanı</a>
     </div>
 </form>
 
-<?php if (rubikpara()->ayarliMi()): ?>
+<?php if (function_exists('rubikpara') && rubikpara()->ayarliMi()): ?>
 <div style="margin-top:20px;padding:14px;background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--radius);font-size:13px;color:var(--success)">
     ✅ Rubikpara entegrasyonu aktif. Bayi sipariş sayfalarında "Kart ile Öde" butonu görünür.
 </div>

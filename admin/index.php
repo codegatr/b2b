@@ -96,9 +96,65 @@ function renderAdminPage(string $page, array $vars = []): void {
 <title><?= h($pageTitle) ?> — Admin | <?= h($siteName) ?></title>
 <link rel="stylesheet" href="<?= B2B_URL ?>/assets/css/main.css?v=<?= $cfg['version'] ?>">
 <style>
+/* ── Admin Inline Styles (CSS dosyası güncellenmeden önce fallback) ── */
+:root{
+  --bg:#f4f5f7;--surface:#fff;--border:#e4e6ea;--border-2:#d0d3da;
+  --text:#1a1d2e;--text-2:#4a5568;--text-muted:#9aa5b4;
+  --red:#ed2939;--red-hover:#c41f2e;--red-light:rgba(237,41,57,.1);--red-border:rgba(237,41,57,.2);
+  --success:#16a34a;--success-bg:#f0fdf4;--success-border:#bbf7d0;
+  --warning:#d97706;--warning-bg:#fffbeb;--warning-border:#fed7aa;
+  --danger:#dc2626;--danger-bg:#fef2f2;--danger-border:#fecaca;
+  --info:#2563eb;--info-bg:#eff6ff;--info-border:#bfdbfe;
+  --radius:8px;--radius-sm:5px;--radius-lg:12px;
+  --shadow:0 1px 3px rgba(0,0,0,.08);--shadow-md:0 4px 12px rgba(0,0,0,.1);
+  --sidebar-bg:#1c1c2e;--sidebar-border:#2e2e45;--sidebar-hover:#2a2a40;
+  --sidebar-muted:#6b6b90;--sidebar-text:#c8c8e0;--sidebar-w:240px;
+  --font:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+}
+/* Logo */
+.sidebar-logo .logo-mark{background:linear-gradient(135deg,#ed2939,#c41f2e)}
+.admin-version{font-size:10px;color:var(--sidebar-muted);padding:4px 12px 8px}
+/* Tab bar */
+.tab-bar{display:flex;gap:2px;background:#fff;border:1px solid #e4e6ea;border-radius:10px;padding:4px;margin-bottom:20px;width:fit-content;flex-wrap:wrap}
+.tab-item{display:flex;align-items:center;gap:6px;padding:7px 18px;border-radius:7px;font-size:13px;font-weight:500;color:#4a5568;text-decoration:none;transition:all .15s;white-space:nowrap}
+.tab-item:hover{background:#f4f5f7;color:#1a1d2e;text-decoration:none}
+.tab-item.active{background:#ed2939;color:#fff;box-shadow:0 1px 4px rgba(237,41,57,.3)}
+.tab-item.active .tab-count{background:rgba(255,255,255,.25);color:#fff;border-color:transparent}
+.tab-count{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:18px;background:#f4f5f7;border:1px solid #e4e6ea;border-radius:99px;font-size:11px;font-weight:700;padding:0 6px;color:#9aa5b4}
+.tab-count.warn{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.3);color:#b45309}
+/* Alert */
+.alert{padding:12px 16px;border-radius:8px;margin-bottom:16px;font-size:13px;border:1px solid transparent}
+.alert-success{background:#f0fdf4;border-color:#bbf7d0;color:#15803d}
+.alert-warning{background:#fffbeb;border-color:#fed7aa;color:#b45309}
+.alert-danger,.alert-error{background:#fef2f2;border-color:#fecaca;color:#b91c1c}
+.alert-info{background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8}
+</style>
+<style>
 /* Admin özel stiller */
 .sidebar-logo .logo-mark{background:linear-gradient(135deg,#ed2939,#c41f2e)}
-.admin-version{font-size:10px;color:var(--text-muted);padding:4px 12px 8px}
+.admin-version{font-size:10px;color:var(--sidebar-muted,#6b6b90);padding:4px 12px 8px}
+
+/* Tab bar — inline fallback (sunucu CSS güncel değilse) */
+:root{
+  --bg:#f4f5f7;--surface:#fff;--border:#e4e6ea;--text:#1a1d2e;--text-2:#4a5568;
+  --text-muted:#9aa5b4;--red:#ed2939;--red-hover:#c41f2e;--red-light:rgba(237,41,57,.1);
+  --success:#16a34a;--success-bg:#f0fdf4;--success-border:#bbf7d0;
+  --warning:#d97706;--warning-bg:#fffbeb;--warning-border:#fed7aa;
+  --danger:#dc2626;--danger-bg:#fef2f2;--danger-border:#fecaca;
+  --info:#2563eb;--info-bg:#eff6ff;--info-border:#bfdbfe;
+  --radius:8px;--radius-sm:5px;--radius-lg:12px;
+  --shadow:0 1px 3px rgba(0,0,0,.08);--shadow-md:0 4px 12px rgba(0,0,0,.1);
+  --sidebar-bg:#1c1c2e;--sidebar-border:#2e2e45;--sidebar-muted:#6b6b90;
+  --sidebar-text:#c8c8e0;--border-2:#d0d3da;--font:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --sidebar-w:240px;
+}
+.tab-bar{display:flex;gap:2px;background:#fff;border:1px solid #e4e6ea;border-radius:10px;padding:4px;margin-bottom:20px;width:fit-content}
+.tab-item{display:flex;align-items:center;gap:6px;padding:7px 16px;border-radius:7px;font-size:13px;font-weight:500;color:#4a5568;text-decoration:none;transition:all .15s;white-space:nowrap}
+.tab-item:hover{background:#f4f5f7;color:#1a1d2e;text-decoration:none}
+.tab-item.active{background:#ed2939;color:#fff;box-shadow:0 1px 4px rgba(237,41,57,.3)}
+.tab-item.active .tab-count{background:rgba(255,255,255,.25);color:#fff;border-color:transparent}
+.tab-count{background:#f4f5f7;border:1px solid #e4e6ea;border-radius:99px;font-size:11px;font-weight:700;padding:1px 7px;min-width:20px;text-align:center;color:#9aa5b4}
+.tab-count.warn{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.3);color:#b45309}
 </style>
 </head>
 <body>
