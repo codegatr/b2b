@@ -103,6 +103,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $success = 'Paraşüt ayarları kaydedildi. Token sıfırlandı.';
     }
 
+    if ($tab === 'rubikpara') {
+        settingSave('rubikpara_public_key',  trim($_POST['rubikpara_public_key'] ?? ''));
+        settingSave('rubikpara_merchant_no', trim($_POST['rubikpara_merchant_no'] ?? ''));
+        settingSave('rubikpara_test_mode',   $_POST['rubikpara_test_mode'] ?? '1');
+        if (!empty($_POST['rubikpara_secret_key'])) {
+            settingSave('rubikpara_secret_key', trim($_POST['rubikpara_secret_key']));
+        }
+        settingClearCache();
+        $success = 'Rubikpara ayarları kaydedildi.';
+    }
+
     if ($tab === 'github') {
         settingSave('github_token', trim($_POST['github_token'] ?? ''));
         settingSave('github_repo',  trim($_POST['github_repo'] ?? ''));
@@ -141,7 +152,7 @@ if (isset($_GET['test_parasut'])) {
 <div class="settings-layout">
 <!-- Sekme Nav -->
 <div class="settings-nav">
-    <?php $tabs = ['general'=>'⚙️ Genel','smtp'=>'📧 E-posta','bank'=>'🏦 Banka Hesapları','parasut'=>'🔗 Paraşüt','github'=>'🐙 GitHub / Güncelleme','order'=>'📦 Sipariş']; ?>
+    <?php $tabs = ['general'=>'⚙️ Genel','smtp'=>'📧 E-posta','bank'=>'🏦 Banka Hesapları','parasut'=>'🔗 Paraşüt','github'=>'🐙 GitHub / Güncelleme','rubikpara'=>'💳 Rubikpara','order'=>'📦 Sipariş']; ?>
     <?php foreach ($tabs as $k=>$v): ?>
     <a href="?page=settings&tab=<?= $k ?>" class="settings-nav-item <?= $activeTab===$k?'active':'' ?>"><?= $v ?></a>
     <?php endforeach; ?>
@@ -381,6 +392,74 @@ $_sha = updater()->getInstalledSha();
         <a href="?page=update" class="btn btn-secondary btn-sm">Güncelleme Merkezi →</a>
     </div>
 </div>
+</div>
+</div>
+
+
+<?php elseif ($activeTab === 'rubikpara'): ?>
+<div class="card">
+<div class="card-header"><h3 class="card-title">💳 Rubikpara (PF Gateway) Ayarları</h3></div>
+<div class="card-body">
+
+<?php
+$_rb = rubikpara();
+if ($_rb->ayarliMi() && isset($_GET['test_rb'])): ?>
+<?php
+    $_rbTest = $_rb->baglantiTest();
+?>
+<div class="alert alert-<?= $_rbTest['ok']?'success':'danger' ?>"><?= h($_rbTest['message']) ?></div>
+<?php endif; ?>
+
+<form method="post">
+    <?= csrfField() ?>
+    <input type="hidden" name="tab" value="rubikpara">
+    <div class="form-grid-2">
+        <div class="form-group">
+            <label class="form-label">Public Key (API Key)</label>
+            <input type="text" name="rubikpara_public_key"
+                   value="<?= h(setting('rubikpara_public_key')) ?>" class="form-control"
+                   placeholder="your-public-key">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Merchant Number</label>
+            <input type="text" name="rubikpara_merchant_no"
+                   value="<?= h(setting('rubikpara_merchant_no')) ?>" class="form-control"
+                   placeholder="000001">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Secret Key (Base64)</label>
+            <input type="password" name="rubikpara_secret_key"
+                   value="<?= h(setting('rubikpara_secret_key')) ?>" class="form-control"
+                   placeholder="Base64 encoded secret key">
+            <p style="font-size:12px;color:var(--text-muted);margin-top:4px">Bu anahtar yalnızca imza oluşturmada kullanılır, API isteğinde gönderilmez.</p>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Mod</label>
+            <select name="rubikpara_test_mode" class="form-control">
+                <option value="1" <?= setting('rubikpara_test_mode','1')==='1'?'selected':'' ?>>Test Ortamı (testpfapi.rubikpara.com)</option>
+                <option value="0" <?= setting('rubikpara_test_mode','1')==='0'?'selected':'' ?>>Canlı Ortam (pfapi.rubikpara.com)</option>
+            </select>
+        </div>
+    </div>
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Kaydet</button>
+        <?php if (rubikpara()->ayarliMi()): ?>
+        <a href="?page=settings&tab=rubikpara&test_rb=1" class="btn btn-secondary">Bağlantıyı Test Et</a>
+        <?php endif; ?>
+        <a href="https://developer.rubikpara.com" target="_blank" class="btn btn-ghost">📖 API Dökümanı</a>
+    </div>
+</form>
+
+<?php if (rubikpara()->ayarliMi()): ?>
+<div style="margin-top:20px;padding:14px;background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--radius);font-size:13px;color:var(--success)">
+    ✅ Rubikpara entegrasyonu aktif. Bayi sipariş sayfalarında "Kart ile Öde" butonu görünür.
+</div>
+<?php else: ?>
+<div style="margin-top:20px;padding:14px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--radius);font-size:13px;color:var(--warning)">
+    ⚠️ Public Key ve Merchant Number girilmeden kart ödemesi aktif olmaz.
+</div>
+<?php endif; ?>
+
 </div>
 </div>
 

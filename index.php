@@ -25,6 +25,7 @@ require __DIR__ . '/includes/db.php';
 require __DIR__ . '/includes/auth.php';
 require __DIR__ . '/includes/functions.php';
 require __DIR__ . '/includes/parasut.php';
+require __DIR__ . '/includes/rubikpara.php';
 
 b2b_session_start();
 
@@ -89,6 +90,7 @@ $pageTitle = match($page) {
     'account'      => 'Cari Hesabım',
     'payments'     => 'Ödemelerim',
     'payment-new'  => 'Ödeme Bildirimi',
+    'payment-card' => 'Kart ile Ödeme',
     'profile'      => 'Profilim',
     'notifications'=> 'Bildirimler',
     'apply'        => 'Bayilik Başvurusu',
@@ -107,8 +109,7 @@ $pageTitle = match($page) {
 </head>
 <body>
 
-<?php
-
+?>
 <div class="layout">
   <!-- ── Sidebar ── -->
   <aside class="sidebar">
