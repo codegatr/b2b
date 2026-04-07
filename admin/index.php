@@ -37,17 +37,20 @@ $admin     = isAdmin() ? currentAdmin() : null;
 $unread    = isAdmin() ? unreadNotifCount('admin') : 0;
 
 // Güncelleme kontrolü (saatte bir)
-$updateInfo = null;
+// Guncelleme kontrolü (saatte 1)
+$hasUpdate  = false;
 $lastCheck  = (int)setting('update_last_check', '0');
 if (isAdmin() && (time() - $lastCheck) > 3600) {
     try {
-        $updateInfo = updater()->getLatestRelease();
-        settingSave('update_last_check', (string)time());
-        if ($updateInfo) settingSave('update_latest_version', ltrim($updateInfo['tag_name']??'','v'));
+        $commit = updater()->getLatestCommit();
+        if ($commit) {
+            settingSave('update_last_check',  (string)time());
+            settingSave('update_latest_sha',  $commit['sha']);
+        }
     } catch (Exception) {}
 }
-$latestVersion  = setting('update_latest_version', $cfg['version']);
-$hasUpdate      = version_compare($latestVersion, $cfg['version'], '>');
+$latestSha = setting('update_latest_sha', '');
+$hasUpdate = $latestSha && $latestSha !== updater()->getInstalledSha();
 
 $pageTitle = match($page) {
     'dashboard'    => 'Dashboard',

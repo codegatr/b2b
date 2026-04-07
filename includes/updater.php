@@ -1,288 +1,326 @@
 <?php
 /**
- * CODEGA B2B — GitHub Releases Güncelleme Motoru
- * Repo: codegatr/b2b (admin panel üzerinden token girilir)
+ * CODEGA B2B — Güncelleme Motoru
+ * İki mod:
+ *   1) Branch ZIP  — main branch den direkt cek (Release gerektirmez)
+ *   2) Release ZIP — GitHub Releases dan cek (manuel release gerekir)
  */
 
 class B2BUpdater {
+
     private string $repo;
     private string $token;
     private string $root;
-    private string $currentVersion;
+    private string $branch;
 
     public function __construct() {
-        $this->root           = B2B_ROOT;
-        $vfile = B2B_ROOT . '/version.txt';
-        $this->currentVersion = file_exists($vfile) ? trim(file_get_contents($vfile)) : (defined('B2B_VERSION') ? B2B_VERSION : '1.0.0');
-        $this->repo           = setting('github_repo', 'codegatr/b2b');
-        $this->token          = setting('github_token', '');
+        $this->root   = B2B_ROOT;
+        $this->repo   = setting('github_repo',   'codegatr/b2b');
+        $this->token  = setting('github_token',  '');
+        $this->branch = setting('github_branch', 'main');
     }
 
-    /** GitHub API'den son release bilgisini getir */
+    // Versiyon
+    public function getCurrentVersion(): string {
+        $f = $this->root . '/version.txt';
+        return file_exists($f) ? trim(file_get_contents($f)) : '1.0.0';
+    }
+
+    // Son commit bilgisi
+    public function getLatestCommit(): ?array {
+        $url  = "https://api.github.com/repos/{$this->repo}/commits/{$this->branch}";
+        $data = $this->githubRequest($url);
+        if (!is_array($data) || !isset($data['sha'])) return null;
+        return [
+            'sha'       => $data['sha'],
+            'sha_short' => substr($data['sha'], 0, 7),
+            'message'   => $data['commit']['message'] ?? '',
+            'author'    => $data['commit']['author']['name'] ?? '',
+            'date'      => $data['commit']['author']['date'] ?? '',
+            'url'       => $data['html_url'] ?? '',
+        ];
+    }
+
+    public function getInstalledSha(): string {
+        $f = $this->root . '/commit.txt';
+        return file_exists($f) ? trim(file_get_contents($f)) : '';
+    }
+
+    public function hasBranchUpdate(): bool {
+        $latest = $this->getLatestCommit();
+        if (!$latest) return false;
+        return $this->getInstalledSha() !== $latest['sha'];
+    }
+
+    // Release bilgisi (opsiyonel)
     public function getLatestRelease(): ?array {
-        $url = "https://api.github.com/repos/{$this->repo}/releases/latest";
-        return $this->githubRequest($url);
+        $url  = "https://api.github.com/repos/{$this->repo}/releases/latest";
+        $data = $this->githubRequest($url);
+        return (is_array($data) && isset($data['tag_name'])) ? $data : null;
     }
 
-    /** Tüm release'leri getir */
     public function getReleases(int $limit = 10): array {
         $url  = "https://api.github.com/repos/{$this->repo}/releases?per_page={$limit}";
         $data = $this->githubRequest($url);
-        // 404 → repo var ama release yok → boş dizi
         return is_array($data) ? $data : [];
     }
 
-    /** Mevcut versiyonu getir */
-    public function getCurrentVersion(): string {
-        return $this->currentVersion;
-    }
-
-    /** Güncelleme var mı? */
-    public function hasUpdate(): bool {
-        $latest = $this->getLatestRelease();
-        if (!$latest) return false;
-        $latestTag = ltrim($latest['tag_name'] ?? '', 'v');
-        return version_compare($latestTag, $this->currentVersion, '>');
-    }
-
-    /** Güncellemeyi indir ve uygula */
-    public function update(string $targetVersion): array {
-        // 1. Release bul
-        $releases = $this->getReleases();
-        $release  = null;
-        foreach ($releases as $r) {
-            if (ltrim($r['tag_name'], 'v') === ltrim($targetVersion, 'v')) {
-                $release = $r;
-                break;
-            }
+    /**
+     * Branch den guncelle (ana mod — Release gerektirmez)
+     * main a push et, admin panelden "Guncelle" ye bas.
+     */
+    public function updateFromBranch(): array {
+        $commit = $this->getLatestCommit();
+        if (!$commit) {
+            return ['ok'=>false,'success'=>false,'message'=>'GitHub baglantisi kurulamadi. Token ve repo adini kontrol edin.'];
         }
-        if (!$release) return ['ok'=>false, 'success'=>false, 'message'=>"$targetVersion versiyonu bulunamadı."];
 
-        // 2. ZIP asset'ini bul
-        $zipUrl = null;
-        foreach ($release['assets'] ?? [] as $asset) {
-            if (str_ends_with($asset['name'], '.zip')) {
-                $zipUrl = $asset['browser_download_url'];
-                break;
-        }}
-        if (!$zipUrl) return ['ok'=>false, 'success'=>false, 'message'=>'ZIP dosyası bulunamadı.'];
+        // Branch ZIP URL: github.com/owner/repo/archive/refs/heads/main.zip
+        $zipUrl = "https://github.com/{$this->repo}/archive/refs/heads/{$this->branch}.zip";
+        $tmpZip = sys_get_temp_dir() . '/b2b_branch_' . time() . '.zip';
 
-        // 3. ZIP indir
-        $tmpZip = sys_get_temp_dir() . '/b2b_update_' . time() . '.zip';
         if (!$this->downloadFile($zipUrl, $tmpZip)) {
-            return ['ok'=>false, 'success'=>false, 'message'=>'ZIP indirilemedi.'];
+            return ['ok'=>false,'success'=>false,'message'=>'ZIP indirilemedi. Repo public mi? Token dogru mu?'];
         }
 
-        // 4. Backup al
         $backupPath = $this->backup();
-        if (!$backupPath) return ['ok'=>false, 'success'=>false, 'message'=>'Backup alınamadı.'];
+        if (!$backupPath) {
+            @unlink($tmpZip);
+            return ['ok'=>false,'success'=>false,'message'=>'Backup alinamadi.'];
+        }
 
-        // 5. manifest.json oku
-        $manifest = $this->readManifestFromZip($tmpZip);
-
-        // 6. Dosyaları güncelle
         $zip = new ZipArchive();
         if ($zip->open($tmpZip) !== true) {
-            return ['ok'=>false, 'success'=>false, 'message'=>'ZIP açılamadı.'];
+            @unlink($tmpZip);
+            return ['ok'=>false,'success'=>false,'message'=>'ZIP acilamadi.'];
         }
 
-        $updated = [];
-        if ($manifest) {
-            // Sadece manifest'teki dosyaları güncelle
-            foreach ($manifest as $file) {
-                $idx = $zip->locateName($file);
-                if ($idx !== false) {
-                    $destPath = $this->root . '/' . ltrim($file, '/');
-                    @mkdir(dirname($destPath), 0755, true);
-                    file_put_contents($destPath, $zip->getFromIndex($idx));
-                    $updated[] = $file;
-                }
+        // GitHub branch ZIP: "repo-branch/" prefix ile gelir (ornegin b2b-main/)
+        $prefix = '';
+        for ($i = 0; $i < min($zip->numFiles, 5); $i++) {
+            $name = $zip->getNameIndex($i);
+            if (str_ends_with($name, '/') && substr_count($name, '/') === 1) {
+                $prefix = $name;
+                break;
             }
-        } else {
-            // manifest.json yoksa tüm ZIP'i çıkar (install/ hariç)
-            for ($i = 0; $i < $zip->numFiles; $i++) {
-                $name = $zip->getNameIndex($i);
-                if (str_starts_with($name, 'install/')) continue;
-                if (str_ends_with($name, '/')) {
-                    @mkdir($this->root . '/' . $name, 0755, true);
-                    continue;
-                }
-                $destPath = $this->root . '/' . $name;
-                @mkdir(dirname($destPath), 0755, true);
-                file_put_contents($destPath, $zip->getFromIndex($i));
-                $updated[] = $name;
+        }
+
+        // manifest.json var mi?
+        $manifestJson = $zip->getFromName($prefix . 'manifest.json');
+        $manifest     = $manifestJson ? json_decode($manifestJson, true) : null;
+        $targetFiles  = $manifest['files'] ?? null;
+
+        $skip    = ['config.php', '.git/', 'uploads/', 'commit.txt'];
+        $updated = [];
+
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $zipPath = $zip->getNameIndex($i);
+            if ($prefix && !str_starts_with($zipPath, $prefix)) continue;
+            $relPath = $prefix ? substr($zipPath, strlen($prefix)) : $zipPath;
+            if (!$relPath || str_ends_with($relPath, '/')) continue;
+            if ($this->shouldSkip($relPath, $skip)) continue;
+            if ($targetFiles !== null && !in_array($relPath, $targetFiles)) continue;
+
+            $destPath = $this->root . '/' . $relPath;
+            $destDir  = dirname($destPath);
+            if (!is_dir($destDir)) mkdir($destDir, 0755, true);
+            $content = $zip->getFromIndex($i);
+            if (file_put_contents($destPath, $content) !== false) {
+                $updated[] = $relPath;
             }
         }
         $zip->close();
         @unlink($tmpZip);
 
-        // 7. DB migration çalıştır (varsa)
-        $this->runMigrations($targetVersion);
+        // commit.txt kaydet
+        file_put_contents($this->root . '/commit.txt', $commit['sha']);
 
-        // 8. config.php versiyon güncelle
-        $cfgFile = $this->root . '/config.php';
-        $cfgContent = file_get_contents($cfgFile);
-        $cfgContent = preg_replace("/'version'\s*=>\s*'[^']+'/", "'version' => '$targetVersion'", $cfgContent);
-        file_put_contents($cfgFile, $cfgContent);
+        // version.txt — manifest'ten
+        if (!empty($manifest['version'])) {
+            file_put_contents($this->root . '/version.txt', $manifest['version']);
+        }
 
-        // 9. Log kaydet
-        dbInsert(
-            "INSERT INTO b2b_update_log (from_version,to_version,status,note,updated_by,created_at) VALUES (?,?,'success',?,?,NOW())",
-            [$this->currentVersion, $targetVersion, count($updated).' dosya güncellendi', $_SESSION['admin_id'] ?? 0]
+        dbExec(
+            "INSERT INTO b2b_update_log (from_version, to_version, status, note, created_at) VALUES (?,?,?,?,NOW())",
+            [
+                $this->getInstalledSha() ? substr($this->getInstalledSha(),0,7) : 'unknown',
+                $commit['sha_short'],
+                'success',
+                'Branch: ' . $this->branch . ' — ' . mb_substr($commit['message'], 0, 100),
+            ]
         );
 
-        return ['ok'=>true, 'success'=>true, 'message'=>"$targetVersion sürümüne güncellendi.", 'files'=>$updated, 'backup'=>basename($backupPath)];
+        return [
+            'ok'      => true,
+            'success' => true,
+            'message' => 'Guncelleme tamamlandi. ' . count($updated) . ' dosya guncellendi.',
+            'commit'  => $commit,
+            'files'   => $updated,
+            'backup'  => basename($backupPath),
+        ];
     }
 
-    /** Rollback — backup'a dön */
-    public function rollback(string $backupFile): array {
-        $backupPath = $this->root . '/backups/' . basename($backupFile);
-        if (!file_exists($backupPath)) return ['ok'=>false, 'success'=>false, 'message'=>'Backup dosyası bulunamadı.'];
-
-        $zip = new ZipArchive();
-        if ($zip->open($backupPath) !== true) return ['ok'=>false, 'success'=>false, 'message'=>'Backup açılamadı.'];
-
-        $extract = sys_get_temp_dir() . '/b2b_rollback_' . time();
-        $zip->extractTo($extract);
-        $zip->close();
-
-        // Dosyaları geri yükle
-        $this->copyDirectory($extract, $this->root);
-        $this->removeDir($extract);
-
-        dbInsert("INSERT INTO b2b_update_log (to_version,status,note,updated_by,created_at) VALUES ('rollback','rolledback',?,?,NOW())",
-            ["$backupFile'den geri alındı", $_SESSION['admin_id'] ?? 0]);
-
-        return ['ok'=>true, 'success'=>true, 'message'=>'Rollback başarılı.'];
-    }
-
-    /** Backup al */
-    private function backup(): string|false {
-        $backupDir = $this->root . '/backups';
-        @mkdir($backupDir, 0755, true);
-
-        $backupFile = $backupDir . '/backup_' . $this->currentVersion . '_' . date('YmdHis') . '.zip';
-        $zip = new ZipArchive();
-        if ($zip->open($backupFile, ZipArchive::CREATE) !== true) return false;
-
-        // Kritik dosyaları yedekle
-        $include = ['admin', 'includes', 'api', 'assets/css', 'assets/js', 'index.php', 'config.php', 'version.txt'];
-        foreach ($include as $item) {
-            $full = $this->root . '/' . $item;
-            if (is_dir($full)) {
-                $this->addDirToZip($zip, $full, $item);
-            } elseif (is_file($full)) {
-                $zip->addFile($full, $item);
+    // Release den guncelle (opsiyonel)
+    public function updateFromRelease(string $targetVersion): array {
+        $releases = $this->getReleases();
+        $release  = null;
+        foreach ($releases as $r) {
+            if (ltrim($r['tag_name'], 'v') === ltrim($targetVersion, 'v')) {
+                $release = $r; break;
             }
         }
+        if (!$release) return ['ok'=>false,'success'=>false,'message'=>"$targetVersion bulunamadi."];
+
+        $zipUrl = null;
+        foreach ($release['assets'] ?? [] as $a) {
+            if (str_ends_with($a['name'], '.zip')) { $zipUrl = $a['browser_download_url']; break; }
+        }
+        if (!$zipUrl) return ['ok'=>false,'success'=>false,'message'=>'ZIP asset bulunamadi.'];
+
+        $tmpZip = sys_get_temp_dir() . '/b2b_release_' . time() . '.zip';
+        if (!$this->downloadFile($zipUrl, $tmpZip)) {
+            return ['ok'=>false,'success'=>false,'message'=>'ZIP indirilemedi.'];
+        }
+        $backupPath = $this->backup();
+        if (!$backupPath) { @unlink($tmpZip); return ['ok'=>false,'success'=>false,'message'=>'Backup alinamadi.']; }
+
+        $zip = new ZipArchive();
+        if ($zip->open($tmpZip) !== true) { @unlink($tmpZip); return ['ok'=>false,'success'=>false,'message'=>'ZIP acilamadi.']; }
+
+        $manifest    = $this->readManifestFromZip($tmpZip);
+        $targetFiles = $manifest['files'] ?? null;
+        $skip        = ['config.php', '.git/', 'uploads/'];
+        $updated     = [];
+
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $relPath = $zip->getNameIndex($i);
+            if (str_ends_with($relPath, '/')) continue;
+            if ($this->shouldSkip($relPath, $skip)) continue;
+            if ($targetFiles !== null && !in_array($relPath, $targetFiles)) continue;
+            $destPath = $this->root . '/' . $relPath;
+            if (!is_dir(dirname($destPath))) mkdir(dirname($destPath), 0755, true);
+            if (file_put_contents($destPath, $zip->getFromIndex($i)) !== false) $updated[] = $relPath;
+        }
         $zip->close();
+        @unlink($tmpZip);
 
-        // Eski backup'ları temizle (en fazla 5 tut)
-        $backups = glob($backupDir . '/backup_*.zip');
-        usort($backups, fn($a,$b) => filemtime($b) - filemtime($a));
-        foreach (array_slice($backups, 5) as $old) @unlink($old);
+        file_put_contents($this->root . '/version.txt', ltrim($targetVersion, 'v'));
+        dbExec("INSERT INTO b2b_update_log (from_version, to_version, status, note, created_at) VALUES (?,?,?,?,NOW())",
+            [$this->getCurrentVersion(), $targetVersion, 'success', 'Release: ' . $targetVersion]);
 
-        return $backupFile;
+        return ['ok'=>true,'success'=>true,'message'=>"$targetVersion yuklendi.",'files'=>$updated,'backup'=>basename($backupPath)];
     }
 
-    /** Mevcut backup listesi */
+    /** Geri donusluluk: update.php update() cagirabilir */
+    public function update(string $targetVersion): array {
+        return $this->updateFromRelease($targetVersion);
+    }
+
+    // Rollback
+    public function rollback(string $backupFile): array {
+        $backupPath = $this->root . '/storage/backups/' . basename($backupFile);
+        if (!file_exists($backupPath)) return ['ok'=>false,'success'=>false,'message'=>'Backup bulunamadi.'];
+        $zip = new ZipArchive();
+        if ($zip->open($backupPath) !== true) return ['ok'=>false,'success'=>false,'message'=>'Backup acilamadi.'];
+        $skip = ['config.php', '.git/'];
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $relPath = $zip->getNameIndex($i);
+            if (str_ends_with($relPath, '/')) continue;
+            if ($this->shouldSkip($relPath, $skip)) continue;
+            $destPath = $this->root . '/' . $relPath;
+            if (!is_dir(dirname($destPath))) mkdir(dirname($destPath), 0755, true);
+            file_put_contents($destPath, $zip->getFromIndex($i));
+        }
+        $zip->close();
+        return ['ok'=>true,'success'=>true,'message'=>'Rollback tamamlandi.'];
+    }
+
     public function getBackups(): array {
-        $dir = $this->root . '/backups';
+        $dir = $this->root . '/storage/backups';
+        if (!is_dir($dir)) return [];
         $files = glob($dir . '/backup_*.zip') ?: [];
-        usort($files, fn($a,$b) => filemtime($b) - filemtime($a));
-        return array_map(fn($f) => [
-            'name' => basename($f),
-            'size' => round(filesize($f)/1024, 1) . ' KB',
-            'date' => date('d.m.Y H:i', filemtime($f)),
-        ], $files);
+        rsort($files);
+        return array_slice($files, 0, 5);
     }
 
-    /** ZIP içindeki manifest.json oku */
+    // Yardimcilar
+    private function shouldSkip(string $relPath, array $skip): bool {
+        foreach ($skip as $s) { if (str_starts_with($relPath, $s)) return true; }
+        return false;
+    }
+
+    private function backup(): string|false {
+        $dir = $this->root . '/storage/backups';
+        if (!is_dir($dir)) mkdir($dir, 0755, true);
+        $file = $dir . '/backup_' . date('Ymd_His') . '.zip';
+        $zip  = new ZipArchive();
+        if ($zip->open($file, ZipArchive::CREATE) !== true) return false;
+        $skip = ['.git/', 'storage/backups/', 'uploads/'];
+        $iter = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($this->root, FilesystemIterator::SKIP_DOTS)
+        );
+        foreach ($iter as $f) {
+            if ($f->isDir()) continue;
+            $relPath = str_replace($this->root . '/', '', $f->getPathname());
+            if ($this->shouldSkip($relPath, $skip)) continue;
+            $zip->addFile($f->getPathname(), $relPath);
+        }
+        $zip->close();
+        $all = glob($dir . '/backup_*.zip') ?: [];
+        rsort($all);
+        foreach (array_slice($all, 5) as $old) @unlink($old);
+        return $file;
+    }
+
     private function readManifestFromZip(string $zipPath): ?array {
         $zip = new ZipArchive();
         if ($zip->open($zipPath) !== true) return null;
-        $content = $zip->getFromName('manifest.json');
+        $c = $zip->getFromName('manifest.json');
         $zip->close();
-        if (!$content) return null;
-        return json_decode($content, true)['files'] ?? null;
+        return $c ? json_decode($c, true) : null;
     }
 
-    /** GitHub API isteği */
     private function githubRequest(string $url): mixed {
+        if (!function_exists('curl_init')) return null;
         $ch = curl_init($url);
-        $headers = ['Accept: application/vnd.github.v3+json', 'User-Agent: CODEGA-B2B-Updater/1.0'];
+        $headers = ['Accept: application/vnd.github.v3+json', 'User-Agent: CODEGA-B2B/1.0'];
         if ($this->token) $headers[] = 'Authorization: Bearer ' . $this->token;
-
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER     => $headers,
-            CURLOPT_TIMEOUT        => 15,
+            CURLOPT_TIMEOUT        => 20,
             CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_FOLLOWLOCATION => true,
         ]);
         $result = curl_exec($ch);
         $code   = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $err    = curl_error($ch);
         curl_close($ch);
-        if ($err) return null; // cURL hatası
-        if ($code === 404) return []; // bulunamadı (release yok)
+        if ($err || $code === 0) return null;
+        if ($code === 404) return [];
         if ($code !== 200) return null;
-        $decoded = json_decode($result, true);
-        return $decoded;
+        return json_decode($result, true);
     }
 
-    /** Dosya indir */
     private function downloadFile(string $url, string $dest): bool {
-        $ch = curl_init($url);
+        if (!function_exists('curl_init')) return false;
         $fp = fopen($dest, 'wb');
-        $headers = ['User-Agent: CODEGA-B2B-Updater/1.0'];
+        if (!$fp) return false;
+        $ch = curl_init($url);
+        $headers = ['User-Agent: CODEGA-B2B/1.0'];
         if ($this->token) $headers[] = 'Authorization: Bearer ' . $this->token;
         curl_setopt_array($ch, [
             CURLOPT_FILE           => $fp,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_HTTPHEADER     => $headers,
             CURLOPT_TIMEOUT        => 120,
+            CURLOPT_SSL_VERIFYPEER => true,
         ]);
-        $ok = curl_exec($ch);
+        curl_exec($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
         fclose($fp);
-        return $ok && $code === 200;
-    }
-
-    /** DB migration'ları çalıştır */
-    private function runMigrations(string $version): void {
-        $sqlFile = $this->root . '/install/migrations/' . $version . '.sql';
-        if (!file_exists($sqlFile)) return;
-        $sql = file_get_contents($sqlFile);
-        foreach (array_filter(array_map('trim', explode(";\n", $sql))) as $stmt) {
-            try { db()->exec($stmt . ';'); } catch (Exception) {}
-        }
-    }
-
-    private function addDirToZip(ZipArchive $zip, string $dir, string $prefix): void {
-        $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS));
-        foreach ($files as $file) {
-            if ($file->isDir()) continue;
-            $relative = $prefix . '/' . substr($file->getRealPath(), strlen($dir)+1);
-            $zip->addFile($file->getRealPath(), str_replace('\\','/',$relative));
-        }
-    }
-
-    private function copyDirectory(string $src, string $dst): void {
-        $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($src, FilesystemIterator::SKIP_DOTS));
-        foreach ($it as $file) {
-            $rel  = substr($file->getRealPath(), strlen($src)+1);
-            $dest = $dst . '/' . $rel;
-            if ($file->isDir()) { @mkdir($dest, 0755, true); }
-            else { @mkdir(dirname($dest), 0755, true); copy($file->getRealPath(), $dest); }
-        }
-    }
-
-    private function removeDir(string $dir): void {
-        if (!is_dir($dir)) return;
-        $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
-        foreach ($it as $f) { $f->isDir() ? rmdir($f->getRealPath()) : unlink($f->getRealPath()); }
-        rmdir($dir);
+        return in_array($code, [200, 302]);
     }
 }
 
