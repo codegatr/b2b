@@ -3,9 +3,10 @@
 requireDealer();
 $dealer = currentDealer();
 
-$search  = trim($_GET['q'] ?? '');
-$catId   = intval($_GET['cat'] ?? 0);
-$perPage = 50;
+$search    = trim($_GET['q'] ?? '');
+$catId     = intval($_GET['cat'] ?? 0);
+$stockFilt = $_GET['stock'] ?? 'all'; // all | instock | outstock
+$perPage   = 50;
 $curPage = max(1, intval($_GET['p'] ?? 1));
 $offset  = ($curPage - 1) * $perPage;
 
@@ -17,6 +18,8 @@ if ($search) {
     $params[] = $s; $params[] = $s; $params[] = $s;
 }
 if ($catId) { $where[] = 'p.category_id=?'; $params[] = $catId; }
+if ($stockFilt === 'instock')  { $where[] = 'p.stock > 0'; }
+if ($stockFilt === 'outstock') { $where[] = 'p.stock <= 0'; }
 
 $w        = implode(' AND ', $where);
 $total    = (int)dbVal("SELECT COUNT(*) FROM b2b_products p WHERE $w", $params);
@@ -32,7 +35,7 @@ $cartItems = dbRows("SELECT product_id, qty FROM b2b_cart WHERE dealer_id=?", [$
 $cartMap   = array_column($cartItems, 'qty', 'product_id');
 $categories = dbRows("SELECT * FROM b2b_categories WHERE is_active=1 ORDER BY sort_order, name");
 $pager = pagination($total, $perPage, $curPage,
-         "?page=products&q=" . urlencode($search) . "&cat=$catId&p=");
+         "?page=products&q=" . urlencode($search) . "&cat=$catId&stock=$stockFilt&p=");
 
 $plId = (int)($dealer['price_list_id'] ?? 0);
 ?>
@@ -66,10 +69,33 @@ $plId = (int)($dealer['price_list_id'] ?? 0);
       <?php endforeach; ?>
     </select>
     <button type="submit" class="btn btn-primary">Ara</button>
-    <?php if ($search || $catId): ?>
+    <?php if ($search || $catId || $stockFilt !== 'all'): ?>
     <a href="?page=products" class="btn btn-ghost">Temizle</a>
     <?php endif; ?>
   </form>
+
+  <!-- Stok Filtresi -->
+  <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+    <?php
+    $sfBase = '?page=products' . ($search?"&q=".urlencode($search):'') . ($catId?"&cat=$catId":'');
+    $sfOpts = ['all'=>'Tümü','instock'=>'✓ Stokta Var','outstock'=>'✗ Stok Yok'];
+    $sfColors = ['all'=>'','instock'=>'color:var(--success)','outstock'=>'color:var(--danger)'];
+    foreach ($sfOpts as $k => $v):
+        $active = $stockFilt === $k;
+    ?>
+    <a href="<?= $sfBase ?>&stock=<?= $k ?>"
+       style="padding:5px 14px;border-radius:99px;font-size:12px;font-weight:600;text-decoration:none;border:1.5px solid;transition:all .15s;
+              <?= $active
+                ? ($k==='instock'?'background:var(--success);border-color:var(--success);color:#fff'
+                  :($k==='outstock'?'background:var(--danger);border-color:var(--danger);color:#fff'
+                  :'background:var(--text);border-color:var(--text);color:#fff'))
+                : 'background:var(--surface);border-color:var(--border-2);'.($sfColors[$k]) ?>">
+      <?= $v ?>
+      <?php if ($k === 'instock'):  $n=(int)dbVal("SELECT COUNT(*) FROM b2b_products WHERE is_active=1 AND stock>0".($catId?" AND category_id=$catId":'').("")); echo "<span style='opacity:.7;margin-left:3px'>($n)</span>"; endif; ?>
+      <?php if ($k === 'outstock'): $n=(int)dbVal("SELECT COUNT(*) FROM b2b_products WHERE is_active=1 AND stock<=0".($catId?" AND category_id=$catId":'')); echo "<span style='opacity:.7;margin-left:3px'>($n)</span>"; endif; ?>
+    </a>
+    <?php endforeach; ?>
+  </div>
 </div>
 
 <?php if (empty($products)): ?>
