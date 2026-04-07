@@ -11,9 +11,9 @@ class B2BUpdater {
     private string $currentVersion;
 
     public function __construct() {
-        $cfg = require B2B_ROOT . '/config.php';
         $this->root           = B2B_ROOT;
-        $this->currentVersion = $cfg['version'] ?? '1.0.0';
+        $vfile = B2B_ROOT . '/version.txt';
+        $this->currentVersion = file_exists($vfile) ? trim(file_get_contents($vfile)) : (defined('B2B_VERSION') ? B2B_VERSION : '1.0.0');
         $this->repo           = setting('github_repo', 'codegatr/b2b');
         $this->token          = setting('github_token', '');
     }
@@ -25,8 +25,8 @@ class B2BUpdater {
     }
 
     /** Tüm release'leri getir */
-    public function getReleases(): array {
-        $url = "https://api.github.com/repos/{$this->repo}/releases?per_page=10";
+    public function getReleases(int $limit = 10): array {
+        $url = "https://api.github.com/repos/{$this->repo}/releases?per_page={$limit}";
         return $this->githubRequest($url) ?? [];
     }
 
@@ -54,7 +54,7 @@ class B2BUpdater {
                 break;
             }
         }
-        if (!$release) return ['ok'=>false, 'msg'=>"$targetVersion versiyonu bulunamadı."];
+        if (!$release) return ['ok'=>false, 'success'=>false, 'message'=>"$targetVersion versiyonu bulunamadı."];
 
         // 2. ZIP asset'ini bul
         $zipUrl = null;
@@ -63,17 +63,17 @@ class B2BUpdater {
                 $zipUrl = $asset['browser_download_url'];
                 break;
         }}
-        if (!$zipUrl) return ['ok'=>false, 'msg'=>'ZIP dosyası bulunamadı.'];
+        if (!$zipUrl) return ['ok'=>false, 'success'=>false, 'message'=>'ZIP dosyası bulunamadı.'];
 
         // 3. ZIP indir
         $tmpZip = sys_get_temp_dir() . '/b2b_update_' . time() . '.zip';
         if (!$this->downloadFile($zipUrl, $tmpZip)) {
-            return ['ok'=>false, 'msg'=>'ZIP indirilemedi.'];
+            return ['ok'=>false, 'success'=>false, 'message'=>'ZIP indirilemedi.'];
         }
 
         // 4. Backup al
         $backupPath = $this->backup();
-        if (!$backupPath) return ['ok'=>false, 'msg'=>'Backup alınamadı.'];
+        if (!$backupPath) return ['ok'=>false, 'success'=>false, 'message'=>'Backup alınamadı.'];
 
         // 5. manifest.json oku
         $manifest = $this->readManifestFromZip($tmpZip);
@@ -81,7 +81,7 @@ class B2BUpdater {
         // 6. Dosyaları güncelle
         $zip = new ZipArchive();
         if ($zip->open($tmpZip) !== true) {
-            return ['ok'=>false, 'msg'=>'ZIP açılamadı.'];
+            return ['ok'=>false, 'success'=>false, 'message'=>'ZIP açılamadı.'];
         }
 
         $updated = [];
@@ -129,16 +129,16 @@ class B2BUpdater {
             [$this->currentVersion, $targetVersion, count($updated).' dosya güncellendi', $_SESSION['admin_id'] ?? 0]
         );
 
-        return ['ok'=>true, 'msg'=>"$targetVersion sürümüne güncellendi.", 'files'=>$updated, 'backup'=>basename($backupPath)];
+        return ['ok'=>true, 'success'=>true, 'message'=>"$targetVersion sürümüne güncellendi.", 'files'=>$updated, 'backup'=>basename($backupPath)];
     }
 
     /** Rollback — backup'a dön */
     public function rollback(string $backupFile): array {
         $backupPath = $this->root . '/backups/' . basename($backupFile);
-        if (!file_exists($backupPath)) return ['ok'=>false,'msg'=>'Backup dosyası bulunamadı.'];
+        if (!file_exists($backupPath)) return ['ok'=>false, 'success'=>false, 'message'=>'Backup dosyası bulunamadı.'];
 
         $zip = new ZipArchive();
-        if ($zip->open($backupPath) !== true) return ['ok'=>false,'msg'=>'Backup açılamadı.'];
+        if ($zip->open($backupPath) !== true) return ['ok'=>false, 'success'=>false, 'message'=>'Backup açılamadı.'];
 
         $extract = sys_get_temp_dir() . '/b2b_rollback_' . time();
         $zip->extractTo($extract);
@@ -151,7 +151,7 @@ class B2BUpdater {
         dbInsert("INSERT INTO b2b_update_log (to_version,status,note,updated_by,created_at) VALUES ('rollback','rolledback',?,?,NOW())",
             ["$backupFile'den geri alındı", $_SESSION['admin_id'] ?? 0]);
 
-        return ['ok'=>true,'msg'=>'Rollback başarılı.'];
+        return ['ok'=>true, 'success'=>true, 'message'=>'Rollback başarılı.'];
     }
 
     /** Backup al */

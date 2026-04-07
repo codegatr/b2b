@@ -1,17 +1,24 @@
-/* CODEGA B2B — Tasarım Sistemi */
+/* Le Monde Du Tacos B2B — Tasarım Sistemi */
 :root {
-  --bg-base: #0d0f17;
-  --bg-surface: #13161f;
-  --bg-elevated: #1a1e2e;
-  --bg-hover: #1f2437;
-  --border: #2a2f45;
-  --border-light: #1f2437;
-  --text-primary: #e2e8f0;
-  --text-secondary: #8892aa;
-  --text-muted: #4a5270;
-  --accent: #6366f1;
-  --accent-hover: #5254cc;
-  --accent-light: rgba(99,102,241,.12);
+  /* Arka planlar — koyu zeytin tonu */
+  --bg-base: #0e130a;
+  --bg-surface: #141a0e;
+  --bg-elevated: #1b2413;
+  --bg-hover: #212e17;
+  --border: #2c3d1e;
+  --border-light: #232e17;
+  /* Metin */
+  --text-primary: #e8edd8;
+  --text-secondary: #94a878;
+  --text-muted: #526040;
+  /* Marka renkleri */
+  --accent: #3A5F0B;
+  --accent-hover: #2a4508;
+  --accent-light: rgba(58,95,11,.15);
+  --accent-red: #b24545;
+  --accent-red-hover: #8f3535;
+  --accent-red-light: rgba(178,69,69,.12);
+  /* Semantik */
   --success: #22c55e;
   --success-bg: rgba(34,197,94,.1);
   --warning: #f59e0b;
@@ -38,14 +45,14 @@ img{max-width:100%}
 
 /* ── Layout ── */
 .layout{display:flex;min-height:100vh}
-.sidebar{width:var(--sidebar-w);background:var(--bg-surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:100;overflow-y:auto}
+.sidebar{width:var(--sidebar-w);background:var(--bg-surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:100;overflow-y:auto;box-shadow:2px 0 12px rgba(0,0,0,.3)}
 .main-content{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100vh}
-.topbar{height:60px;background:var(--bg-surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;position:sticky;top:0;z-index:50}
+.topbar{height:60px;background:var(--bg-surface);border-bottom:2px solid var(--accent);display:flex;align-items:center;padding:0 24px;gap:16px;position:sticky;top:0;z-index:50}
 .page-body{padding:24px;flex:1}
 
 /* ── Sidebar ── */
 .sidebar-logo{padding:20px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
-.sidebar-logo .logo-mark{width:32px;height:32px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#fff;flex-shrink:0}
+.sidebar-logo .logo-mark{width:32px;height:32px;background:linear-gradient(135deg,var(--accent),var(--accent-hover));border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#fff;flex-shrink:0;box-shadow:0 2px 8px rgba(58,95,11,.4)}
 .sidebar-logo .logo-text{font-weight:600;font-size:14px;color:var(--text-primary)}
 .sidebar-logo .logo-sub{font-size:11px;color:var(--text-muted)}
 .sidebar-nav{padding:8px;flex:1}
@@ -53,7 +60,7 @@ img{max-width:100%}
 .nav-section-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);padding:12px 12px 4px}
 .nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:var(--radius-sm);color:var(--text-secondary);font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap;overflow:hidden}
 .nav-item:hover{background:var(--bg-hover);color:var(--text-primary);text-decoration:none}
-.nav-item.active{background:var(--accent-light);color:var(--accent)}
+.nav-item.active{background:var(--accent-light);color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
 .nav-item .nav-icon{width:16px;height:16px;flex-shrink:0;opacity:.7}
 .nav-item.active .nav-icon{opacity:1}
 .nav-item .badge-count{margin-left:auto;background:var(--danger);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px;min-width:18px;text-align:center}
@@ -255,3 +262,51 @@ textarea.form-control{resize:vertical;min-height:90px}
 .file-drop{border:2px dashed var(--border);border-radius:var(--radius);padding:32px;text-align:center;cursor:pointer;transition:all .2s;color:var(--text-muted)}
 .file-drop:hover,.file-drop.dragover{border-color:var(--accent);background:var(--accent-light);color:var(--text-primary)}
 .file-drop input[type=file]{display:none}
+
+/* ── Le Monde Du Tacos Marka Vurguları ── */
+.sidebar-logo-wrap{
+  padding:0 16px 16px;
+  border-bottom:1px solid var(--border);
+  background:linear-gradient(180deg, rgba(58,95,11,.08) 0%, transparent 100%);
+}
+.sidebar-logo{border-bottom:none!important;padding-bottom:0!important}
+.logo-mark-b{
+  background:linear-gradient(135deg,#3A5F0B,#2a4508)!important;
+  box-shadow:0 0 0 1px rgba(58,95,11,.4),0 4px 16px rgba(58,95,11,.3)!important;
+}
+/* Sidebar altına yeşil şerit */
+.sidebar-footer{
+  border-top:2px solid rgba(58,95,11,.3)!important;
+  background:rgba(58,95,11,.05);
+}
+/* Bayi portal badge */
+.badge-dealer{
+  background:rgba(178,69,69,.15);
+  color:#c95555;
+  border:1px solid rgba(178,69,69,.2);
+}
+/* Stat kartı — yeşil vurgu */
+.stat-card{
+  border-left:3px solid var(--accent)!important;
+}
+/* Tablo header */
+.table thead th{
+  border-bottom:2px solid rgba(58,95,11,.3)!important;
+}
+/* Scrollbar */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg-surface)}
+::-webkit-scrollbar-thumb{background:rgba(58,95,11,.4);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:rgba(58,95,11,.6)}
+/* Focus ring yeşil */
+input:focus,select:focus,textarea:focus{
+  outline:none;
+  border-color:var(--accent)!important;
+  box-shadow:0 0 0 3px rgba(58,95,11,.15)!important;
+}
+/* Aktif sayfa topbar başlık vurgusu */
+.page-title{
+  background:linear-gradient(135deg,var(--text-primary),var(--text-secondary));
+  -webkit-background-clip:text;
+  background-clip:text;
+}

@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $result = $updater->update($version);
                 if ($result['success']) {
-                    $success = "Güncelleme tamamlandı! Sürüm: <strong>$version</strong> — {$result['files_updated']} dosya güncellendi.";
+                    $success = "Güncelleme tamamlandı! Sürüm: <strong>$version</strong> — {(is_array($result['files'] ?? null) ? count($result['files']) : ($result['files'] ?? 0))} dosya güncellendi.";
                 } else {
                     $error = $result['message'] ?? 'Güncelleme başarısız.';
                 }
