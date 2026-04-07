@@ -11,9 +11,7 @@ $token   = $_GET['token'] ?? '';
 // Token varsa reset adımı
 if ($token) {
     $step = 'reset';
-    $row  = $pdo->prepare("SELECT * FROM b2b_dealers WHERE reset_token=? AND reset_expires > NOW() AND is_active=1");
-    $row->execute([$token]);
-    $dealer = $row->fetch();
+    $row = dbRow("SELECT * FROM b2b_dealers WHERE reset_token=? AND reset_expires > NOW() AND is_active=1", [$token]);
     if (!$dealer) {
         $step  = 'request';
         $error = 'Bu bağlantı geçersiz veya süresi dolmuş.';
@@ -25,19 +23,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Adım 1: E-posta gönder
     if (isset($_POST['email'])) {
         $email = trim($_POST['email']);
-        $d = $pdo->prepare("SELECT * FROM b2b_dealers WHERE email=? AND is_active=1");
-        $d->execute([$email]);
-        $d = $d->fetch();
+        $d = dbRow("SELECT * FROM b2b_dealers WHERE email=? AND is_active=1", [$email]);
         // Güvenlik: her zaman aynı mesajı göster
         if ($d) {
             $tok     = bin2hex(random_bytes(32));
             $expires = date('Y-m-d H:i:s', strtotime('+1 hour'));
-            $pdo->prepare("UPDATE b2b_dealers SET reset_token=?, reset_expires=? WHERE id=?")
+            dbExec("UPDATE b2b_dealers SET reset_token=?, reset_expires=? WHERE id=?", [$token, $expires, $dealer['id']]); //_stmt
                 ->execute([$tok, $expires, $d['id']]);
 
             // E-posta gönder
             $settings = [];
-            $rows = $pdo->query("SELECT skey, sval FROM b2b_settings")->fetchAll();
+            $rows = dbRows("SELECT skey, sval FROM b2b_settings");
             foreach ($rows as $r) $settings[$r['skey']] = $r['sval'];
 
             $siteName   = $settings['site_name'] ?? 'B2B Portal';
@@ -63,8 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Şifreler eşleşmiyor.';
         } else {
             $hash = password_hash($pass, PASSWORD_DEFAULT);
-            $pdo->prepare("UPDATE b2b_dealers SET password=?, reset_token=NULL, reset_expires=NULL WHERE reset_token=?")
-                ->execute([$hash, $token]);
+            dbExec("UPDATE b2b_dealers SET password=?, reset_token=NULL, reset_expires=NULL WHERE reset_token=?", [$hash, $token]);
             $step = 'done';
         }
     }
@@ -72,9 +67,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // DB'de reset_token kolonu yoksa ekle (güvenlik)
 try {
-    $pdo->query("SELECT reset_token FROM b2b_dealers LIMIT 1");
+    try { dbVal("SELECT reset_token FROM b2b_dealers LIMIT 1"); } catch(Exception $e) {
 } catch (\Exception $e) {
-    $pdo->query("ALTER TABLE b2b_dealers ADD COLUMN reset_token VARCHAR(64) NULL, ADD COLUMN reset_expires DATETIME NULL");
+    dbExec("ALTER TABLE b2b_dealers ADD COLUMN IF NOT EXISTS reset_token VARCHAR(64) NULL"); } // migrationD COLUMN reset_expires DATETIME NULL");
 }
 ?>
 <!DOCTYPE html>

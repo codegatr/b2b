@@ -4,7 +4,7 @@ $dealerId = $_SESSION['dealer_id'];
 
 // Tümünü okundu işaretle
 if (isset($_GET['mark_all'])) {
-    $pdo->prepare("UPDATE b2b_notifications SET is_read=1 WHERE dealer_id=?")->execute([$dealerId]);
+    dbExec("UPDATE b2b_notifications SET is_read=1 WHERE dealer_id=?", [$dealerId]);
     header('Location: ?page=notifications');
     exit;
 }
@@ -16,22 +16,16 @@ $params = [$dealerId];
 if ($filter === 'unread') { $where .= " AND is_read=0"; }
 elseif ($filter !== 'all') { $where .= " AND type=?"; $params[] = $filter; }
 
-$total = $pdo->prepare("SELECT COUNT(*) FROM b2b_notifications WHERE $where");
-$total->execute($params);
-$totalCount = $total->fetchColumn();
+$total = dbExec("SELECT COUNT(*) FROM b2b_notifications WHERE $where");
 
 $page = max(1, (int)($_GET['p'] ?? 1));
 $perPage = 20;
 $offset = ($page - 1) * $perPage;
 
-$stmt = $pdo->prepare("SELECT * FROM b2b_notifications WHERE $where ORDER BY created_at DESC LIMIT $perPage OFFSET $offset");
-$stmt->execute($params);
-$notifications = $stmt->fetchAll();
+$stmt = dbRows("SELECT * FROM b2b_notifications WHERE $where ORDER BY created_at DESC LIMIT $perPage OFFSET $offset");
 
 // Okunmamış sayısı
-$unreadCount = $pdo->prepare("SELECT COUNT(*) FROM b2b_notifications WHERE dealer_id=? AND is_read=0");
-$unreadCount->execute([$dealerId]);
-$unreadCount = $unreadCount->fetchColumn();
+$unreadCount = dbExec("SELECT COUNT(*) FROM b2b_notifications WHERE dealer_id=? AND is_read=0", [$dealerId]);
 ?>
 <div class="page-header">
     <div>

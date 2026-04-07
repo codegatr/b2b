@@ -6,14 +6,7 @@ $productId = (int)($_GET['id'] ?? 0);
 
 if (!$productId) { header('Location: ?page=products'); exit; }
 
-$product = $pdo->prepare("
-    SELECT p.*, c.name as category_name
-    FROM b2b_products p
-    LEFT JOIN b2b_categories c ON c.id = p.category_id
-    WHERE p.id = ? AND p.is_active = 1
-");
-$product->execute([$productId]);
-$product = $product->fetch();
+$product = dbRow("SELECT p.*, c.name as category_name FROM b2b_products p LEFT JOIN b2b_categories c ON c.id = p.category_id WHERE p.id = ? AND p.is_active = 1", [$productId]);
 if (!$product) { header('Location: ?page=products'); exit; }
 
 $price    = dealerPrice($productId, $dealer['price_list_id']);
@@ -21,30 +14,13 @@ $basePrice = $product['base_price'];
 $discount = $basePrice > 0 ? round((1 - $price / $basePrice) * 100) : 0;
 
 // Stok hareketi (son 10)
-$logs = $pdo->prepare("
-    SELECT sl.*, COALESCE(o.order_no, '-') as order_no
-    FROM b2b_stock_log sl
-    LEFT JOIN b2b_orders o ON o.id = sl.order_id
-    WHERE sl.product_id = ?
-    ORDER BY sl.created_at DESC LIMIT 10
-");
-$logs->execute([$productId]);
-$logs = $logs->fetchAll();
+$logs = dbRows("SELECT sl.*, COALESCE(o.order_no, '-') as order_no FROM b2b_stock_log sl LEFT JOIN b2b_orders o ON o.id = sl.order_id WHERE sl.product_id = ? ORDER BY sl.created_at DESC LIMIT 10", [$productId]);
 
 // Sepetteki miktar
-$cartQty = $pdo->prepare("SELECT qty FROM b2b_cart WHERE dealer_id=? AND product_id=?");
-$cartQty->execute([$dealerId, $productId]);
-$cartQty = (int)($cartQty->fetchColumn() ?: 0);
+$cartQty = dbExec("SELECT qty FROM b2b_cart WHERE dealer_id=? AND product_id=?", [$dealerId, $productId]);
 
 // Benzer ürünler
-$related = $pdo->prepare("
-    SELECT p.*, (SELECT price FROM b2b_price_list_items WHERE product_id=p.id AND price_list_id=? LIMIT 1) as list_price
-    FROM b2b_products p
-    WHERE p.category_id = ? AND p.id != ? AND p.is_active=1
-    LIMIT 4
-");
-$related->execute([$dealer['price_list_id'], $product['category_id'], $productId]);
-$related = $related->fetchAll();
+$related = dbRows("SELECT p.*, (SELECT price FROM b2b_price_list_items WHERE product_id=p.id AND price_list_id=? LIMIT 1) as list_price FROM b2b_products p WHERE p.category_id = ? AND p.id != ? AND p.is_active=1 LIMIT 4");
 ?>
 <div style="margin-bottom:1rem">
     <a href="?page=products" style="color:var(--text-muted);text-decoration:none;font-size:.875rem;display:inline-flex;align-items:center;gap:.4rem">
