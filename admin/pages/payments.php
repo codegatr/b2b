@@ -109,7 +109,7 @@ if ($action === 'list') {
 </div>
 
 <?php if (!empty($success)): ?><div class="alert alert-success"><?= h($success) ?></div><?php endif; ?>
-<?php if (!empty($error)):   ?><div class="alert alert-error"><?= h($error) ?></div><?php endif; ?>
+<?php if (!empty($error)):   ?><div class="alert alert-danger"><?= h($error) ?></div><?php endif; ?>
 
 <!-- Durum filtreleri -->
 <div class="tab-bar mb-4">

@@ -113,7 +113,7 @@ $total = $subtotal + $tax;
     <a href="?page=products" class="btn btn-ghost">← Alışverişe Devam</a>
 </div>
 
-<?php if ($error): ?><div class="alert alert-error mb-4"><?= h($error) ?></div><?php endif; ?>
+<?php if ($error): ?><div class="alert alert-danger mb-4"><?= h($error) ?></div><?php endif; ?>
 
 <?php if (empty($items)): ?>
 <div class="card" style="text-align:center;padding:64px 32px">

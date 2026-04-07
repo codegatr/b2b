@@ -202,7 +202,7 @@ $stockLog = dbRows("SELECT sl.*, COALESCE(a.full_name, 'Sistem') AS created_by_n
     </div>
 </div>
 <?php if (!empty($success)): ?><div class="alert alert-success"><?= h($success) ?></div><?php endif; ?>
-<?php if (!empty($error)):   ?><div class="alert alert-error"><?= h($error) ?></div><?php endif; ?>
+<?php if (!empty($error)):   ?><div class="alert alert-danger"><?= h($error) ?></div><?php endif; ?>
 
 <div class="grid grid-cols-4 gap-4 mb-6">
     <div class="stat-card"><div class="stat-label">Taban Fiyat</div><div class="stat-value"><?= money($product['base_price']) ?></div></div>
@@ -269,7 +269,7 @@ $stockLog = dbRows("SELECT sl.*, COALESCE(a.full_name, 'Sistem') AS created_by_n
     <div><h1 class="page-title"><?= $action==='add'?'Yeni Ürün':'Ürün Düzenle' ?></h1></div>
     <a href="?page=products<?= $id?"&action=detail&id=$id":'' ?>" class="btn btn-ghost">← Geri</a>
 </div>
-<?php if (!empty($error)): ?><div class="alert alert-error"><?= h($error) ?></div><?php endif; ?>
+<?php if (!empty($error)): ?><div class="alert alert-danger"><?= h($error) ?></div><?php endif; ?>
 
 <div class="card">
 <div class="card-body">

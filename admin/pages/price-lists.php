@@ -186,7 +186,7 @@ $lists = dbRows("SELECT pl.*, COUNT(pli.id) as item_count,
         <div class="form-group">
           <label class="form-label">Global İskonto (%)</label>
           <input name="discount_percent" type="number" step="0.01" min="0" max="100" class="form-control" value="<?= $list['discount_percent']??'0' ?>">
-          <div class="form-hint">Ürün bazında fiyat girilmezse bu iskonto uygulanır</div>
+          <div class="" style="font-size:12px;color:var(--text-muted);margin-top:4px">Ürün bazında fiyat girilmezse bu iskonto uygulanır</div>
         </div>
         <div class="form-group">
           <label class="form-label">Para Birimi</label>

@@ -48,7 +48,7 @@ $cats = dbRows("SELECT c.*, (SELECT COUNT(*) FROM b2b_products p WHERE p.categor
     <div><h1 class="page-title">Kategoriler</h1></div>
 </div>
 <?php if (!empty($success)): ?><div class="alert alert-success"><?= h($success) ?></div><?php endif; ?>
-<?php if (!empty($error)):   ?><div class="alert alert-error"><?= h($error) ?></div><?php endif; ?>
+<?php if (!empty($error)):   ?><div class="alert alert-danger"><?= h($error) ?></div><?php endif; ?>
 
 <div class="grid grid-cols-3 gap-6">
     <!-- Kategori Listesi -->

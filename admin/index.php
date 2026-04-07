@@ -96,7 +96,7 @@ function renderAdminPage(string $page, array $vars = []): void {
 <link rel="stylesheet" href="<?= B2B_URL ?>/assets/css/main.css?v=<?= $cfg['version'] ?>">
 <style>
 /* Admin özel stiller */
-.sidebar-logo .logo-mark{background:linear-gradient(135deg,#6366f1,#8b5cf6)}
+.sidebar-logo .logo-mark{background:linear-gradient(135deg,#ed2939,#c41f2e)}
 .admin-version{font-size:10px;color:var(--text-muted);padding:4px 12px 8px}
 </style>
 </head>
@@ -119,8 +119,8 @@ function renderAdminPage(string $page, array $vars = []): void {
     <div style="width:100%;max-width:360px">
       <div style="text-align:center;margin-bottom:32px">
         <div style="width:48px;height:48px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:12px;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:#fff">B2</div>
-        <h1 style="font-size:20px;font-weight:700;color:var(--text-primary)"><?= h($siteName) ?></h1>
-        <p style="color:var(--text-secondary);font-size:13px;margin-top:4px">Admin Paneli</p>
+        <h1 style="font-size:20px;font-weight:700;color:#1a1d2e"><?= h($siteName) ?></h1>
+        <p style="color:#4a5568;font-size:13px;margin-top:4px">Admin Paneli</p>
       </div>
       <div class="card">
         <div class="card-body">
@@ -157,7 +157,7 @@ function renderAdminPage(string $page, array $vars = []): void {
         <div class="logo-sub">Admin Paneli</div>
       </div>
     </div>
-    <div class="admin-version">v<?= h($cfg['version']) ?><?php if ($hasUpdate): ?> <span style="color:var(--warning)">↑ <?= h($latestVersion) ?></span><?php endif; ?></div>
+    <div class="admin-version">v<?= h($cfg['version']) ?><?php if ($hasUpdate): ?> <span style="color:var(--warning)">● Güncelleme</span><?php endif; ?></div>
 
     <nav class="sidebar-nav">
       <div class="nav-section">
@@ -214,7 +214,7 @@ function renderAdminPage(string $page, array $vars = []): void {
       <div class="topbar-title"><?= h($pageTitle) ?></div>
       <div class="topbar-actions">
         <?php if ($hasUpdate): ?>
-          <a href="?page=update" class="btn btn-warning btn-sm">⬆ <?= h($latestVersion) ?> Güncelle</a>
+          <a href="?page=update" class="btn btn-primary btn-sm">⬆ Güncelleme Mevcut</a>
         <?php endif; ?>
         <div class="dropdown">
           <div class="avatar" data-dropdown="admin-menu"><?= mb_substr($admin['name']??'A', 0, 1) ?></div>
@@ -243,7 +243,7 @@ function renderAdminPage(string $page, array $vars = []): void {
         echo "<div class='alert alert-{$flash['type']}' data-auto-close style='margin:16px 24px 0'>{$flash['msg']}</div>";
     }
 
-    renderAdminPage($page, compact('admin', 'cfg', 'hasUpdate', 'latestVersion'));
+    renderAdminPage($page, compact('admin', 'cfg', 'hasUpdate'));
     ?>
   </div>
 </div>

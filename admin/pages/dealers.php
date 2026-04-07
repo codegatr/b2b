@@ -164,7 +164,7 @@ if ($action === 'list') {
 </div>
 
 <?php if (!empty($success)): ?><div class="alert alert-success"><?= h($success) ?></div><?php endif; ?>
-<?php if (!empty($error)):   ?><div class="alert alert-error"><?= h($error) ?></div><?php endif; ?>
+<?php if (!empty($error)):   ?><div class="alert alert-danger"><?= h($error) ?></div><?php endif; ?>
 
 <!-- Filtreler -->
 <div class="filter-bar card mb-4">
@@ -260,7 +260,7 @@ $payments= dbRows("SELECT * FROM b2b_payments WHERE dealer_id=? ORDER BY created
     </div>
 </div>
 <?php if (!empty($success)): ?><div class="alert alert-success"><?= h($success) ?></div><?php endif; ?>
-<?php if (!empty($error)):   ?><div class="alert alert-error"><?= h($error) ?></div><?php endif; ?>
+<?php if (!empty($error)):   ?><div class="alert alert-danger"><?= h($error) ?></div><?php endif; ?>
 
 <div class="grid grid-cols-4 gap-4 mb-6">
     <div class="stat-card"><div class="stat-label">Açık Bakiye</div><div class="stat-value <?= $balance>0?'text-danger':'' ?>"><?= money($balance) ?></div></div>
@@ -353,7 +353,7 @@ $payments= dbRows("SELECT * FROM b2b_payments WHERE dealer_id=? ORDER BY created
     </div>
     <a href="?page=dealers<?= $dealer?"&action=detail&id=$id":'' ?>" class="btn btn-ghost">← Geri</a>
 </div>
-<?php if (!empty($error)): ?><div class="alert alert-error"><?= h($error) ?></div><?php endif; ?>
+<?php if (!empty($error)): ?><div class="alert alert-danger"><?= h($error) ?></div><?php endif; ?>
 
 <div class="card">
 <div class="card-body">

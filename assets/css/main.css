@@ -305,3 +305,130 @@ textarea { resize: vertical; min-height: 80px; padding-top: 10px; }
   .stats-grid { grid-template-columns: 1fr 1fr; }
   .page-body { padding: 16px; }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   ADMIN ÖZEL — Topbar, Avatar, Dropdown, Ek sınıflar
+══════════════════════════════════════════════════════════════ */
+
+/* Topbar */
+.topbar-title  { font-size: 15px; font-weight: 700; color: var(--text); flex: 1; }
+.topbar-actions{ display: flex; align-items: center; gap: 8px; }
+
+/* Avatar */
+.avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--red); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 13px; cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Dropdown */
+.dropdown { position: relative; }
+.dropdown-menu {
+  position: absolute; right: 0; top: calc(100% + 6px);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow-md);
+  min-width: 180px; z-index: 200; display: none;
+}
+.dropdown-menu.show { display: block; }
+.dropdown-item {
+  display: block; padding: 8px 14px; font-size: 13px;
+  color: var(--text-2); transition: background .1s;
+  text-decoration: none;
+}
+.dropdown-item:hover { background: var(--bg); color: var(--text); text-decoration: none; }
+.dropdown-divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+
+/* Btn warning */
+.btn-warning { background: #f59e0b; color: #fff; border-color: #f59e0b; }
+.btn-warning:hover { background: #d97706; color: #fff; }
+
+/* Admin version label */
+.admin-version { font-size: 10px; color: var(--sidebar-muted); padding: 4px 12px 8px; }
+
+/* Cart badge */
+.cart-badge {
+  background: var(--red); color: #fff; font-size: 10px; font-weight: 700;
+  padding: 1px 5px; border-radius: 99px; min-width: 16px; text-align: center;
+  margin-left: auto;
+}
+
+/* Empty state */
+.empty-state { text-align: center; padding: 48px 24px; color: var(--text-muted); }
+.empty-icon   { font-size: 40px; margin-bottom: 12px; }
+
+/* Stat-info helper */
+.stat-info { flex: 1; min-width: 0; }
+
+/* Table header kırmızı alt çizgi */
+.table thead th, table thead th {
+  border-bottom: 1px solid var(--border);
+  border-top: none;
+}
+.table.table-red thead th, table.table-red thead th {
+  border-bottom: 2px solid rgba(237,41,57,.2);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   BAYİ PORTAL — Ek sınıflar
+══════════════════════════════════════════════════════════════ */
+.notif-dot {
+  display: inline-block; width: 7px; height: 7px;
+  background: var(--red); border-radius: 50%; margin-left: 3px;
+  vertical-align: middle;
+}
+.topbar-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 10px; border-radius: var(--radius-sm);
+  color: var(--text-2); font-size: 13px; cursor: pointer;
+  transition: background .15s; position: relative;
+}
+.topbar-btn:hover { background: var(--bg); }
+.topbar-logo { font-weight: 700; font-size: 15px; color: var(--text); }
+
+/* Product grid (bayi portal) */
+.product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+.product-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); overflow: hidden;
+  transition: box-shadow .15s, transform .15s;
+}
+.product-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+.product-img {
+  height: 160px; display: flex; align-items: center;
+  justify-content: center; background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.product-img img { max-height: 130px; object-fit: contain; }
+.product-info { padding: 12px; }
+.product-name { font-weight: 600; font-size: 13px; line-height: 1.4; margin-bottom: 4px; }
+.product-sku  { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
+.product-price{ font-size: 16px; font-weight: 800; color: var(--red); }
+
+/* Qty spinner */
+.qty-spinner { display: flex; align-items: center; border: 1.5px solid var(--border-2); border-radius: var(--radius); overflow: hidden; }
+.qty-btn     { background: var(--bg); border: none; width: 32px; height: 36px; cursor: pointer; font-size: 16px; color: var(--text-2); transition: background .1s; }
+.qty-btn:hover { background: var(--border); }
+.qty-input   { width: 48px; height: 36px; text-align: center; border: none; border-left: 1px solid var(--border-2); border-right: 1px solid var(--border-2); background: transparent; color: var(--text); font-size: 13px; font-family: inherit; }
+.qty-input::-webkit-outer-spin-button, .qty-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+/* Bildirim listesi */
+.notif-list  { display: flex; flex-direction: column; }
+.notif-item  { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border); transition: background .1s; cursor: pointer; }
+.notif-item:last-child { border-bottom: none; }
+.notif-item:hover { background: var(--bg); }
+.notif-icon  { width: 36px; height: 36px; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.notif-content { flex: 1; min-width: 0; }
+.notif-title { font-weight: 600; font-size: 13px; }
+.notif-body  { font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-top: 2px; }
+.notif-time  { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+
+/* Stock badge */
+.stock-badge { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 99px; }
+.stock-ok    { background: var(--success-bg); color: var(--success); }
+.stock-low   { background: var(--warning-bg); color: var(--warning); }
+.stock-none  { background: var(--danger-bg);  color: var(--danger); }
+
+/* Divider */
+hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }

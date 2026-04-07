@@ -69,6 +69,14 @@ function renderPage(string $page, array $vars = []): void {
     }
 }
 
+// ── Public standalone sayfalar — HTML başlamadan önce yükle ────
+// Bu sayfalar kendi <!DOCTYPE html> çıktıları var, layout dışında
+if (in_array($page, ['login','apply','forgot-password','privacy','terms'])) {
+    $siteName = setting('site_name', 'B2B Bayi Portalı');
+    require B2B_ROOT . '/pages/' . $page . '.php';
+    exit;
+}
+
 // ── Layout başlat ──────────────────────────────────────────────
 $pageTitle = match($page) {
     'dashboard'    => 'Dashboard',
@@ -99,13 +107,7 @@ $pageTitle = match($page) {
 </head>
 <body>
 
-<?php if ($page === 'login'): ?>
-  <?php require B2B_ROOT . '/pages/login.php'; ?>
-
-<?php elseif ($page === 'apply'): ?>
-  <?php require B2B_ROOT . '/pages/apply.php'; ?>
-
-<?php else: ?>
+<?php
 
 <div class="layout">
   <!-- ── Sidebar ── -->
@@ -225,7 +227,6 @@ $pageTitle = match($page) {
   </div>
 </div>
 
-<?php endif; ?>
 
 <script src="<?= B2B_URL ?>/assets/js/main.js?v=<?= $cfg['version'] ?>"></script>
 </body>

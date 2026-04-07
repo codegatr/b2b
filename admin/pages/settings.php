@@ -152,7 +152,7 @@ if (isset($_GET['test_parasut'])) {
 
 <?php if ($activeTab === 'general'): ?>
 <div class="card">
-<div class="card-header"><h3>Genel Ayarlar</h3></div>
+<div class="card-header"><h3 class="card-title">Genel Ayarlar</h3></div>
 <div class="card-body">
 <form method="post">
     <?= csrfField() ?>
@@ -241,7 +241,7 @@ if (isset($_GET['test_parasut'])) {
 
 <?php elseif ($activeTab === 'smtp'): ?>
 <div class="card">
-<div class="card-header"><h3>E-posta (SMTP) Ayarları</h3></div>
+<div class="card-header"><h3 class="card-title">E-posta (SMTP) Ayarları</h3></div>
 <div class="card-body">
 <form method="post">
     <?= csrfField() ?>
@@ -287,7 +287,7 @@ if (isset($_GET['test_parasut'])) {
 
 <?php elseif ($activeTab === 'bank'): ?>
 <div class="card">
-<div class="card-header"><h3>Banka Hesapları</h3></div>
+<div class="card-header"><h3 class="card-title">Banka Hesapları</h3></div>
 <div class="card-body">
 <form method="post">
     <?= csrfField() ?>
@@ -297,7 +297,7 @@ if (isset($_GET['test_parasut'])) {
         <textarea name="bank_accounts" class="form-control" rows="8" placeholder="Her satıra bir hesap:
 Ziraat Bankası — TR12 0001 0234 5678 9012 3456 78 — CODEGA A.Ş.
 Garanti Bankası — TR98 0006 2000 1234 0006 2991 26 — CODEGA A.Ş."><?= h(setting('bank_accounts')) ?></textarea>
-        <p class="form-hint">Bu bilgiler bayi ödeme sayfasında görünür.</p>
+        <p style="font-size:12px;color:var(--text-muted);margin-top:4px">Bu bilgiler bayi ödeme sayfasında görünür.</p>
     </div>
     <div class="form-actions"><button type="submit" class="btn btn-primary">Kaydet</button></div>
 </form>
@@ -349,7 +349,7 @@ Garanti Bankası — TR98 0006 2000 1234 0006 2991 26 — CODEGA A.Ş."><?= h(se
 
 <?php elseif ($activeTab === 'github'): ?>
 <div class="card">
-<div class="card-header"><h3>GitHub Güncelleme Sistemi</h3></div>
+<div class="card-header"><h3 class="card-title">GitHub Güncelleme Sistemi</h3></div>
 <div class="card-body">
 <form method="post">
     <?= csrfField() ?>
@@ -358,7 +358,7 @@ Garanti Bankası — TR98 0006 2000 1234 0006 2991 26 — CODEGA A.Ş."><?= h(se
         <div class="form-group">
             <label>GitHub Token (Personal Access Token)</label>
             <input type="password" name="github_token" value="<?= h(setting('github_token')) ?>" class="form-control" placeholder="ghp_...">
-            <p class="form-hint">GitHub → Settings → Developer settings → Personal access tokens → repo:read permission</p>
+            <p style="font-size:12px;color:var(--text-muted);margin-top:4px">GitHub → Settings → Developer settings → Personal access tokens → repo:read permission</p>
         </div>
         <div class="form-group">
             <label>Repo (user/repo)</label>
@@ -374,28 +374,26 @@ try {
     $currentVersion = defined('B2B_VERSION') ? B2B_VERSION : setting('app_version','1.0.0');
     $hasUpdate = $latest && version_compare($latest['tag_name'], $currentVersion, '>');
 ?>
-<div class="mt-6 p-4 bg-muted rounded-lg">
-    <div style="display:flex;justify-content:space-between;align-items:center">
-        <div>
-            <div class="font-medium">Mevcut Sürüm: <strong><?= h($currentVersion) ?></strong></div>
-            <?php if ($hasUpdate): ?>
-            <div class="text-success mt-1">🆕 Yeni sürüm mevcut: <strong><?= h($latest['tag_name']) ?></strong></div>
-            <?php else: ?>
-            <div class="text-muted mt-1">Sistem güncel.</div>
-            <?php endif; ?>
-        </div>
+<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-top:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+    <div>
+        <div style="font-weight:600;font-size:13px">Mevcut Sürüm: <strong><?= h($currentVersion) ?></strong></div>
         <?php if ($hasUpdate): ?>
-        <a href="?page=update" class="btn btn-success">Güncelle →</a>
+        <div style="color:var(--success);font-size:12px;margin-top:4px">Yeni sürüm mevcut: <strong><?= h($latest['tag_name']) ?></strong></div>
+        <?php else: ?>
+        <div style="color:var(--text-muted);font-size:12px;margin-top:4px">Sistem güncel.</div>
         <?php endif; ?>
     </div>
+    <?php if ($hasUpdate): ?>
+    <a href="?page=update" class="btn btn-success btn-sm">Güncelle →</a>
+    <?php endif; ?>
 </div>
-<?php } catch (Exception $e) { echo '<div class="alert alert-error mt-4">GitHub bağlantısı: '.h($e->getMessage()).'</div>'; } ?>
+<?php } catch (Exception $e) { echo '<div class="alert alert-danger mt-4">GitHub bağlantısı: '.h($e->getMessage()).'</div>'; } ?>
 </div>
 </div>
 
 <?php elseif ($activeTab === 'order'): ?>
 <div class="card">
-<div class="card-header"><h3>Sipariş Ayarları</h3></div>
+<div class="card-header"><h3 class="card-title">Sipariş Ayarları</h3></div>
 <div class="card-body">
 <form method="post">
     <?= csrfField() ?>
@@ -403,7 +401,7 @@ try {
     <div class="form-group">
         <label>Otomatik Onay Limiti (₺)</label>
         <input type="number" step="0.01" name="order_auto_approve_limit" value="<?= h(setting('order_auto_approve_limit','0')) ?>" class="form-control">
-        <p class="form-hint">Bayi sipariş onayı "Otomatik" ise bu limite kadar olan siparişler otomatik onaylanır. 0 = tüm siparişler otomatik.</p>
+        <p style="font-size:12px;color:var(--text-muted);margin-top:4px">Bayi sipariş onayı "Otomatik" ise bu limite kadar olan siparişler otomatik onaylanır. 0 = tüm siparişler otomatik.</p>
     </div>
     <div class="form-group">
         <label>Fatura Alt Notu</label>

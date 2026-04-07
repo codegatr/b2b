@@ -118,7 +118,7 @@ if ($order['status'] !== 'iptal' && $order['status'] !== 'iade'):
     </div>
 </div>
 <?php elseif ($order['status'] === 'iptal'): ?>
-<div class="alert alert-error mb-6">
+<div class="alert alert-danger mb-6">
     ❌ Sipariş iptal edildi.<?= $order['cancel_reason'] ? ' Neden: '.h($order['cancel_reason']) : '' ?>
 </div>
 <?php endif; ?>

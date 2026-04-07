@@ -42,7 +42,7 @@ $payments = dbVal("SELECT COALESCE(SUM(amount),0) FROM b2b_payments WHERE dealer
 </div>
 
 <?php if ($overdue > 0): ?>
-<div class="alert alert-error mb-6">
+<div class="alert alert-danger mb-6">
     ⚠️ <strong><?= money($overdue) ?></strong> tutarında vadesi geçmiş borcunuz bulunmaktadır.
     Lütfen en kısa sürede ödeme yapınız.
     <a href="?page=payments&action=new" class="btn btn-sm btn-white ml-4">Ödeme Bildir</a>
