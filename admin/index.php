@@ -50,8 +50,10 @@ if (isAdmin() && (time() - $lastCheck) > 3600) {
         }
     } catch (Exception) {}
 }
-$latestSha = setting('update_latest_sha', '');
-$hasUpdate = $latestSha && $latestSha !== updater()->getInstalledSha();
+$latestSha    = setting('update_latest_sha', '');
+$installedSha = updater()->getInstalledSha();
+// Güncelleme var mı? Her iki SHA de doluysa ve farklıysa
+$hasUpdate = $latestSha && $installedSha && ($latestSha !== $installedSha);
 
 $pageTitle = match($page) {
     'dashboard'    => 'Dashboard',

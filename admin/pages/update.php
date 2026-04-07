@@ -18,8 +18,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $result = $updater->updateFromBranch();
             if ($result['success']) {
                 $fc = is_array($result['files'] ?? null) ? count($result['files']) : 0;
-                $success = "Branch guncellendi! {$fc} dosya guncellendi. Commit: " .
-                           ($result['commit']['sha_short'] ?? '');
+                $sha = $result['commit']['sha_short'] ?? '';
+                $success = "Güncelleme tamamlandı! {$fc} dosya güncellendi. Commit: {$sha}";
             } else {
                 $error = $result['message'] ?? 'Guncelleme basarisiz.';
             }

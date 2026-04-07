@@ -135,6 +135,11 @@ class B2BUpdater {
         // commit.txt kaydet
         file_put_contents($this->root . '/commit.txt', $commit['sha']);
 
+        // DB cache'i güncelle — badge anında kapansın
+        settingSave('update_latest_sha',  $commit['sha']);
+        settingSave('update_last_check',  (string)time());
+        settingClearCache();
+
         // version.txt — manifest'ten
         if (!empty($manifest['version'])) {
             file_put_contents($this->root . '/version.txt', $manifest['version']);
