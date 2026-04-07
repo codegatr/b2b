@@ -10,8 +10,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $dealer = dbRow("SELECT * FROM b2b_dealers WHERE email=? AND is_active=1", [$email]);
         if ($dealer && password_verify($pass, $dealer['password'])) {
-            dealerLogin($dealer);
-            header('Location: ?page=dashboard'); exit;
+            // dealerLogin() email+password bekliyor — direkt session set et
+            $_SESSION['dealer_id']    = $dealer['id'];
+            $_SESSION['dealer_name']  = $dealer['company_name'] ?: trim($dealer['first_name'].' '.$dealer['last_name']);
+            $_SESSION['dealer_type']  = $dealer['type'];
+            $_SESSION['dealer_email'] = $dealer['email'];
+            $_SESSION['dealer_pl']    = $dealer['price_list_id'];
+            dbExec("UPDATE b2b_dealers SET last_login=NOW() WHERE id=?", [$dealer['id']]);
+            session_regenerate_id(true);
+            $next = preg_replace('/[^a-z0-9\-\/\.\?\=\&]/i', '', $_GET['next'] ?? '');
+            header('Location: ' . ($next ?: '?page=dashboard'));
+            exit;
         } else {
             $error = 'E-posta veya sifre hatali ya da hesabiniz aktif degil.';
         }
