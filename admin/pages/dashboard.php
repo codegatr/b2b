@@ -1,0 +1,180 @@
+<?php
+/**
+ * Admin Dashboard
+ */
+$stats = [
+    'dealers'       => (int)dbVal("SELECT COUNT(*) FROM b2b_dealers WHERE is_active=1"),
+    'orders_today'  => (int)dbVal("SELECT COUNT(*) FROM b2b_orders WHERE DATE(created_at)=CURDATE()"),
+    'pending_orders'=> (int)dbVal("SELECT COUNT(*) FROM b2b_orders WHERE status='bekliyor'"),
+    'pending_pay'   => (int)dbVal("SELECT COUNT(*) FROM b2b_payments WHERE status='bekliyor'"),
+    'revenue_month' => (float)dbVal("SELECT COALESCE(SUM(grand_total),0) FROM b2b_orders WHERE MONTH(created_at)=MONTH(CURDATE()) AND YEAR(created_at)=YEAR(CURDATE()) AND status NOT IN('iptal','iade')"),
+    'products'      => (int)dbVal("SELECT COUNT(*) FROM b2b_products WHERE is_active=1"),
+    'low_stock'     => (int)dbVal("SELECT COUNT(*) FROM b2b_products WHERE stock <= stock_critical AND stock > 0 AND is_active=1"),
+    'no_stock'      => (int)dbVal("SELECT COUNT(*) FROM b2b_products WHERE stock <= 0 AND is_active=1"),
+    'applications'  => (int)dbVal("SELECT COUNT(*) FROM b2b_applications WHERE status='bekliyor'"),
+];
+
+$recentOrders = dbRows(
+    "SELECT o.*, d.company_name, d.first_name, d.last_name, d.type
+     FROM b2b_orders o JOIN b2b_dealers d ON d.id=o.dealer_id
+     ORDER BY o.created_at DESC LIMIT 8"
+);
+
+$recentPayments = dbRows(
+    "SELECT p.*, d.company_name, d.first_name, d.last_name
+     FROM b2b_payments p JOIN b2b_dealers d ON d.id=p.dealer_id
+     WHERE p.status='bekliyor'
+     ORDER BY p.created_at DESC LIMIT 5"
+);
+?>
+<div class="page-body">
+
+<!-- İstatistikler -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-icon purple">🏪</div>
+    <div class="stat-info">
+      <div class="stat-value"><?= $stats['dealers'] ?></div>
+      <div class="stat-label">Aktif Bayi</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon amber">📦</div>
+    <div class="stat-info">
+      <div class="stat-value"><?= $stats['pending_orders'] ?></div>
+      <div class="stat-label">Bekleyen Sipariş</div>
+      <?php if ($stats['orders_today']): ?><div class="stat-change up">+<?= $stats['orders_today'] ?> bugün</div><?php endif; ?>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon green">💰</div>
+    <div class="stat-info">
+      <div class="stat-value"><?= money($stats['revenue_month']) ?></div>
+      <div class="stat-label">Bu Ay Ciro</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon blue">💳</div>
+    <div class="stat-info">
+      <div class="stat-value"><?= $stats['pending_pay'] ?></div>
+      <div class="stat-label">Bekleyen Ödeme</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon <?= $stats['no_stock'] > 0 ? 'red' : ($stats['low_stock'] > 0 ? 'amber' : 'green') ?>">📊</div>
+    <div class="stat-info">
+      <div class="stat-value"><?= $stats['products'] ?></div>
+      <div class="stat-label">Aktif Ürün</div>
+      <?php if ($stats['no_stock'] > 0): ?><div class="stat-change down"><?= $stats['no_stock'] ?> ürün stok bitti</div><?php endif; ?>
+      <?php if ($stats['low_stock'] > 0): ?><div class="stat-change down" style="color:var(--warning)"><?= $stats['low_stock'] ?> kritik stok</div><?php endif; ?>
+    </div>
+  </div>
+  <?php if ($stats['applications'] > 0): ?>
+  <div class="stat-card">
+    <div class="stat-icon amber">📋</div>
+    <div class="stat-info">
+      <div class="stat-value"><?= $stats['applications'] ?></div>
+      <div class="stat-label">Bekleyen Başvuru</div>
+      <div class="stat-change"><a href="?page=applications">İncele →</a></div>
+    </div>
+  </div>
+  <?php endif; ?>
+</div>
+
+<div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;align-items:start">
+
+<!-- Son Siparişler -->
+<div class="card">
+  <div class="card-header">
+    <h2>📦 Son Siparişler</h2>
+    <a href="?page=orders" class="btn btn-secondary btn-sm">Tümünü Gör</a>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Sipariş No</th><th>Bayi</th><th>Tutar</th><th>Durum</th><th>Tarih</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php foreach ($recentOrders as $o):
+          $dn = $o['type']==='kurumsal' ? $o['company_name'] : trim($o['first_name'].' '.$o['last_name']);
+        ?>
+        <tr>
+          <td class="fw-600"><?= h($o['order_no']) ?></td>
+          <td><?= h($dn) ?></td>
+          <td><?= money((float)$o['grand_total']) ?></td>
+          <td><?= orderStatusLabel($o['status']) ?></td>
+          <td class="text-muted fs-12"><?= fmtDateTime($o['created_at']) ?></td>
+          <td><a href="?page=order&id=<?= $o['id'] ?>" class="btn btn-ghost btn-sm">Detay</a></td>
+        </tr>
+        <?php endforeach; ?>
+        <?php if (empty($recentOrders)): ?>
+        <tr><td colspan="6" class="text-center text-muted" style="padding:24px">Henüz sipariş yok</td></tr>
+        <?php endif; ?>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Bekleyen Ödemeler -->
+<div class="card">
+  <div class="card-header">
+    <h2>💳 Bekleyen Ödemeler</h2>
+    <a href="?page=payments" class="btn btn-secondary btn-sm">Tümü</a>
+  </div>
+  <div class="card-body" style="padding:0">
+    <?php foreach ($recentPayments as $p):
+      $dn = $p['company_name'] ?: trim($p['first_name'].' '.$p['last_name']);
+    ?>
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px">
+      <div style="flex:1;min-width:0">
+        <div class="fw-600 fs-13"><?= h($dn) ?></div>
+        <div class="text-muted fs-12"><?= h(strtoupper($p['type'])) ?> · <?= fmtDate($p['payment_date']) ?></div>
+      </div>
+      <div style="text-align:right">
+        <div class="fw-600" style="color:var(--success)"><?= money((float)$p['amount']) ?></div>
+        <a href="?page=payments&action=approve&id=<?= $p['id'] ?>" class="btn btn-success btn-sm" style="margin-top:4px">Onayla</a>
+      </div>
+    </div>
+    <?php endforeach; ?>
+    <?php if (empty($recentPayments)): ?>
+    <div class="empty-state" style="padding:24px"><p>Bekleyen ödeme yok</p></div>
+    <?php endif; ?>
+  </div>
+</div>
+
+</div>
+
+<!-- Stok Uyarıları -->
+<?php $lowStockProducts = dbRows(
+    "SELECT name, sku, stock, stock_critical FROM b2b_products
+     WHERE stock <= stock_critical AND is_active=1
+     ORDER BY stock ASC LIMIT 5"
+);
+if ($lowStockProducts): ?>
+<div class="card" style="margin-top:20px">
+  <div class="card-header">
+    <h2>⚠ Kritik Stok Uyarıları</h2>
+    <a href="?page=stock" class="btn btn-secondary btn-sm">Stok Yönetimi</a>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Ürün</th><th>SKU</th><th>Mevcut Stok</th><th>Kritik Seviye</th><th>Durum</th></tr></thead>
+      <tbody>
+        <?php foreach ($lowStockProducts as $p): ?>
+        <tr>
+          <td class="fw-600"><?= h($p['name']) ?></td>
+          <td class="text-muted"><?= h($p['sku']??'—') ?></td>
+          <td><strong style="color:<?= $p['stock']<=0?'var(--danger)':'var(--warning)' ?>"><?= $p['stock'] ?></strong></td>
+          <td><?= $p['stock_critical'] ?></td>
+          <td><?= stockBadge((int)$p['stock'], (int)$p['stock_critical']) ?></td>
+        </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+</div>
+<?php endif; ?>
+
+</div>

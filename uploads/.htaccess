@@ -1,0 +1,5 @@
+<FilesMatch "\.(php|php3|php4|php5|phtml|cgi|pl|py|sh)$">
+    Deny from all
+</FilesMatch>
+Options -ExecCGI
+AddHandler cgi-script .php .php3 .php4 .php5 .phtml .cgi .pl .py .sh

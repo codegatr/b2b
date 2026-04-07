@@ -1,0 +1,9 @@
+config.php
+/uploads/*
+!/uploads/.htaccess
+!/uploads/products/.gitkeep
+!/uploads/dekont/.gitkeep
+!/uploads/logo/.gitkeep
+*.bak
+*.log
+.DS_Store
