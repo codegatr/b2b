@@ -20,9 +20,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'base_price'        => floatval($_POST['base_price']),
             'unit'              => trim($_POST['unit']) ?: 'adet',
             'min_order_qty'     => intval($_POST['min_order_qty']) ?: 1,
+            'max_order_qty'     => intval($_POST['max_order_qty']) ?: null,
             'stock'             => intval($_POST['stock']),
             'stock_critical'    => intval($_POST['stock_critical']),
-            'tax_rate'          => floatval($_POST['tax_rate']),
+            'vat_rate'          => floatval($_POST['vat_rate'] ?? $_POST['tax_rate'] ?? 18),
             'parasut_product_id'=> trim($_POST['parasut_product_id']),
             'is_active'         => isset($_POST['is_active']) ? 1 : 0,
         ];
@@ -31,7 +32,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         else {
             // Resim yükleme
             if (!empty($_FILES['image']['name'])) {
-                $img = uploadFile($_FILES['image'], 'products', ['jpg','jpeg','png','webp'], 2);
+                $uploadDir = B2B_ROOT . '/uploads/products';
+                if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+                $file = $_FILES['image'];
+                $ext  = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+                $mime = ['jpg'=>'image/jpeg','jpeg'=>'image/jpeg','png'=>'image/png','webp'=>'image/webp'];
+                if (isset($mime[$ext])) $file['type'] = $mime[$ext];
+                $img = uploadFile($file, $uploadDir, ['image/jpeg','image/png','image/webp']);
                 if ($img) $data['image'] = $img;
             }
             if ($id) {
@@ -40,12 +47,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $old = dbRow("SELECT stock FROM b2b_products WHERE id=?", [$id]);
                 if ($old && $old['stock'] != $data['stock']) {
                     $diff = $data['stock'] - $old['stock'];
-                    dbExec("INSERT INTO b2b_stock_log (product_id, change_type, quantity, note, created_by, created_at) VALUES (?,?,?,?,?,NOW())",
-                        [$id, $diff>0?'giris':'cikis', abs($diff), 'Admin düzenlemesi', adminId()]);
+                    try { dbExec("INSERT INTO b2b_stock_log (product_id, change_type, quantity, note, created_by, created_at) VALUES (?,?,?,?,?,NOW())",
+                        [$id, $diff>0?'giris':'cikis', abs($diff), 'Admin düzenlemesi', adminId()]); } catch (Exception $e) {}
                 }
                 auditLog('product_updated', 'b2b_products', $id, ['name'=>$data['name']]);
                 $success = 'Ürün güncellendi.';
             } else {
+                $data['slug'] = preg_replace('/[^a-z0-9]+/','-',strtolower($data['name'])).'-'.time();
                 $data['created_at'] = date('Y-m-d H:i:s');
                 $newId = dbInsertRow('b2b_products', $data);
                 auditLog('product_created', 'b2b_products', $newId, ['name'=>$data['name']]);
@@ -67,8 +75,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 dbExec("UPDATE b2b_products SET stock=GREATEST(0,stock-?) WHERE id=?", [$qty, $pid]);
             }
-            dbExec("INSERT INTO b2b_stock_log (product_id, change_type, quantity, note, created_by, created_at) VALUES (?,?,?,?,?,NOW())",
-                [$pid, $type, $qty, $note, adminId()]);
+            try { dbExec("INSERT INTO b2b_stock_log (product_id, change_type, quantity, note, created_by, created_at) VALUES (?,?,?,?,?,NOW())",
+                [$pid, $type, $qty, $note, adminId()]); } catch (Exception $e) {}
             // Kritik stok kontrolü
             $p = dbRow("SELECT * FROM b2b_products WHERE id=?", [$pid]);
             if ($p && $p['stock'] <= $p['stock_critical']) {
@@ -168,7 +176,7 @@ if ($action === 'list') {
         <td><?= stockBadge($p['stock'], $p['stock_critical']) ?> <?= $p['stock'] ?> <?= h($p['unit']) ?></td>
         <td><?= $p['min_order_qty'] ?> <?= h($p['unit']) ?></td>
         <td>
-            <form method="post" style="display:inline">
+            <form method="post" enctype="multipart/form-data" style="display:inline">
                 <?= csrfField() ?>
                 <input type="hidden" name="form_action" value="toggle">
                 <input type="hidden" name="product_id" value="<?= $p['id'] ?>">
@@ -311,7 +319,7 @@ $stockLog = dbRows("SELECT sl.*, COALESCE(a.full_name, 'Sistem') AS created_by_n
             <label>KDV Oranı (%)</label>
             <select name="tax_rate" class="form-control">
                 <?php foreach ([0,1,8,10,18,20] as $t): ?>
-                <option value="<?= $t ?>" <?= ($product['tax_rate']??18)==$t?'selected':'' ?>>%<?= $t ?></option>
+                <option value="<?= $t ?>" <?= ($product['vat_rate']??$product['tax_rate']??18)==$t?'selected':'' ?>>%<?= $t ?></option>
                 <?php endforeach; ?>
             </select>
         </div>
