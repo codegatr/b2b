@@ -42,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $siteName   = $settings['site_name'] ?? 'B2B Portal';
             $siteUrl    = rtrim($settings['site_url'] ?? 'http://localhost', '/');
-            $resetLink  = $siteUrl . '/pages/forgot-password.php?token=' . $tok;
+            $resetLink  = $siteUrl . '/?page=forgot-password&token=' . $tok;
 
             $subject = $siteName . ' - Şifre Sıfırlama';
             $body    = "Merhaba {$d['company_name']},\n\nŞifrenizi sıfırlamak için aşağıdaki bağlantıya tıklayın:\n\n{$resetLink}\n\nBu bağlantı 1 saat geçerlidir.\n\nİyi çalışmalar,\n{$siteName}";
@@ -109,7 +109,7 @@ body { background:var(--bg);display:flex;align-items:center;justify-content:cent
             Kayıtlı e-posta adresinize şifre sıfırlama bağlantısı gönderdik.
             Gelen kutunuzu kontrol edin.
         </p>
-        <a href="/pages/login.php" class="btn btn-secondary" style="margin-top:1.5rem">Girişe Dön</a>
+        <a href="/?page=login" class="btn btn-secondary" style="margin-top:1.5rem">Girişe Dön</a>
     </div>
 
     <?php elseif ($step === 'reset'): ?>
@@ -135,7 +135,7 @@ body { background:var(--bg);display:flex;align-items:center;justify-content:cent
         <p style="color:var(--text-muted);font-size:.9rem">
             Yeni şifrenizle giriş yapabilirsiniz.
         </p>
-        <a href="/pages/login.php" class="btn btn-primary" style="margin-top:1.5rem">Giriş Yap</a>
+        <a href="/?page=login" class="btn btn-primary" style="margin-top:1.5rem">Giriş Yap</a>
     </div>
 
     <?php else: ?>
@@ -152,7 +152,7 @@ body { background:var(--bg);display:flex;align-items:center;justify-content:cent
             <button type="submit" class="btn btn-primary" style="width:100%">Sıfırlama Bağlantısı Gönder</button>
         </form>
         <div style="text-align:center;margin-top:1.25rem">
-            <a href="/pages/login.php" style="color:var(--text-muted);font-size:.875rem">← Girişe Dön</a>
+            <a href="/?page=login" style="color:var(--text-muted);font-size:.875rem">← Girişe Dön</a>
         </div>
     </div>
     <?php endif; ?>

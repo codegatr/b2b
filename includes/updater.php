@@ -26,8 +26,10 @@ class B2BUpdater {
 
     /** Tüm release'leri getir */
     public function getReleases(int $limit = 10): array {
-        $url = "https://api.github.com/repos/{$this->repo}/releases?per_page={$limit}";
-        return $this->githubRequest($url) ?? [];
+        $url  = "https://api.github.com/repos/{$this->repo}/releases?per_page={$limit}";
+        $data = $this->githubRequest($url);
+        // 404 → repo var ama release yok → boş dizi
+        return is_array($data) ? $data : [];
     }
 
     /** Mevcut versiyonu getir */
@@ -219,9 +221,13 @@ class B2BUpdater {
         ]);
         $result = curl_exec($ch);
         $code   = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err    = curl_error($ch);
         curl_close($ch);
+        if ($err) return null; // cURL hatası
+        if ($code === 404) return []; // bulunamadı (release yok)
         if ($code !== 200) return null;
-        return json_decode($result, true);
+        $decoded = json_decode($result, true);
+        return $decoded;
     }
 
     /** Dosya indir */

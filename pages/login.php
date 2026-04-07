@@ -393,7 +393,7 @@ html,body{height:100%;font-family:'Inter',-apple-system,sans-serif;font-size:14p
       <div class="fg">
         <div class="frow">
           <label class="fl" for="pw" style="margin-bottom:0">Sifre</label>
-          <a href="pages/forgot-password.php" class="flink">Sifremi Unuttum</a>
+          <a href="?page=forgot-password" class="flink">Sifremi Unuttum</a>
         </div>
         <div class="fiw">
           <span class="fi-ico">
@@ -423,7 +423,7 @@ html,body{height:100%;font-family:'Inter',-apple-system,sans-serif;font-size:14p
 
     <div class="form-foot">
       <?= htmlspecialchars($siteName) ?><br>
-      <a href="pages/privacy.php">Gizlilik &amp; KVKK</a> &nbsp;&middot;&nbsp; <a href="pages/terms.php">Kullanım Koşulları</a>
+      <a href="?page=privacy">Gizlilik &amp; KVKK</a> &nbsp;&middot;&nbsp; <a href="?page=terms">Kullanım Koşulları</a>
     </div>
 
   </div>

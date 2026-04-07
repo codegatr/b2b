@@ -58,13 +58,13 @@ article .warning{background:rgba(178,69,69,.07);border-left:3px solid var(--red)
 
 <div class="topbar">
   <div class="topbar-inner">
-    <a href="pages/login.php" class="topbar-brand">
+    <a href="/?page=login" class="topbar-brand">
       <div class="topbar-brand-mark">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>
       </div>
       <?= htmlspecialchars($siteName) ?>
     </a>
-    <a href="pages/login.php" class="topbar-back">
+    <a href="/?page=login" class="topbar-back">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
       Giriş Sayfasına Dön
     </a>
@@ -202,7 +202,7 @@ article .warning{background:rgba(178,69,69,.07);border-left:3px solid var(--red)
       <p>Teknik altyapı CODEGA (codega.com.tr) tarafından geliştirilmiştir; yazılım hakları saklıdır.</p>
 
       <h2 id="gizlilik">11. Gizlilik</h2>
-      <p>Kişisel verilerin işlenmesi, 6698 sayılı KVKK ve <a href="pages/privacy.php">Gizlilik Politikamız</a> çerçevesinde gerçekleştirilir. Bu Koşulların ayrılmaz bir parçasını oluşturur.</p>
+      <p>Kişisel verilerin işlenmesi, 6698 sayılı KVKK ve <a href="/?page=privacy">Gizlilik Politikamız</a> çerçevesinde gerçekleştirilir. Bu Koşulların ayrılmaz bir parçasını oluşturur.</p>
 
       <h2 id="fesih">12. Fesih</h2>
       <p>Her iki taraf da yazılı bildirimle Bayi hesabını ve bu Koşulların uygulanmasını sona erdirebilir. Fesih tarihinden önce oluşmuş siparişler, borçlar ve alacaklar mevcut koşullar çerçevesinde tasfiye edilir. Fesih halinde Platform erişimi derhal sonlandırılır.</p>
@@ -224,8 +224,8 @@ article .warning{background:rgba(178,69,69,.07);border-left:3px solid var(--red)
 
 <div class="page-footer">
   <p>&copy; <?= date('Y') ?> <?= htmlspecialchars($companyName) ?> &mdash; Tüm hakları saklıdır. &nbsp;|&nbsp;
-    <a href="pages/privacy.php">Gizlilik Politikası</a> &nbsp;|&nbsp;
-    <a href="pages/login.php">Giriş Yap</a>
+    <a href="/?page=privacy">Gizlilik Politikası</a> &nbsp;|&nbsp;
+    <a href="/?page=login">Giriş Yap</a>
   </p>
 </div>
 

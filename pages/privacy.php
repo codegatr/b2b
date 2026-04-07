@@ -77,13 +77,13 @@ article table td{padding:9px 14px;border:1px solid var(--border);color:#374151;v
 
 <div class="topbar">
   <div class="topbar-inner">
-    <a href="pages/login.php" class="topbar-brand">
+    <a href="/?page=login" class="topbar-brand">
       <div class="topbar-brand-mark">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>
       </div>
       <?= htmlspecialchars($siteName) ?>
     </a>
-    <a href="pages/login.php" class="topbar-back">
+    <a href="/?page=login" class="topbar-back">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
       Giriş Sayfasına Dön
     </a>
@@ -240,8 +240,8 @@ article table td{padding:9px 14px;border:1px solid var(--border);color:#374151;v
 
 <div class="page-footer">
   <p>&copy; <?= date('Y') ?> <?= htmlspecialchars($companyName) ?> &mdash; Tüm hakları saklıdır. &nbsp;|&nbsp;
-    <a href="?page=terms">Kullanım Koşulları</a> &nbsp;|&nbsp;
-    <a href="pages/login.php">Giriş Yap</a>
+    <a href="/?page=terms">Kullanım Koşulları</a> &nbsp;|&nbsp;
+    <a href="/?page=login">Giriş Yap</a>
   </p>
 </div>
 
