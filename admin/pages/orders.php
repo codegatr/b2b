@@ -58,11 +58,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Cari kayıt
             $dealer = dbRow("SELECT * FROM b2b_dealers WHERE id=?", [$order['dealer_id']]);
             $dueDate = date('Y-m-d', strtotime("+{$dealer['payment_term_days']} days"));
-            ledgerAdd($order['dealer_id'], 'borc', $order['grand_total'], "Sipariş: {$order['order_number']}", $dueDate, $oid, 'order');
+            ledgerAdd($order['dealer_id'], 'borc', (float)$order['grand_total'], "Sipariş: {$order['order_no']}", 'order', $oid, $dueDate);
             // Paraşüt fatura
             try { parasut()->createInvoice($oid); } catch (Exception $e) {}
             // Bildirim
-            notifyDealer($order['dealer_id'], 'Siparişiniz Onaylandı', "#{$order['order_number']} numaralı siparişiniz onaylandı.", 'order', $oid);
+            notifyDealer($order['dealer_id'], 'Siparişiniz Onaylandı', "#{$order['order_no']} numaralı siparişiniz onaylandı.", 'order', $oid);
             auditLog('order_approved', 'b2b_orders', $oid, []);
             $success = 'Sipariş onaylandı.';
         }
@@ -82,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Cari iptal
                 dbExec("UPDATE b2b_ledger SET is_closed=1 WHERE ref_id=? AND ref_type='order'", [$oid]);
             }
-            notifyDealer($order['dealer_id'], 'Sipariş İptal Edildi', "#{$order['order_number']} numaralı siparişiniz iptal edildi." . ($reason ? " Neden: $reason" : ''), 'order', $oid);
+            notifyDealer($order['dealer_id'], 'Sipariş İptal Edildi', "#{$order['order_no']} numaralı siparişiniz iptal edildi." . ($reason ? " Neden: $reason" : ''), 'order', $oid);
             $success = 'Sipariş iptal edildi.';
         }
         $action = 'detail'; $id = $oid;
@@ -100,7 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 dbExec("UPDATE b2b_orders SET delivered_at=NOW() WHERE id=?", [$oid]);
             }
             $order = dbRow("SELECT * FROM b2b_orders WHERE id=?", [$oid]);
-            notifyDealer($order['dealer_id'], 'Sipariş Durumu Güncellendi', "#{$order['order_number']}: " . orderStatusLabel($status, false), 'order', $oid);
+            notifyDealer($order['dealer_id'], 'Sipariş Durumu Güncellendi', "#{$order['order_no']}: " . orderStatusLabel($status, false), 'order', $oid);
             $success = 'Durum güncellendi.';
         }
         $action = 'detail'; $id = $oid;
@@ -145,7 +145,7 @@ if ($action === 'list') {
 
     $where = ['1=1']; $params = [];
     if ($search) {
-        $where[] = '(o.order_number LIKE ? OR d.company_name LIKE ?)';
+        $where[] = '(o.order_no LIKE ? OR d.company_name LIKE ?)';
         $s = "%$search%"; $params[] = $s; $params[] = $s;
     }
     if ($status)   { $where[] = 'o.status=?'; $params[] = $status; }
@@ -197,7 +197,7 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
     <tbody>
     <?php foreach ($orders as $o): ?>
     <tr class="<?= $o['status']==='bekliyor'?'row-highlight':'' ?>">
-        <td><a href="?page=orders&action=detail&id=<?= $o['id'] ?>" class="font-medium"><?= h($o['order_number']) ?></a></td>
+        <td><a href="?page=orders&action=detail&id=<?= $o['id'] ?>" class="font-medium"><?= h($o['order_no']) ?></a></td>
         <td><?= h($o['company_name']) ?></td>
         <td><?= fmtDate($o['created_at']) ?></td>
         <td class="font-medium"><?= money($o['grand_total']) ?></td>
@@ -220,7 +220,7 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
 <?php elseif ($action === 'detail' && $order): ?>
 <div class="page-header">
     <div>
-        <h1 class="page-title"><?= h($order['order_number']) ?></h1>
+        <h1 class="page-title"><?= h($order['order_no']) ?></h1>
         <p class="page-sub"><?= h($order['company_name']) ?> — <?= fmtDate($order['created_at']) ?></p>
     </div>
     <div class="btn-group">
@@ -334,7 +334,7 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
 <div class="modal">
     <div class="modal-header"><h3>Siparişi Onayla</h3></div>
     <div class="modal-body">
-        <p><?= h($order['order_number']) ?> numaralı siparişi onaylamak istediğinize emin misiniz?</p>
+        <p><?= h($order['order_no']) ?> numaralı siparişi onaylamak istediğinize emin misiniz?</p>
         <p class="text-sm text-muted mt-2">Onaylanınca stok düşülecek ve bayi bilgilendirilecektir.</p>
     </div>
     <div class="modal-footer">

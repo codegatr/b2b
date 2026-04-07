@@ -218,3 +218,48 @@ $hasBranchUpdate = $latestCommit && ($latestCommit['sha'] !== $installedSha);
   </table>
 </div>
 <?php endif; ?>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Branch güncelleme formu
+    document.querySelectorAll('form[data-update-form]').forEach(function(form) {
+        form.addEventListener('submit', function(e) {
+            const btn = form.querySelector('button[type=submit]');
+            if (!btn) return;
+            const origText = btn.innerHTML;
+            btn.disabled = true;
+
+            // Aşamalar
+            const stages = [
+                { text: '🔗 GitHub'a bağlanılıyor...', t: 800 },
+                { text: '📦 Dosyalar indiriliyor...', t: 1800 },
+                { text: '📂 Dosyalar çıkarılıyor...', t: 1200 },
+                { text: '✏️  Sistem güncelleniyor...', t: 800 },
+                { text: '✅ Tamamlandı!', t: 400 },
+            ];
+
+            let elapsed = 0;
+            stages.forEach(function(s) {
+                setTimeout(function() { btn.innerHTML = s.text; }, elapsed);
+                elapsed += s.t;
+            });
+
+            // Progress bar
+            const bar = document.createElement('div');
+            bar.style.cssText = 'height:3px;background:linear-gradient(90deg,#ed2939,#f59e0b);border-radius:2px;margin-top:10px;width:0;transition:width 5s linear';
+            btn.parentNode.insertBefore(bar, btn.nextSibling);
+            setTimeout(function() { bar.style.width = '100%'; }, 50);
+        });
+    });
+
+    // Zorla yükleme formu da aynı
+    document.querySelectorAll('form[data-force-form]').forEach(function(form) {
+        form.addEventListener('submit', function(e) {
+            const btn = form.querySelector('button[type=submit]');
+            if (!btn) return;
+            btn.disabled = true;
+            btn.innerHTML = '🔄 Yükleniyor...';
+        });
+    });
+});
+</script>

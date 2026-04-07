@@ -126,6 +126,7 @@ function renderAdminPage(string $page, array $vars = []): void {
 .tab-item.active .tab-count{background:rgba(255,255,255,.25);color:#fff;border-color:transparent}
 .tab-count{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:18px;background:#f4f5f7;border:1px solid #e4e6ea;border-radius:99px;font-size:11px;font-weight:700;padding:0 6px;color:#9aa5b4}
 .tab-count.warn{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.3);color:#b45309}
+@keyframes pulse-red{0%,100%{box-shadow:0 0 0 0 rgba(237,41,57,.4)}50%{box-shadow:0 0 0 6px rgba(237,41,57,0)}}
 /* Alert */
 .alert{padding:12px 16px;border-radius:8px;margin-bottom:16px;font-size:13px;border:1px solid transparent}
 .alert-success{background:#f0fdf4;border-color:#bbf7d0;color:#15803d}
@@ -281,19 +282,51 @@ function renderAdminPage(string $page, array $vars = []): void {
   <div class="main-content">
     <div class="topbar">
       <div class="topbar-title"><?= h($pageTitle) ?></div>
-      <div class="topbar-actions">
+      <div class="topbar-actions" style="gap:6px">
+
+        <!-- Güncelleme butonu -->
         <?php if ($hasUpdate): ?>
-          <a href="?page=update" class="btn btn-primary btn-sm">⬆ Güncelleme Mevcut</a>
+        <a href="?page=update"
+           style="display:flex;align-items:center;gap:5px;padding:5px 12px;background:#ed2939;color:#fff;border-radius:6px;font-size:12px;font-weight:600;text-decoration:none;animation:pulse-red 1.5s infinite">
+          ↑ Güncelleme Mevcut
+        </a>
         <?php endif; ?>
+
+        <!-- Bayi Portalı -->
+        <a href="<?= B2B_URL ?>"
+           target="_blank"
+           title="Bayi Portalı"
+           style="display:flex;align-items:center;gap:5px;padding:5px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:500;color:var(--text-2);text-decoration:none">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Bayi Portalı
+        </a>
+
+        <!-- Admin Kullanıcılar -->
+        <a href="?page=admins"
+           title="Admin Kullanıcılar"
+           style="display:flex;align-items:center;gap:5px;padding:5px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:500;color:var(--text-2);text-decoration:none">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          Kullanıcılar
+        </a>
+
+        <!-- Çıkış -->
+        <a href="?page=logout"
+           title="Çıkış Yap"
+           style="display:flex;align-items:center;gap:5px;padding:5px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:500;color:var(--danger);text-decoration:none"
+           onclick="return confirm('Çıkış yapmak istediğinize emin misiniz?')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Çıkış
+        </a>
+
+        <!-- Kullanıcı Avatar -->
         <div class="dropdown">
           <div class="avatar" data-dropdown="admin-menu"><?= mb_substr($admin['name']??'A', 0, 1) ?></div>
           <div class="dropdown-menu" id="admin-menu">
-            <div style="padding:12px 14px;font-size:12px;color:var(--text-muted)"><?= h($admin['name']??'') ?></div>
-            <div style="padding:0 14px 8px;font-size:11px;color:var(--text-muted)"><?= h($admin['role']??'') ?></div>
+            <div style="padding:12px 14px;font-size:13px;font-weight:600;color:var(--text)"><?= h($admin['name']??'') ?></div>
+            <div style="padding:0 14px 10px;font-size:11px;color:var(--text-muted)"><?= h($admin['role']??'') ?></div>
             <hr class="dropdown-divider">
-            <a href="?page=settings" class="dropdown-item">⚙️ Ayarlar</a>
-            <hr class="dropdown-divider">
-            <a href="?page=logout" class="dropdown-item" style="color:var(--danger)">🚪 Çıkış</a>
+            <a href="?page=settings" class="dropdown-item">⚙️ Sistem Ayarları</a>
+            <a href="?page=update" class="dropdown-item">🚀 Güncelleme Merkezi</a>
           </div>
         </div>
       </div>
