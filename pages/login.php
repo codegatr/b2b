@@ -34,7 +34,7 @@ html,body{height:100%;font-family:'Inter',-apple-system,sans-serif;font-size:14p
 :root{
   --green:#ed2939;--green-d:#c41f2e;--green-l:#f04050;
   --red:#b24545;--red-d:#8f3535;--red-l:#c95555;
-  --cream:#f5f0e8;--cream-d:#ede6d6;
+  --cream:#f4f5f7;--cream-d:#ede6d6;
   --ink:#1f2937;--muted:#6b7280;
   --bg-dark:#0f0c0c;--bg-card:#1a2710;
 }
@@ -149,7 +149,7 @@ html,body{height:100%;font-family:'Inter',-apple-system,sans-serif;font-size:14p
 
 /* ══════ SAG — FORM PANEL ══════ */
 .form-panel{
-  background:var(--cream);
+  background:#f4f5f7;
   display:flex;flex-direction:column;
   align-items:center;justify-content:center;
   padding:56px 64px;
@@ -242,7 +242,7 @@ html,body{height:100%;font-family:'Inter',-apple-system,sans-serif;font-size:14p
   display:flex;align-items:center;justify-content:center;gap:8px;
   margin-top:10px;letter-spacing:.01em;
   transition:background .15s,transform .1s,box-shadow .15s;
-  box-shadow:0 4px 16px rgba(237,41,57,.35);
+  box-shadow:0 2px 8px rgba(237,41,57,.25);
 }
 .btn-sub:hover{background:var(--green-l);box-shadow:0 6px 24px rgba(237,41,57,.4)}
 .btn-sub:active{transform:scale(.98)}

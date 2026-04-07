@@ -32,14 +32,14 @@ $recentPayments = dbRows(
 <!-- İstatistikler -->
 <div class="stats-grid">
   <div class="stat-card">
-    <div class="stat-icon purple">🏪</div>
+    <div class="stat-icon purple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>
     <div class="stat-info">
       <div class="stat-value"><?= $stats['dealers'] ?></div>
       <div class="stat-label">Aktif Bayi</div>
     </div>
   </div>
   <div class="stat-card">
-    <div class="stat-icon amber">📦</div>
+    <div class="stat-icon amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg></div>
     <div class="stat-info">
       <div class="stat-value"><?= $stats['pending_orders'] ?></div>
       <div class="stat-label">Bekleyen Sipariş</div>
@@ -47,21 +47,21 @@ $recentPayments = dbRows(
     </div>
   </div>
   <div class="stat-card">
-    <div class="stat-icon green">💰</div>
+    <div class="stat-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg></div>
     <div class="stat-info">
       <div class="stat-value"><?= money($stats['revenue_month']) ?></div>
       <div class="stat-label">Bu Ay Ciro</div>
     </div>
   </div>
   <div class="stat-card">
-    <div class="stat-icon blue">💳</div>
+    <div class="stat-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></div>
     <div class="stat-info">
       <div class="stat-value"><?= $stats['pending_pay'] ?></div>
       <div class="stat-label">Bekleyen Ödeme</div>
     </div>
   </div>
   <div class="stat-card">
-    <div class="stat-icon <?= $stats['no_stock'] > 0 ? 'red' : ($stats['low_stock'] > 0 ? 'amber' : 'green') ?>">📊</div>
+    <div class="stat-icon <?= $stats['no_stock'] > 0 ? 'red' : ($stats['low_stock'] > 0 ? 'amber' : 'green') ?>"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div>
     <div class="stat-info">
       <div class="stat-value"><?= $stats['products'] ?></div>
       <div class="stat-label">Aktif Ürün</div>
@@ -71,7 +71,7 @@ $recentPayments = dbRows(
   </div>
   <?php if ($stats['applications'] > 0): ?>
   <div class="stat-card">
-    <div class="stat-icon amber">📋</div>
+    <div class="stat-icon amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
     <div class="stat-info">
       <div class="stat-value"><?= $stats['applications'] ?></div>
       <div class="stat-label">Bekleyen Başvuru</div>
@@ -86,7 +86,7 @@ $recentPayments = dbRows(
 <!-- Son Siparişler -->
 <div class="card">
   <div class="card-header">
-    <h2>📦 Son Siparişler</h2>
+    <h3 class="card-title">Son Siparişler</h3>
     <a href="?page=orders" class="btn btn-secondary btn-sm">Tümünü Gör</a>
   </div>
   <div class="table-wrap">
@@ -120,7 +120,7 @@ $recentPayments = dbRows(
 <!-- Bekleyen Ödemeler -->
 <div class="card">
   <div class="card-header">
-    <h2>💳 Bekleyen Ödemeler</h2>
+    <h3 class="card-title">Bekleyen Ödemeler</h3>
     <a href="?page=payments" class="btn btn-secondary btn-sm">Tümü</a>
   </div>
   <div class="card-body" style="padding:0">
