@@ -368,26 +368,19 @@ Garanti Bankası — TR98 0006 2000 1234 0006 2991 26 — CODEGA A.Ş."><?= h(se
     <div class="form-actions"><button type="submit" class="btn btn-primary">Kaydet</button></div>
 </form>
 <?php
-$updater = updater();
-try {
-    $latest = $updater->getLatestRelease();
-    $currentVersion = defined('B2B_VERSION') ? B2B_VERSION : setting('app_version','1.0.0');
-    $hasUpdate = $latest && version_compare($latest['tag_name'], $currentVersion, '>');
+$_ver = updater()->getCurrentVersion();
+$_sha = updater()->getInstalledSha();
 ?>
-<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-top:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-    <div>
-        <div style="font-weight:600;font-size:13px">Mevcut Sürüm: <strong><?= h($currentVersion) ?></strong></div>
-        <?php if ($hasUpdate): ?>
-        <div style="color:var(--success);font-size:12px;margin-top:4px">Yeni sürüm mevcut: <strong><?= h($latest['tag_name']) ?></strong></div>
-        <?php else: ?>
-        <div style="color:var(--text-muted);font-size:12px;margin-top:4px">Sistem güncel.</div>
-        <?php endif; ?>
+<div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-top:16px">
+    <div style="font-weight:600;font-size:13px;margin-bottom:6px">Sürüm Bilgisi</div>
+    <div style="font-size:13px;color:var(--text-2)">
+        Mevcut sürüm: <strong><?= h($_ver) ?></strong>
+        <?php if ($_sha): ?> &nbsp;·&nbsp; Commit: <code style="font-size:11px"><?= h(substr($_sha,0,7)) ?></code><?php endif; ?>
     </div>
-    <?php if ($hasUpdate): ?>
-    <a href="?page=update" class="btn btn-success btn-sm">Güncelle →</a>
-    <?php endif; ?>
+    <div style="margin-top:10px">
+        <a href="?page=update" class="btn btn-secondary btn-sm">Güncelleme Merkezi →</a>
+    </div>
 </div>
-<?php } catch (Exception $e) { echo '<div class="alert alert-danger mt-4">GitHub bağlantısı: '.h($e->getMessage()).'</div>'; } ?>
 </div>
 </div>
 

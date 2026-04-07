@@ -69,9 +69,22 @@ $pendingCount = dbVal("SELECT COUNT(*) FROM b2b_applications WHERE status='bekli
 
 <?php if (!empty($success)): ?><div class="alert alert-success"><?= $success ?></div><?php endif; ?>
 
-<div class="tab-bar mb-4">
+<?php
+$_acounts = [
+    'bekliyor'   => (int)dbVal("SELECT COUNT(*) FROM b2b_applications WHERE status='bekliyor'"),
+    'onaylandi'  => (int)dbVal("SELECT COUNT(*) FROM b2b_applications WHERE status='onaylandi'"),
+    'reddedildi' => (int)dbVal("SELECT COUNT(*) FROM b2b_applications WHERE status='reddedildi'"),
+    ''           => (int)dbVal("SELECT COUNT(*) FROM b2b_applications"),
+];
+?>
+<div class="tab-bar">
     <?php foreach (['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','reddedildi'=>'Reddedilen',''=>'Tümü'] as $v=>$l): ?>
-    <a href="?page=applications&status=<?= $v ?>" class="tab-item <?= $status===$v?'active':'' ?>"><?= $l ?></a>
+    <a href="?page=applications&status=<?= $v ?>" class="tab-item <?= $status===$v?'active':'' ?>">
+        <?= $l ?>
+        <?php if ($_acounts[$v] > 0): ?>
+        <span class="tab-count <?= $v==='bekliyor'?'warn':'' ?>"><?= $_acounts[$v] ?></span>
+        <?php endif; ?>
+    </a>
     <?php endforeach; ?>
 </div>
 

@@ -112,9 +112,23 @@ if ($action === 'list') {
 <?php if (!empty($error)):   ?><div class="alert alert-danger"><?= h($error) ?></div><?php endif; ?>
 
 <!-- Durum filtreleri -->
-<div class="tab-bar mb-4">
-    <?php foreach (['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','reddedildi'=>'Reddedilen',''=>'Tümü'] as $val=>$label): ?>
-    <a href="?page=payments&status=<?= $val ?>" class="tab-item <?= $status===$val?'active':'' ?>"><?= $label ?></a>
+<?php
+$_counts = [
+    'bekliyor'    => (int)dbVal("SELECT COUNT(*) FROM b2b_payments WHERE status='bekliyor'"),
+    'onaylandi'   => (int)dbVal("SELECT COUNT(*) FROM b2b_payments WHERE status='onaylandi'"),
+    'reddedildi'  => (int)dbVal("SELECT COUNT(*) FROM b2b_payments WHERE status='reddedildi'"),
+    ''            => (int)dbVal("SELECT COUNT(*) FROM b2b_payments"),
+];
+$_tabs = ['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','reddedildi'=>'Reddedilen',''=>'Tümü'];
+?>
+<div class="tab-bar">
+    <?php foreach ($_tabs as $val=>$label): ?>
+    <a href="?page=payments&status=<?= $val ?>" class="tab-item <?= $status===$val?'active':'' ?>">
+        <?= $label ?>
+        <?php if ($_counts[$val] > 0): ?>
+        <span class="tab-count <?= $val==='bekliyor'?'warn':'' ?>"><?= $_counts[$val] ?></span>
+        <?php endif; ?>
+    </a>
     <?php endforeach; ?>
 </div>
 

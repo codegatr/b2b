@@ -10,7 +10,7 @@ if ($action === 'delete' && $editId) {
     if ($editId === $_SESSION['admin_id']) {
         $msg = 'error:Kendinizi silemezsiniz.';
     } else {
-        $pdo->prepare("DELETE FROM b2b_admin_users WHERE id=?")->execute([$editId]);
+        dbExec("DELETE FROM b2b_admin_users WHERE id=?", [$editId]);
         auditLog('admin_delete', 'b2b_admin_users', $editId, ['deleted_by' => $_SESSION['admin_id']]);
         header('Location: ?page=admins&msg=deleted');
         exit;
@@ -24,8 +24,7 @@ if ($action === 'reset_pass' && $editId && $_SERVER['REQUEST_METHOD'] === 'POST'
     if (strlen($newPass) < 6) {
         $msg = 'error:Şifre en az 6 karakter olmalı.';
     } else {
-        $pdo->prepare("UPDATE b2b_admin_users SET password=? WHERE id=?")
-            ->execute([password_hash($newPass, PASSWORD_DEFAULT), $editId]);
+        dbExec("UPDATE b2b_admin_users SET password=? WHERE id=?", [password_hash($newPass, PASSWORD_DEFAULT), $editId]);
         auditLog('admin_reset_pass', 'b2b_admin_users', $editId);
         $msg = 'success:Şifre güncellendi.';
         $action = 'list';
@@ -54,18 +53,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save'])) {
             }
             $sql .= " WHERE id=?";
             $params[] = $editId;
-            $pdo->prepare($sql)->execute($params);
+            dbExec($sql, $params);
             auditLog('admin_update', 'b2b_admin_users', $editId);
             $msg = 'success:Admin güncellendi.';
         } else {
             // Ekle
             if (!$pass || strlen($pass) < 6) { $msg = 'error:Şifre en az 6 karakter.'; goto render; }
-            $dup = $pdo->prepare("SELECT id FROM b2b_admin_users WHERE email=?");
-            $dup->execute([$email]);
-            if ($dup->fetch()) { $msg = 'error:Bu e-posta zaten kayıtlı.'; goto render; }
-            $pdo->prepare("INSERT INTO b2b_admin_users (name, email, password, role) VALUES (?,?,?,?)")
-                ->execute([$name, $email, password_hash($pass, PASSWORD_DEFAULT), $role]);
-            auditLog('admin_create', 'b2b_admin_users', $pdo->lastInsertId());
+            if (dbVal("SELECT id FROM b2b_admin_users WHERE email=?", [$email])) {
+                $msg = 'error:Bu e-posta zaten kayıtlı.'; goto render;
+            }
+            dbExec("INSERT INTO b2b_admin_users (name, email, password, role) VALUES (?,?,?,?)", [$name, $email, password_hash($pass, PASSWORD_DEFAULT), $role]);
+            auditLog('admin_create', 'b2b_admin_users', db()->lastInsertId());
             $msg = 'success:Admin eklendi.';
         }
         $editId = 0;
@@ -84,15 +82,12 @@ if (isset($_GET['msg'])) {
 // Düzenleme
 $editRow = null;
 if ($action === 'edit' && $editId) {
-    $editRow = $pdo->prepare("SELECT * FROM b2b_admin_users WHERE id=?")->execute([$editId]) ? null : null;
-    $stmt = $pdo->prepare("SELECT * FROM b2b_admin_users WHERE id=?");
-    $stmt->execute([$editId]);
-    $editRow = $stmt->fetch();
+    $editRow = dbRow("SELECT * FROM b2b_admin_users WHERE id=?", [$editId]);
     if (!$editRow) { $action = 'list'; }
 }
 
 // Liste
-$admins = $pdo->query("SELECT * FROM b2b_admin_users ORDER BY id ASC")->fetchAll();
+$admins = dbRows("SELECT * FROM b2b_admin_users ORDER BY id ASC");
 ?>
 
 <?php if ($msg): [$type, $text] = explode(':', $msg, 2); ?>

@@ -432,3 +432,66 @@ textarea { resize: vertical; min-height: 80px; padding-top: 10px; }
 
 /* Divider */
 hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+
+/* ══════════════════════════════════════════════════════════════
+   TAB BAR — Filtre sekmeleri (Payments, Applications)
+══════════════════════════════════════════════════════════════ */
+.tab-bar {
+  display: flex; gap: 2px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 4px;
+  margin-bottom: 20px;
+  width: fit-content;
+}
+.tab-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 16px; border-radius: var(--radius);
+  font-size: 13px; font-weight: 500;
+  color: var(--text-2); cursor: pointer;
+  text-decoration: none; transition: all .15s;
+  white-space: nowrap;
+}
+.tab-item:hover { background: var(--bg); color: var(--text); text-decoration: none; }
+.tab-item.active {
+  background: var(--red); color: #fff;
+  box-shadow: 0 1px 4px rgba(237,41,57,.3);
+}
+.tab-item.active .tab-count { background: rgba(255,255,255,.25); color: #fff; }
+.tab-count {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 99px; font-size: 11px; font-weight: 700;
+  padding: 1px 7px; min-width: 20px; text-align: center;
+  color: var(--text-muted);
+}
+.tab-count.warn { background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.3); color: #b45309; }
+
+/* ══════════════════════════════════════════════════════════════
+   UTILITY — Spacing, Grid
+══════════════════════════════════════════════════════════════ */
+.mb-4 { margin-bottom: 16px; }
+.mb-6 { margin-bottom: 24px; }
+.mt-4 { margin-top: 16px; }
+.mt-6 { margin-top: 24px; }
+.mb-2 { margin-bottom: 8px; }
+.mt-2 { margin-top: 8px; }
+.gap-4{ gap: 16px; }
+
+.grid { display: grid; }
+.grid-cols-2 { grid-template-columns: repeat(2,1fr); }
+.grid-cols-3 { grid-template-columns: repeat(3,1fr); }
+.grid-cols-4 { grid-template-columns: repeat(4,1fr); }
+@media(max-width:900px){.grid-cols-4{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:640px){.grid-cols-3,.grid-cols-4{grid-template-columns:1fr}}
+
+/* Filter bar */
+.filter-bar {
+  display: flex; flex-wrap: wrap; align-items: flex-end;
+  gap: 12px; padding: 14px 16px; margin-bottom: 16px;
+}
+.filter-bar .form-group { margin-bottom: 0; flex: 1; min-width: 140px; }
+.filter-bar .form-control { height: 36px; }
+
+/* Alert info */
+.alert-info { background: var(--info-bg); border-color: var(--info-border); color: #1e40af; }
