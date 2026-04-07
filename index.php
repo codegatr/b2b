@@ -25,7 +25,7 @@ require __DIR__ . '/includes/db.php';
 require __DIR__ . '/includes/auth.php';
 require __DIR__ . '/includes/functions.php';
 require __DIR__ . '/includes/parasut.php';
-require __DIR__ . '/includes/rubikpara.php';
+if (file_exists(__DIR__ . '/includes/rubikpara.php')) require __DIR__ . '/includes/rubikpara.php';
 
 b2b_session_start();
 
@@ -109,7 +109,6 @@ $pageTitle = match($page) {
 </head>
 <body>
 
-?>
 <div class="layout">
   <!-- ── Sidebar ── -->
   <aside class="sidebar">
