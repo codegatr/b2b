@@ -243,7 +243,27 @@ if ($li && !file_exists($liPath)) {
         <div style="width:140px;height:140px;border:2px dashed var(--border);border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px">Görsel Yok</div>
     <?php endif; ?>
     </div>
-</div>
+
+    <!-- Upload formu -->
+    <div style="flex:1;min-width:220px">
+        <form method="post" enctype="multipart/form-data">
+            <?= csrfField() ?>
+            <input type="hidden" name="tab" value="general">
+            <div class="form-group">
+                <label class="form-label">Yeni Görsel Yükle</label>
+                <input type="file" name="login_image" class="form-control"
+                       accept="image/png,image/jpeg,image/webp,image/svg+xml,.svg">
+                <p style="font-size:12px;color:var(--text-muted);margin-top:4px">
+                    PNG, JPG, WEBP, <strong>SVG</strong> — Maks 5MB.
+                    SVG tercih edilir (sonsuz çözünürlük).
+                </p>
+            </div>
+            <button type="submit" class="btn btn-secondary">Görseli Yükle</button>
+        </form>
+    </div>
+
+</div><!-- /flex -->
+</div><!-- /Giriş Görseli -->
 </div></div>
 
 <?php elseif ($activeTab === 'smtp'): ?>
