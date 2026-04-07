@@ -90,8 +90,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!empty($_POST['parasut_password'])) settingSave('parasut_password', $_POST['parasut_password']);
         settingSave('parasut_access_token', '');
         settingSave('parasut_token_expires', '');
+        settingSave('parasut_auto_invoice', isset(\$_POST['parasut_auto_invoice'])?'1':'0');
         settingClearCache();
-        $success = 'Paraşüt ayarları kaydedildi. Token sıfırlandı.';
+        \$success = 'Paraşüt ayarları kaydedildi.';
     }
 
     // Rubikpara
@@ -339,6 +340,44 @@ if ($li && !file_exists($liPath)) {
         <a href="?page=settings&tab=parasut&test_parasut=1" class="btn btn-secondary">Bağlantıyı Test Et</a>
     </div>
 </form>
+
+<!-- Stok Senkronizasyonu -->
+<div style="border-top:1px solid var(--border);margin-top:20px;padding-top:20px">
+<h4 style="font-size:14px;font-weight:600;margin-bottom:12px">📦 Stok Senkronizasyonu</h4>
+<div class="form-grid-2">
+  <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:16px">
+    <div style="font-weight:600;font-size:13px;margin-bottom:6px">⬇️ Paraşüt'ten Stok Al</div>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">
+      Paraşüt'teki ürün stok miktarlarını B2B sistemine çeker.
+      SKU eşleşmesi ile otomatik güncelleme yapılır.
+    </p>
+    <a href="?page=stock&parasut_sync=1"
+       onclick="return confirm('Paraşüt'ten stok çekilecek. Devam?')"
+       class="btn btn-secondary btn-sm">Şimdi Senkronize Et</a>
+    <p style="font-size:11px;color:var(--text-muted);margin-top:8px">
+      Detaylı stok yönetimi için: <a href="?page=stock">Stok Sayfası →</a>
+    </p>
+  </div>
+  <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:16px">
+    <div style="font-weight:600;font-size:13px;margin-bottom:6px">⬆️ Sipariş Faturası Gönder</div>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">
+      Onaylanan siparişler için Paraşüt'te otomatik satış faturası oluşturulur.
+      Fatura oluşturulunca stok Paraşüt tarafında otomatik düşer.
+    </p>
+    <form method="post">
+      <?= csrfField() ?>
+      <input type="hidden" name="tab" value="parasut">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+        <input type="checkbox" name="parasut_auto_invoice" value="1"
+               <?= setting('parasut_auto_invoice','0')==='1'?'checked':'' ?>>
+        Sipariş onaylanınca otomatik fatura oluştur
+      </label>
+      <button type="submit" class="btn btn-secondary btn-sm" style="margin-top:10px">Kaydet</button>
+    </form>
+  </div>
+</div>
+</div>
+
 </div></div>
 
 <?php elseif ($activeTab === 'rubikpara'): ?>
