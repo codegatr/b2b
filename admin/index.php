@@ -73,6 +73,8 @@ $pageTitle = match($page) {
     'settings'     => 'Sistem Ayarları',
     'admins'       => 'Admin Kullanıcılar',
     'reports'      => 'Raporlar',
+    'tickets'       => 'Destek Talepleri',
+    'announcements' => 'Duyuru Yönetimi',
     'login'        => 'Admin Girişi',
     default        => ucfirst($page),
 };

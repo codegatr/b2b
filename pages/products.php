@@ -21,8 +21,8 @@ $products = dbRows(
 );
 
 // Sepet adeti (hızlı kontrol için)
-$cartItems = dbRows("SELECT product_id, quantity FROM b2b_cart WHERE dealer_id=?", [$dealer['id']]);
-$cartMap   = array_column($cartItems, 'quantity', 'product_id');
+$cartItems = dbRows("SELECT product_id, qty FROM b2b_cart WHERE dealer_id=?", [$dealer['id']]);
+$cartMap   = array_column($cartItems, 'qty', 'product_id');
 
 $categories = dbRows("SELECT * FROM b2b_categories WHERE is_active=1 ORDER BY sort_order, name");
 $pager = pagination($total, $perPage, $page, "?page=products&q=".urlencode($search)."&cat=$catId&p=");

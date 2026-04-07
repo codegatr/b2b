@@ -8,7 +8,7 @@ $totalOrders   = dbVal("SELECT COUNT(*) FROM b2b_orders WHERE dealer_id=?", [$de
 $pendingOrders = dbVal("SELECT COUNT(*) FROM b2b_orders WHERE dealer_id=? AND status='bekliyor'", [$dealer['id']]);
 $openBalance   = dbVal("SELECT COALESCE(SUM(CASE WHEN type='borc' THEN amount ELSE -amount END),0) FROM b2b_ledger WHERE dealer_id=? AND is_closed=0", [$dealer['id']]);
 $overdueAmount = dbVal("SELECT COALESCE(SUM(CASE WHEN type='borc' THEN amount ELSE -amount END),0) FROM b2b_ledger WHERE dealer_id=? AND is_closed=0 AND due_date < CURDATE()", [$dealer['id']]);
-$cartCount     = dbVal("SELECT COALESCE(SUM(quantity),0) FROM b2b_cart WHERE dealer_id=?", [$dealer['id']]);
+$cartCount     = dbVal("SELECT COALESCE(SUM(qty),0) FROM b2b_cart WHERE dealer_id=?", [$dealer['id']]);
 
 // Son siparişler
 $recentOrders = dbRows(
@@ -30,6 +30,16 @@ $upcomingDue = dbRows(
     "SELECT * FROM b2b_ledger WHERE dealer_id=? AND is_closed=0 AND type='borc' AND due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(),INTERVAL 7 DAY) ORDER BY due_date",
     [$dealer['id']]
 );
+// Aktif duyurular
+$announcements = [];
+try {
+    $announcements = dbRows(
+        "SELECT * FROM b2b_announcements WHERE is_active=1
+         AND (starts_at IS NULL OR starts_at <= NOW())
+         AND (ends_at IS NULL OR ends_at >= NOW())
+         ORDER BY created_at DESC LIMIT 5"
+    );
+} catch (Exception $e) { /* Tablo henüz oluşturulmamış olabilir */ }
 ?>
 
 <div class="page-header">
@@ -41,6 +51,23 @@ $upcomingDue = dbRows(
 </div>
 
 <!-- Stat Kartları -->
+
+<?php if (!empty($announcements)): ?>
+<div style="margin-bottom:20px">
+  <?php foreach ($announcements as $ann): ?>
+  <?php $ac = ['bilgi'=>'info','uyari'=>'warning','onemli'=>'danger'][$ann['type']??'bilgi']; ?>
+  <div class="alert alert-<?= $ac ?>" style="margin-bottom:8px;display:flex;align-items:flex-start;gap:10px">
+    <div style="flex:1">
+      <strong><?= h($ann['title']) ?></strong>
+      <div style="font-size:12px;margin-top:3px;opacity:.85"><?= nl2br(h($ann['content'])) ?></div>
+    </div>
+    <?php if ($ann['ends_at']): ?>
+    <div style="font-size:11px;opacity:.6;white-space:nowrap"><?= date('d.m.Y', strtotime($ann['ends_at'])) ?>'e kadar</div>
+    <?php endif; ?>
+  </div>
+  <?php endforeach; ?>
+</div>
+<?php endif; ?>
 <div class="grid grid-cols-4 gap-4 mb-6">
     <a href="?page=orders" class="stat-card" style="text-decoration:none">
         <div class="stat-label">Toplam Sipariş</div>

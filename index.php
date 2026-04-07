@@ -93,6 +93,7 @@ $pageTitle = match($page) {
     'payment-card' => 'Kart ile Ödeme',
     'profile'      => 'Profilim',
     'notifications'=> 'Bildirimler',
+    'tickets'      => 'Destek Talepleri',
     'apply'        => 'Bayilik Başvurusu',
     'login'        => 'Giriş Yap',
     default        => ucfirst($page),
@@ -222,7 +223,9 @@ $pageTitle = match($page) {
         echo "<div class='alert alert-{$flash['type']}' data-auto-close style='margin:16px 24px 0'>{$flash['msg']}</div>";
     }
 
+    echo '<div class="page-body">';
     renderPage($page, compact('dealer', 'cartCount', 'currency', 'siteName'));
+    echo '</div>';
     ?>
   </div>
 </div>

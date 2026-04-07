@@ -267,3 +267,94 @@ function pagination(int $total, int $perPage, int $currentPage, string $baseUrl)
     }
     return $html . '</div>';
 }
+
+// ──────────────────────────────────────────────────────────────
+// PARAŞÜT STOK SYNC
+// ──────────────────────────────────────────────────────────────
+
+/**
+ * Paraşüt'ten stok al (ürünleri senkronize et)
+ * Paraşüt API'sinde stok takibi için: /v2/{company_id}/stock_items
+ */
+function parasutSyncStock(): array {
+    $synced = 0;
+    $errors = [];
+
+    try {
+        $rb = parasut();
+        $token = $rb->getAccessToken();
+        if (!$token) throw new Exception('Paraşüt token alınamadı.');
+
+        $companyId = setting('parasut_company_id', '');
+        if (!$companyId) throw new Exception('Paraşüt firma ID girilmemiş.');
+
+        // Paraşüt'ten tüm ürünleri çek
+        $ch = curl_init("https://api.parasut.com/v4/{$companyId}/products?filter[product_type]=product&page[size]=100");
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => [
+                'Authorization: Bearer ' . $token,
+                'Accept: application/json',
+            ],
+            CURLOPT_TIMEOUT => 20,
+        ]);
+        $response = curl_exec($ch);
+        $code     = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($code !== 200) throw new Exception("Paraşüt API: HTTP $code");
+
+        $data = json_decode($response, true);
+        if (!isset($data['data'])) throw new Exception('Geçersiz API yanıtı.');
+
+        foreach ($data['data'] as $item) {
+            $attrs  = $item['attributes'] ?? [];
+            $sku    = $attrs['code'] ?? '';
+            $stock  = (int)($attrs['quantity'] ?? 0);
+            $name   = $attrs['name'] ?? '';
+
+            if (!$sku) continue;
+
+            // SKU ile eşleştir
+            $product = dbRow("SELECT id FROM b2b_products WHERE sku=? AND is_active=1", [$sku]);
+            if ($product) {
+                dbExec("UPDATE b2b_products SET stock=?, updated_at=NOW() WHERE id=?",
+                       [$stock, $product['id']]);
+                $synced++;
+            }
+        }
+
+        dbExec("INSERT INTO b2b_parasut_log (action, status, response, created_at) VALUES (?,?,?,NOW())",
+               ['stock_sync', 'success', "Senkronize: $synced ürün"]);
+
+    } catch (Exception $e) {
+        $errors[] = $e->getMessage();
+        try {
+            dbExec("INSERT INTO b2b_parasut_log (action, status, response, created_at) VALUES (?,?,?,NOW())",
+                   ['stock_sync', 'error', $e->getMessage()]);
+        } catch (Exception $le) {}
+    }
+
+    return ['synced' => $synced, 'errors' => $errors];
+}
+
+/**
+ * B2B'den Paraşüt'e stok ver (sipariş tamamlandığında)
+ * Paraşüt stok düşme: satış faturası oluşturulduğunda otomatik düşer
+ */
+function parasutPushStockOut(int $orderId): bool {
+    try {
+        // Sipariş detayları
+        $order = dbRow("SELECT * FROM b2b_orders WHERE id=?", [$orderId]);
+        if (!$order) return false;
+
+        // Zaten fatura oluşturulduysa — stok otomatik düşmüş
+        if ($order['parasut_invoice_id']) return true;
+
+        // Fatura oluştur (mevcut Paraşüt entegrasyonunu kullan)
+        parasut()->syncInvoice($orderId);
+        return true;
+    } catch (Exception $e) {
+        return false;
+    }
+}

@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = 'Desteklenmeyen format: ' . htmlspecialchars($file['type']);
             } else {
                 $fname = 'login_hero_' . time() . '.' . $ext;
-                $dir   = dirname(__DIR__) . '/uploads/logo';
+                $dir   = B2B_ROOT . '/uploads/logo';
                 if (!is_dir($dir)) mkdir($dir, 0755, true);
                 if (!is_writable($dir)) {
                     $error = 'Klasör yazılamıyor.';
@@ -46,7 +46,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($old && $old !== 'login_hero_logo.svg' && file_exists($dir.'/'.$old)) @unlink($dir.'/'.$old);
                     settingSave('login_image', $fname);
                     settingClearCache();
-                    $success = 'Görsel yüklendi.';
+                    $_SESSION['flash_admin'] = ['type'=>'success','msg'=>'Görsel yüklendi: '.$fname];
+                    header('Location: ?page=settings&tab=general');
+                    exit;
                 } else {
                     $error = 'Dosya taşınamadı.';
                 }
@@ -55,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($isRemove) {
             $old = setting('login_image', '');
-            $dir = dirname(__DIR__) . '/uploads/logo';
+            $dir = B2B_ROOT . '/uploads/logo';
             if ($old && $old !== 'login_hero_logo.svg' && file_exists($dir.'/'.$old)) @unlink($dir.'/'.$old);
             settingSave('login_image', '');
             settingClearCache();
@@ -216,7 +218,7 @@ foreach ($tabs as $k => $v):
     <div>
     <?php
 $li    = setting('login_image','');
-$liPath = $li ? dirname(__DIR__).'/uploads/logo/'.$li : '';
+$liPath = $li ? B2B_ROOT.'/uploads/logo/'.$li : '';
 // Dosya yoksa DB kaydını temizle
 if ($li && !file_exists($liPath)) {
     settingSave('login_image', '');
