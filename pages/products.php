@@ -58,7 +58,9 @@ $pager = pagination($total, $perPage, $page, "?page=products&q=".urlencode($sear
 <!-- Ürün Grid -->
 <div class="product-grid">
 <?php foreach ($products as $p):
-    $price     = dealerPrice($p['id'], $dealer['price_list_id']);
+    $dp        = dealerPrice($p['id'], (int)($dealer['price_list_id'] ?? 0));
+    $price     = $dp['price'];
+    $discount  = $dp['discount'];
     $inCart    = $cartMap[$p['id']] ?? 0;
     $inStock   = $p['stock'] > 0;
     $lowStock  = $p['stock'] > 0 && $p['stock'] <= $p['stock_critical'];
@@ -66,7 +68,7 @@ $pager = pagination($total, $perPage, $page, "?page=products&q=".urlencode($sear
 <div class="product-card" data-product-id="<?= $p['id'] ?>">
     <?php if ($p['image']): ?>
     <div class="product-img">
-        <img src="<?= h($p['image']) ?>" alt="<?= h($p['name']) ?>" loading="lazy">
+        <img src="/uploads/products/<?= h($p['image']) ?>" alt="<?= h($p['name']) ?>" loading="lazy">
     </div>
     <?php else: ?>
     <div class="product-img product-img--empty">📦</div>

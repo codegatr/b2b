@@ -167,7 +167,7 @@ if ($action === 'list') {
     <?php foreach ($products as $p): ?>
     <tr>
         <td>
-            <?php if ($p['image']): ?><img src="<?= h($p['image']) ?>" style="width:32px;height:32px;object-fit:cover;border-radius:4px;margin-right:8px;vertical-align:middle"><?php endif; ?>
+            <?php if ($p['image']): ?><img src="/uploads/products/<?= h($p['image']) ?>" style="width:32px;height:32px;object-fit:cover;border-radius:4px;margin-right:8px;vertical-align:middle"><?php endif; ?>
             <a href="?page=products&action=detail&id=<?= $p['id'] ?>"><?= h($p['name']) ?></a>
         </td>
         <td class="mono text-sm"><?= h($p['sku']) ?></td>

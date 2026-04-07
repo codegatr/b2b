@@ -9,7 +9,9 @@ if (!$productId) { header('Location: ?page=products'); exit; }
 $product = dbRow("SELECT p.*, c.name as category_name FROM b2b_products p LEFT JOIN b2b_categories c ON c.id = p.category_id WHERE p.id = ? AND p.is_active = 1", [$productId]);
 if (!$product) { header('Location: ?page=products'); exit; }
 
-$price    = dealerPrice($productId, $dealer['price_list_id']);
+$dp       = dealerPrice($productId, (int)($dealer['price_list_id'] ?? 0));
+$price    = $dp['price'];
+$discount = $dp['discount'];
 $basePrice = $product['base_price'];
 $discount = $basePrice > 0 ? round((1 - $price / $basePrice) * 100) : 0;
 
@@ -127,7 +129,8 @@ $related = dbRows("SELECT p.*, (SELECT price FROM b2b_price_list_items WHERE pro
     <h2 style="font-size:1.1rem;font-weight:700;margin-bottom:1rem">Benzer Ürünler</h2>
     <div class="product-grid">
         <?php foreach ($related as $r):
-            $rPrice = dealerPrice($r['id'], $dealer['price_list_id']);
+            $rdp = dealerPrice($r['id'], (int)($dealer['price_list_id'] ?? 0));
+                $rPrice = $rdp['price'];
         ?>
         <a href="?page=product&id=<?= $r['id'] ?>" class="product-card" style="text-decoration:none;color:inherit">
             <div class="product-img">
