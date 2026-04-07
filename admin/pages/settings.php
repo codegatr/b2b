@@ -7,47 +7,88 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $tab = $_POST['tab'] ?? 'general';
 
     if ($tab === 'general') {
-        $fields = ['site_name','site_url','order_prefix','currency','timezone','admin_email'];
-        foreach ($fields as $f) {
-            settingSave($f, trim($_POST[$f] ?? ''));
-        }
-        $success = 'Genel ayarlar kaydedildi.';
+        // ── Önce action türünü belirle ─────────────────────────────
+        $isImageUpload = !empty($_FILES['login_image']['name']);
+        $isImageRemove = !empty($_POST['remove_login_image']);
+        $isGeneralSave = !$isImageUpload && !$isImageRemove;
 
-        // Login gorseli yukle
-        if (!empty($_FILES['login_image']['name'])) {
+        // ── Genel ayarlar — yalnızca genel form gönderildiğinde ────
+        if ($isGeneralSave) {
+            $fields = ['site_name','site_url','order_prefix','currency','timezone','admin_email'];
+            foreach ($fields as $f) {
+                settingSave($f, trim($_POST[$f] ?? ''));
+            }
+            settingClearCache();
+            $success = 'Genel ayarlar kaydedildi.';
+        }
+
+        // ── Logo yükleme ───────────────────────────────────────────
+        if ($isImageUpload) {
             $file    = $_FILES['login_image'];
             $maxSize = 5 * 1024 * 1024;
             $allowed = ['image/png','image/jpeg','image/webp','image/svg+xml'];
+            // Dosya uzantısından MIME belirle (tarayıcı tutarsız gönderebilir)
+            $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+            $extMimeMap = [
+                'svg'  => 'image/svg+xml',
+                'png'  => 'image/png',
+                'jpg'  => 'image/jpeg',
+                'jpeg' => 'image/jpeg',
+                'webp' => 'image/webp',
+            ];
+            if (isset($extMimeMap[$ext])) {
+                $file['type'] = $extMimeMap[$ext];
+            }
+
             if ($file['size'] > $maxSize) {
-                $error = 'Gorsel 5MB dan buyuk olamaz.';
-            } elseif (!in_array($file['type'], $allowed)) {
-                $error = 'Sadece PNG, JPG, WEBP, SVG kabul edilir.';
+                $error = 'Görsel 5MB'dan büyük olamaz.';
+            } elseif (!in_array($file['type'], $allowed) && $ext !== 'svg') {
+                $error = 'Sadece PNG, JPG, WEBP, SVG kabul edilir. (Tip: ' . h($file['type']) . ')';
+            } elseif ($file['error'] !== UPLOAD_ERR_OK) {
+                $error = 'Yükleme hatası: ' . $file['error'];
             } else {
-                $ext    = pathinfo($file['name'], PATHINFO_EXTENSION);
-                $fname  = 'login_hero_'.time().'.'.$ext;
-                $dest   = dirname(__DIR__).'/uploads/logo/'.$fname;
-                // Eskiyi sil
-                $old_img = setting('login_image','');
-                if ($old_img && file_exists(dirname(__DIR__).'/uploads/logo/'.$old_img)) {
-                    @unlink(dirname(__DIR__).'/uploads/logo/'.$old_img);
+                $fname = 'login_hero_' . time() . '.' . $ext;
+                $dest  = dirname(__DIR__) . '/uploads/logo/' . $fname;
+
+                // Klasör var mı, yazılabilir mi kontrol
+                $uploadDir = dirname($dest);
+                if (!is_dir($uploadDir)) {
+                    mkdir($uploadDir, 0775, true);
                 }
-                if (move_uploaded_file($file['tmp_name'], $dest)) {
+                if (!is_writable($uploadDir)) {
+                    $error = 'Yükleme klasörü yazılamıyor: ' . $uploadDir;
+                }
+                if (empty($error)):
+
+                // Eski varsayılan olmayan görseli sil
+                $old_img = setting('login_image', '');
+                if ($old_img && $old_img !== 'login_hero_logo.svg' &&
+                    file_exists(dirname(__DIR__) . '/uploads/logo/' . $old_img)) {
+                    @unlink(dirname(__DIR__) . '/uploads/logo/' . $old_img);
+                }
+
+                if (empty($error) && move_uploaded_file($file['tmp_name'], $dest)) {
                     settingSave('login_image', $fname);
-                    $success = 'Login gorseli yuklendi.';
-                } else {
-                    $error = 'Gorsel yuklenemedi.';
+                    settingClearCache();
+                    $success = 'Giriş ekranı görseli yüklendi.';
+                } elseif (empty($error)) {
+                    $error = 'Görsel taşınamadı. PHP move_uploaded_file başarısız. Dizin: ' . $uploadDir .
+                             ' | Yazılabilir: ' . (is_writable($uploadDir) ? 'Evet' : 'Hayır');
                 }
+                endif; // is_writable check
             }
         }
 
-        // Login gorseli kaldir
-        if (!empty($_POST['remove_login_image'])) {
-            $old_img = setting('login_image','');
-            if ($old_img && file_exists(dirname(__DIR__).'/uploads/logo/'.$old_img)) {
-                @unlink(dirname(__DIR__).'/uploads/logo/'.$old_img);
+        // ── Logo kaldırma ──────────────────────────────────────────
+        if ($isImageRemove) {
+            $old_img = setting('login_image', '');
+            if ($old_img && $old_img !== 'login_hero_logo.svg' &&
+                file_exists(dirname(__DIR__) . '/uploads/logo/' . $old_img)) {
+                @unlink(dirname(__DIR__) . '/uploads/logo/' . $old_img);
             }
             settingSave('login_image', '');
-            $success = 'Login gorseli kaldirildi.';
+            settingClearCache();
+            $success = 'Giriş ekranı görseli kaldırıldı.';
         }
     }
 

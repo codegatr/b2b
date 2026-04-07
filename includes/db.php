@@ -89,17 +89,32 @@ function dbUpdateRow(string $table, array $data, string|array $whereOrCol, mixed
     return dbExec("UPDATE `$table` SET $sets WHERE $conds", $params);
 }
 
+/** Dahili: setting cache referansı */
+function &_settingCache(): array {
+    static $cache = [];
+    return $cache;
+}
+
 /** Ayar oku */
 function setting(string $key, mixed $default = ''): string {
-    static $cache = [];
-    if (isset($cache[$key])) return $cache[$key];
+    $cache = &_settingCache();
+    if (array_key_exists($key, $cache)) return $cache[$key];
     $val = dbVal("SELECT sval FROM b2b_settings WHERE skey=?", [$key]);
     $cache[$key] = $val ?? $default;
     return $cache[$key];
+}
+
+/** Ayar cache'ini tamamen temizle */
+function settingClearCache(): void {
+    $cache = &_settingCache();
+    $cache = [];
 }
 
 /** Ayar yaz */
 function settingSave(string $key, string $val): void {
     dbExec("INSERT INTO b2b_settings (skey,sval,updated_at) VALUES (?,?,NOW())
             ON DUPLICATE KEY UPDATE sval=VALUES(sval), updated_at=NOW()", [$key, $val]);
+    // Cache'i de güncelle (aynı request'te setting() doğru değeri dönsün)
+    $cache = &_settingCache();
+    $cache[$key] = $val;
 }
