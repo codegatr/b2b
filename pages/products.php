@@ -125,7 +125,7 @@ $plId = (int)($dealer['price_list_id'] ?? 0);
   <th style="width:44px;text-align:center">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
   </th>
-  <th style="width:60px;text-align:center">Stok</th>
+  <th style="width:70px;text-align:center">Stok</th>
   <th style="width:110px;text-align:center">Adet</th>
   <th style="width:140px;text-align:center">İşlem</th>
 </tr>
@@ -206,11 +206,21 @@ $plId = (int)($dealer['price_list_id'] ?? 0);
   <!-- Stok -->
   <td style="text-align:center">
     <?php if (!$inStock): ?>
-    <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#ef4444" title="Stok yok"></span>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+      <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ef4444"></span>
+      <span style="font-size:10px;color:#ef4444;font-weight:600">Tükendi</span>
+    </div>
     <?php elseif ($lowStock): ?>
-    <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#f59e0b" title="Kritik stok: <?= $p['stock'] ?>"></span>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+      <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#f59e0b"></span>
+      <span style="font-size:11px;font-weight:700;color:#d97706"><?= $p['stock'] ?></span>
+      <span style="font-size:10px;color:#f59e0b">Son stok</span>
+    </div>
     <?php else: ?>
-    <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#22c55e" title="Stok: <?= $p['stock'] ?>"></span>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+      <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#22c55e"></span>
+      <span style="font-size:11px;font-weight:600;color:var(--text-2)"><?= $p['stock'] ?></span>
+    </div>
     <?php endif; ?>
   </td>
 
@@ -223,7 +233,7 @@ $plId = (int)($dealer['price_list_id'] ?? 0);
       <input type="number" id="cqty-<?= $p['id'] ?>"
              value="<?= $inCart ?: $p['min_order_qty'] ?>"
              min="<?= $p['min_order_qty'] ?>"
-             <?= $p['max_order_qty'] ? 'max="'.$p['max_order_qty'].'"' : '' ?>
+             max="<?= $p['max_order_qty'] ? min($p['max_order_qty'], $p['stock']) : $p['stock'] ?>"
              style="width:48px;height:30px;text-align:center;border:1px solid var(--border-2);border-radius:5px;font-size:13px;font-family:inherit">
       <button onclick="catalogChange(<?= $p['id'] ?>,1,<?= $p['min_order_qty'] ?>)"
               style="width:26px;height:30px;border:1px solid var(--border-2);border-radius:5px;background:var(--bg);cursor:pointer;font-size:14px;color:var(--text-2)">+</button>
@@ -266,7 +276,8 @@ function catalogChange(pid, delta, minQty) {
     const inp = document.getElementById('cqty-' + pid);
     if (!inp) return;
     const cur = parseInt(inp.value) || minQty;
-    inp.value = Math.max(minQty, cur + delta);
+    const maxVal = parseInt(inp.max) || 9999;
+    inp.value = Math.min(maxVal, Math.max(minQty, cur + delta));
 }
 
 function catalogAdd(pid) {
