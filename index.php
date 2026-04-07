@@ -31,7 +31,7 @@ b2b_session_start();
 $page = preg_replace('/[^a-z0-9\-]/', '', strtolower($_GET['page'] ?? 'dashboard'));
 
 // Public sayfalar (oturum gerektirmez)
-$publicPages = ['login', 'apply', 'forgot-password'];
+$publicPages = ['login', 'apply', 'forgot-password', 'privacy', 'terms'];
 
 if (!in_array($page, $publicPages)) {
     requireDealer();

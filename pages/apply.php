@@ -461,6 +461,11 @@ document.getElementById('applyForm')?.addEventListener('submit', function(){
   b.disabled = true;
 });
 </script>
+<div style="text-align:center;margin-top:24px;font-size:.72rem;color:#a0998e;line-height:1.9">
+  <a href="pages/privacy.php" style="color:#6b7280;text-decoration:none">Gizlilik &amp; KVKK</a>
+  &nbsp;&middot;&nbsp;
+  <a href="pages/terms.php" style="color:#6b7280;text-decoration:none">Kullanım Koşulları</a>
+</div>
 </body>
 </html>
 <?php exit; ?>

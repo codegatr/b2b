@@ -17,11 +17,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!empty($_FILES['login_image']['name'])) {
             $file    = $_FILES['login_image'];
             $maxSize = 5 * 1024 * 1024;
-            $allowed = ['image/png','image/jpeg','image/webp'];
+            $allowed = ['image/png','image/jpeg','image/webp','image/svg+xml'];
             if ($file['size'] > $maxSize) {
                 $error = 'Gorsel 5MB dan buyuk olamaz.';
             } elseif (!in_array($file['type'], $allowed)) {
-                $error = 'Sadece PNG, JPG, WEBP kabul edilir.';
+                $error = 'Sadece PNG, JPG, WEBP, SVG kabul edilir.';
             } else {
                 $ext    = pathinfo($file['name'], PATHINFO_EXTENSION);
                 $fname  = 'login_hero_'.time().'.'.$ext;
@@ -198,8 +198,8 @@ if (isset($_GET['test_parasut'])) {
                 <input type="hidden" name="upload_login_image" value="1">
                 <div class="form-group">
                     <label class="form-label">Yeni Gorsel Yukle</label>
-                    <input type="file" name="login_image" class="form-control" accept="image/png,image/jpeg,image/webp">
-                    <small style="color:var(--text-muted);font-size:.78rem">PNG, JPG, WEBP &mdash; Maks 5MB. Onerilen: 800x900px dikey.</small>
+                    <input type="file" name="login_image" class="form-control" accept="image/png,image/jpeg,image/webp,image/svg+xml,.svg">
+                    <small style="color:var(--text-muted);font-size:.78rem">PNG, JPG, WEBP, <strong>SVG</strong> &mdash; Maks 5MB. &bull; SVG tercih edilir (sonsuz çözünürlük). &bull; Önerilen oran: dikey 4:5.</small>
                 </div>
                 <button type="submit" class="btn btn-secondary">Gorseli Yukle</button>
             </form>

@@ -423,7 +423,7 @@ html,body{height:100%;font-family:'Inter',-apple-system,sans-serif;font-size:14p
 
     <div class="form-foot">
       <?= htmlspecialchars($siteName) ?><br>
-      <a href="#">Gizlilik Politikasi</a> &nbsp;&middot;&nbsp; <a href="#">Kullanim Kosullari</a>
+      <a href="pages/privacy.php">Gizlilik &amp; KVKK</a> &nbsp;&middot;&nbsp; <a href="pages/terms.php">Kullanım Koşulları</a>
     </div>
 
   </div>
