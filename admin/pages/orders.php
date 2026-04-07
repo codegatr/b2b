@@ -9,6 +9,40 @@ $dealerId = intval($_GET['dealer_id'] ?? 0);
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrfCheck();
     $act = $_POST['form_action'] ?? '';
+
+    // ── İptal onayla ─────────────────────────────────────────
+    if ($act === 'approve_cancel') {
+        $oid = intval($_POST['order_id'] ?? 0);
+        $ord = dbRow("SELECT * FROM b2b_orders WHERE id=?", [$oid]);
+        if ($ord && $ord['cancel_requested']) {
+            // Stok geri yükle
+            $items = dbRows("SELECT * FROM b2b_order_items WHERE order_id=?", [$oid]);
+            foreach ($items as $it) {
+                $qty = (int)($it['qty'] ?? $it['quantity'] ?? 0);
+                if ($qty > 0) dbExec("UPDATE b2b_products SET stock=stock+? WHERE id=?", [$qty, $it['product_id']]);
+            }
+            // Cari borcu kapat
+            dbExec("UPDATE b2b_ledger SET is_closed=1 WHERE reference_id=? AND reference_type='order'", [$oid]);
+            // Sipariş güncelle
+            dbExec("UPDATE b2b_orders SET status='iptal', cancel_requested=0,
+                    cancel_reviewed_by=?, cancel_reviewed_at=NOW() WHERE id=?",
+                   [adminId(), $oid]);
+            auditLog('order_cancelled', 'b2b_orders', $oid, ['by'=>'admin']);
+            $success = 'Sipariş iptal edildi, stoklar geri yüklendi.';
+        }
+        $action = 'detail'; $id = $oid;
+    }
+
+    // ── İptal reddet ─────────────────────────────────────────
+    if ($act === 'reject_cancel') {
+        $oid = intval($_POST['order_id'] ?? 0);
+        dbExec("UPDATE b2b_orders SET cancel_requested=0,
+                cancel_reviewed_by=?, cancel_reviewed_at=NOW() WHERE id=?",
+               [adminId(), $oid]);
+        auditLog('cancel_rejected', 'b2b_orders', $oid, []);
+        $success = 'İptal talebi reddedildi.';
+        $action = 'detail'; $id = $oid;
+    }
     $oid = intval($_POST['order_id'] ?? 0);
 
     // Sipariş Onayla
@@ -167,7 +201,12 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
         <td><?= h($o['company_name']) ?></td>
         <td><?= fmtDate($o['created_at']) ?></td>
         <td class="font-medium"><?= money($o['grand_total']) ?></td>
-        <td><?= orderStatusLabel($o['status']) ?></td>
+        <td>
+            <?= orderStatusLabel($o['status']) ?>
+            <?php if (!empty($o['cancel_requested'])): ?>
+            <span style="display:block;margin-top:3px;font-size:10px;background:#fef3c7;color:#d97706;border:1px solid #fed7aa;border-radius:4px;padding:1px 6px;width:fit-content">⏳ İptal Talebi</span>
+            <?php endif; ?>
+          </td>
         <td><span class="badge badge-<?= $o['payment_status']==='odendi'?'green':($o['payment_status']==='bekliyor'?'yellow':'blue') ?>"><?= h($o['payment_status']) ?></span></td>
         <td class="text-right"><a href="?page=orders&action=detail&id=<?= $o['id'] ?>" class="btn btn-xs btn-secondary">Detay →</a></td>
     </tr>

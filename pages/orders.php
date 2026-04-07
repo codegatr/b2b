@@ -6,6 +6,28 @@ $dealer = currentDealer();
 $action = $_GET['action'] ?? 'list';
 $id     = intval($_GET['id'] ?? 0);
 
+// İptal talebi POST
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'cancel_request') {
+    csrfCheck();
+    $oid    = intval($_POST['order_id'] ?? 0);
+    $reason = trim($_POST['cancel_reason'] ?? '');
+    $ord    = dbRow("SELECT * FROM b2b_orders WHERE id=? AND dealer_id=?", [$oid, $dealer['id']]);
+    if ($ord && in_array($ord['status'], ['bekliyor','onaylandi']) && $reason) {
+        dbExec(
+            "UPDATE b2b_orders SET cancel_requested=1, cancel_reason=?, cancel_requested_at=NOW() WHERE id=?",
+            [$reason, $oid]
+        );
+        // Admin bildirim
+        notifyAdmin('order_cancel', 'Sipariş İptal Talebi',
+            $dealer['company_name']." siparişi (#".$ord['order_no'].") iptal etmek istiyor.",
+            '?page=orders&action=detail&id='.$oid);
+        auditLog('cancel_requested', 'b2b_orders', $oid, ['reason'=>$reason]);
+        $_SESSION['flash'] = ['type'=>'success','msg'=>'İptal talebiniz yöneticiye iletildi.'];
+    }
+    header('Location: ?page=orders&action=detail&id='.$oid);
+    exit;
+}
+
 // Sipariş detay
 $order = null;
 if ($action === 'detail' && $id) {
@@ -302,6 +324,43 @@ $curIdx = array_search($order['status'] ?? '', $steps);
   <div class="card">
     <div class="card-header"><h3 class="card-title">📋 Yönetici Notu</h3></div>
     <div class="card-body" style="font-size:13px"><?= nl2br(h($order['admin_note'])) ?></div>
+  </div>
+  <?php endif; ?>
+
+  <!-- İptal Talebi -->
+  <?php
+  $cancelable = in_array($order['status'] ?? '', ['bekliyor','onaylandi']);
+  $cancelReq  = (bool)($order['cancel_requested'] ?? false);
+  ?>
+  <?php if ($cancelReq): ?>
+  <div class="alert alert-warning" style="margin:0">
+    <div style="font-weight:600;margin-bottom:4px">⏳ İptal Talebi Bekliyor</div>
+    <div style="font-size:12px">Talebiniz yönetici onayında. Neden: <?= h($order['cancel_reason'] ?? '—') ?></div>
+  </div>
+  <?php elseif ($cancelable): ?>
+  <div class="card" style="border-color:var(--danger-border)">
+    <div class="card-header" style="background:var(--danger-bg)">
+      <h3 class="card-title" style="color:var(--danger)">⚠️ Sipariş İptali</h3>
+    </div>
+    <div class="card-body">
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">
+        İptal talebiniz yönetici onayına gönderilecek. Onaylanmadan sipariş iptal edilmez.
+      </p>
+      <form method="post">
+        <?= csrfField() ?>
+        <input type="hidden" name="action" value="cancel_request">
+        <input type="hidden" name="order_id" value="<?= $order['id'] ?>">
+        <div class="form-group">
+          <label class="form-label">İptal Sebebi *</label>
+          <textarea name="cancel_reason" class="form-control" rows="2"
+                    placeholder="Lütfen iptal sebebinizi yazın..." required></textarea>
+        </div>
+        <button type="submit" class="btn btn-danger" style="width:100%"
+                onclick="return confirm('Sipariş iptali talep edilecek. Onaylanmadan iptal gerçekleşmez. Devam edilsin mi?')">
+          İptal Talebi Gönder
+        </button>
+      </form>
+    </div>
   </div>
   <?php endif; ?>
 

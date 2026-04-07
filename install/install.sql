@@ -400,3 +400,11 @@ CREATE TABLE IF NOT EXISTS `b2b_announcements` (
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ── Sipariş İptal Talebi Kolonları ───────────────────────────
+ALTER TABLE `b2b_orders`
+  ADD COLUMN IF NOT EXISTS `cancel_requested`    tinyint(1) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS `cancel_reason`       text DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS `cancel_requested_at` datetime DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS `cancel_reviewed_by`  int(11) DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS `cancel_reviewed_at`  datetime DEFAULT NULL;
