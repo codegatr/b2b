@@ -1,37 +1,33 @@
 /* Le Monde Du Tacos B2B — Tasarım Sistemi */
 :root {
-  /* Arka planlar — koyu zeytin tonu */
-  --bg-base: #0e130a;
-  --bg-surface: #141a0e;
-  --bg-elevated: #1b2413;
-  --bg-hover: #212e17;
-  --border: #2c3d1e;
-  --border-light: #232e17;
-  /* Metin */
-  --text-primary: #e8edd8;
-  --text-secondary: #94a878;
-  --text-muted: #526040;
-  /* Marka renkleri */
-  --accent: #3A5F0B;
-  --accent-hover: #2a4508;
-  --accent-light: rgba(58,95,11,.15);
-  --accent-red: #b24545;
-  --accent-red-hover: #8f3535;
-  --accent-red-light: rgba(178,69,69,.12);
-  /* Semantik */
-  --success: #22c55e;
-  --success-bg: rgba(34,197,94,.1);
-  --warning: #f59e0b;
-  --warning-bg: rgba(245,158,11,.1);
-  --danger: #ef4444;
-  --danger-bg: rgba(239,68,68,.1);
-  --info: #3b82f6;
-  --info-bg: rgba(59,130,246,.1);
-  --radius: 10px;
-  --radius-sm: 6px;
+  /* ── Arka planlar — koyu antrasit/siyah ── */
+  --bg-base:     #0f0c0c;
+  --bg-surface:  #181212;
+  --bg-elevated: #211919;
+  --bg-hover:    #2a1f1f;
+  --border:      #3d2828;
+  --border-light:#2a1f1f;
+  /* ── Metin ── */
+  --text-primary:  #f5eded;
+  --text-secondary:#c4a8a8;
+  --text-muted:    #7a5555;
+  /* ── Marka: Kırmızı + Koyu ── */
+  --accent:        #ed2939;
+  --accent-hover:  #c41f2e;
+  --accent-light:  rgba(237,41,57,.14);
+  --accent-dark:   #231f20;
+  --accent-dark-l: #3d3233;
+  /* ── Semantik ── */
+  --success: #22c55e;  --success-bg: rgba(34,197,94,.1);
+  --warning: #f59e0b;  --warning-bg: rgba(245,158,11,.1);
+  --danger:  #ef4444;  --danger-bg:  rgba(239,68,68,.1);
+  --info:    #3b82f6;  --info-bg:    rgba(59,130,246,.1);
+  /* ── Layout ── */
+  --radius:    10px;
+  --radius-sm:  6px;
   --radius-lg: 14px;
-  --shadow: 0 1px 3px rgba(0,0,0,.4);
-  --shadow-md: 0 4px 16px rgba(0,0,0,.3);
+  --shadow:    0 1px 3px rgba(0,0,0,.5);
+  --shadow-md: 0 4px 16px rgba(0,0,0,.4);
   --font: -apple-system,BlinkMacSystemFont,'Segoe UI','Inter',sans-serif;
   --sidebar-w: 240px;
 }
@@ -263,50 +259,59 @@ textarea.form-control{resize:vertical;min-height:90px}
 .file-drop:hover,.file-drop.dragover{border-color:var(--accent);background:var(--accent-light);color:var(--text-primary)}
 .file-drop input[type=file]{display:none}
 
+
 /* ── Le Monde Du Tacos Marka Vurguları ── */
-.sidebar-logo-wrap{
-  padding:0 16px 16px;
-  border-bottom:1px solid var(--border);
-  background:linear-gradient(180deg, rgba(58,95,11,.08) 0%, transparent 100%);
+
+/* Sidebar logo */
+.sidebar-logo .logo-mark{
+  background:linear-gradient(135deg,var(--accent),var(--accent-hover))!important;
+  box-shadow:0 0 0 1px rgba(237,41,57,.35),0 4px 14px rgba(237,41,57,.3)!important;
 }
-.sidebar-logo{border-bottom:none!important;padding-bottom:0!important}
-.logo-mark-b{
-  background:linear-gradient(135deg,#3A5F0B,#2a4508)!important;
-  box-shadow:0 0 0 1px rgba(58,95,11,.4),0 4px 16px rgba(58,95,11,.3)!important;
+
+/* Topbar — kırmızı alt çizgi */
+.topbar{border-bottom:2px solid var(--accent)!important}
+
+/* Nav active — sol kırmızı şerit */
+.nav-item.active{
+  background:var(--accent-light)!important;
+  color:var(--accent)!important;
+  box-shadow:inset 3px 0 0 var(--accent)!important;
 }
-/* Sidebar altına yeşil şerit */
+.nav-item:hover{
+  background:rgba(237,41,57,.08)!important;
+  color:var(--text-primary)!important;
+}
+
+/* Sidebar footer */
 .sidebar-footer{
-  border-top:2px solid rgba(58,95,11,.3)!important;
-  background:rgba(58,95,11,.05);
+  border-top:2px solid rgba(237,41,57,.2)!important;
+  background:rgba(237,41,57,.04);
 }
-/* Bayi portal badge */
-.badge-dealer{
-  background:rgba(178,69,69,.15);
-  color:#c95555;
-  border:1px solid rgba(178,69,69,.2);
-}
-/* Stat kartı — yeşil vurgu */
-.stat-card{
-  border-left:3px solid var(--accent)!important;
-}
+
+/* Stat kartı */
+.stat-card{border-left:3px solid var(--accent)!important}
+
 /* Tablo header */
-.table thead th{
-  border-bottom:2px solid rgba(58,95,11,.3)!important;
-}
-/* Scrollbar */
-::-webkit-scrollbar{width:6px;height:6px}
+.table thead th{border-bottom:2px solid rgba(237,41,57,.25)!important}
+
+/* Scrollbar kırmızı */
+::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-track{background:var(--bg-surface)}
-::-webkit-scrollbar-thumb{background:rgba(58,95,11,.4);border-radius:3px}
-::-webkit-scrollbar-thumb:hover{background:rgba(58,95,11,.6)}
-/* Focus ring yeşil */
+::-webkit-scrollbar-thumb{background:rgba(237,41,57,.35);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:rgba(237,41,57,.6)}
+
+/* Focus ring kırmızı */
 input:focus,select:focus,textarea:focus{
   outline:none;
   border-color:var(--accent)!important;
-  box-shadow:0 0 0 3px rgba(58,95,11,.15)!important;
+  box-shadow:0 0 0 3px rgba(237,41,57,.12)!important;
 }
-/* Aktif sayfa topbar başlık vurgusu */
-.page-title{
-  background:linear-gradient(135deg,var(--text-primary),var(--text-secondary));
-  -webkit-background-clip:text;
-  background-clip:text;
-}
+
+/* Badge dealer (kırmızı temayla) */
+.badge-primary{background:var(--accent-light);color:var(--accent)}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent-hover)}
+
+/* Alert success/info */
+.alert-success{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2);color:#86efac}
+.alert-danger,.alert-error{background:rgba(237,41,57,.1);border:1px solid rgba(237,41,57,.2);color:#fca5a5}

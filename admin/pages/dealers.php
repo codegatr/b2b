@@ -5,6 +5,11 @@ requireAdmin();
 $action = $_GET['action'] ?? 'list';
 $id     = intval($_GET['id'] ?? 0);
 
+// Flash mesajı oku
+$success = $_SESSION['flash_success'] ?? '';
+$error   = $_SESSION['flash_error']   ?? '';
+unset($_SESSION['flash_success'], $_SESSION['flash_error']);
+
 // ── Fiyat Listeleri (select için) ─────────────────────────────────────────
 $priceLists = dbRows("SELECT id, name FROM b2b_price_lists WHERE is_active=1 ORDER BY name");
 
@@ -46,7 +51,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($id) {
                 dbUpdateRow('b2b_dealers', $data, 'id', $id);
                 auditLog('dealer_updated', 'b2b_dealers', $id, ['label' => $label]);
-                $success = 'Bayi güncellendi.';
+                $_SESSION['flash_success'] = 'Bayi güncellendi.';
+                header('Location: ?page=dealers&action=detail&id=' . $id);
+                exit;
             } else {
                 // Yeni bayi — şifre zorunlu
                 $pass = trim($_POST['password'] ?? '');
@@ -62,9 +69,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $newId = dbInsertRow('b2b_dealers', $data);
                     auditLog('dealer_created', 'b2b_dealers', $newId, ['label' => $label]);
                     try { parasut()->syncDealer($newId); } catch (Exception $e) {}
-                    $success = 'Bayi eklendi.';
-                    $id = 0;
-                    $action = 'list';
+                    // PRG — yenileme sorununu önle, mesajı session ile taşı
+                    $_SESSION['flash_success'] = 'Bayi başarıyla eklendi.';
+                    header('Location: ?page=dealers');
+                    exit;
                 }
             }
         }

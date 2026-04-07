@@ -16,11 +16,11 @@ $today       = date('d.m.Y');
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--green:#3A5F0B;--green-d:#2a4508;--ink:#1f2937;--muted:#6b7280;--cream:#f5f0e8;--border:#e5e7eb;--red:#b24545}
+:root{--green:#ed2939;--green-d:#c41f2e;--ink:#1f2937;--muted:#6b7280;--cream:#f5f0e8;--border:#e5e7eb;--red:#b24545}
 html,body{font-family:'Inter',-apple-system,sans-serif;font-size:15px;line-height:1.75;color:var(--ink);background:#fff}
 a{color:var(--green);text-decoration:none}
 a:hover{text-decoration:underline}
-.topbar{background:var(--green);padding:14px 0;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(58,95,11,.3)}
+.topbar{background:var(--green);padding:14px 0;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(237,41,57,.3)}
 .topbar-inner{max-width:900px;margin:0 auto;padding:0 24px;display:flex;align-items:center;justify-content:space-between}
 .topbar-brand{display:flex;align-items:center;gap:10px;color:#fff;font-weight:700;font-size:.95rem;text-decoration:none}
 .topbar-brand-mark{width:34px;height:34px;background:rgba(255,255,255,.2);border-radius:8px;display:flex;align-items:center;justify-content:center}
@@ -47,7 +47,7 @@ article p{margin-bottom:14px;color:#374151}
 article ul,article ol{margin:10px 0 14px 20px;color:#374151}
 article li{margin-bottom:6px}
 article strong{color:var(--ink)}
-article .highlight{background:rgba(58,95,11,.07);border-left:3px solid var(--green);padding:14px 18px;border-radius:0 8px 8px 0;margin:18px 0;font-size:.9rem}
+article .highlight{background:rgba(237,41,57,.07);border-left:3px solid var(--green);padding:14px 18px;border-radius:0 8px 8px 0;margin:18px 0;font-size:.9rem}
 article .warning{background:rgba(178,69,69,.07);border-left:3px solid var(--red);padding:14px 18px;border-radius:0 8px 8px 0;margin:18px 0;font-size:.9rem}
 .page-footer{background:var(--cream);border-top:1px solid var(--border);padding:28px 24px;text-align:center;font-size:.8rem;color:var(--muted)}
 .page-footer a{color:var(--green)}

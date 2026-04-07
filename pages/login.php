@@ -32,11 +32,11 @@ $version  = file_exists(dirname(__DIR__).'/version.txt') ? trim(file_get_content
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;font-family:'Inter',-apple-system,sans-serif;font-size:14px;line-height:1.6}
 :root{
-  --green:#3A5F0B;--green-d:#2a4508;--green-l:#4e7d10;
+  --green:#ed2939;--green-d:#c41f2e;--green-l:#f04050;
   --red:#b24545;--red-d:#8f3535;--red-l:#c95555;
   --cream:#f5f0e8;--cream-d:#ede6d6;
   --ink:#1f2937;--muted:#6b7280;
-  --bg-dark:#111a0a;--bg-card:#1a2710;
+  --bg-dark:#0f0c0c;--bg-card:#1a2710;
 }
 
 /* ── Layout ── */
@@ -54,10 +54,10 @@ html,body{height:100%;font-family:'Inter',-apple-system,sans-serif;font-size:14p
 .brand-panel::before{
   content:'';position:absolute;inset:0;
   background-image:
-    radial-gradient(circle at 20% 80%, rgba(58,95,11,.35) 0%, transparent 50%),
+    radial-gradient(circle at 20% 80%, rgba(237,41,57,.35) 0%, transparent 50%),
     radial-gradient(circle at 80% 20%, rgba(178,69,69,.2) 0%, transparent 45%),
-    linear-gradient(rgba(58,95,11,.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(58,95,11,.04) 1px, transparent 1px);
+    linear-gradient(rgba(237,41,57,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(237,41,57,.04) 1px, transparent 1px);
   background-size:100% 100%, 100% 100%, 38px 38px, 38px 38px;
   pointer-events:none;
 }
@@ -88,10 +88,12 @@ html,body{height:100%;font-family:'Inter',-apple-system,sans-serif;font-size:14p
   flex:1;
 }
 .login-visual{
-  width:360px;max-width:90%;
-  border-radius:20px;
-  object-fit:cover;
-  filter:drop-shadow(0 20px 60px rgba(0,0,0,.55));
+  width:340px;max-width:88%;
+  border-radius:16px;
+  object-fit:contain;
+  background:rgba(255,255,255,.07);
+  padding:24px;
+  filter:drop-shadow(0 16px 48px rgba(0,0,0,.6));
 }
 .login-visual-placeholder{
   width:320px;max-width:90%;aspect-ratio:1/1;
@@ -158,7 +160,7 @@ html,body{height:100%;font-family:'Inter',-apple-system,sans-serif;font-size:14p
 .form-panel::before{
   content:'';position:absolute;top:-120px;right:-120px;
   width:340px;height:340px;border-radius:50%;
-  background:radial-gradient(circle, rgba(58,95,11,.08), transparent 70%);
+  background:radial-gradient(circle, rgba(237,41,57,.08), transparent 70%);
   pointer-events:none;
 }
 .form-panel::after{
@@ -193,7 +195,7 @@ html,body{height:100%;font-family:'Inter',-apple-system,sans-serif;font-size:14p
 }
 @keyframes sd{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
 .f-alert.err{background:rgba(178,69,69,.1);border:1px solid rgba(178,69,69,.25);color:#8f3535}
-.f-alert.ok {background:rgba(58,95,11,.1);border:1px solid rgba(58,95,11,.25);color:#2a4508}
+.f-alert.ok {background:rgba(237,41,57,.1);border:1px solid rgba(237,41,57,.25);color:#c41f2e}
 .f-alert svg{flex-shrink:0;margin-top:1px}
 
 /* Form elemanlar */
@@ -217,7 +219,7 @@ html,body{height:100%;font-family:'Inter',-apple-system,sans-serif;font-size:14p
   transition:border-color .15s,box-shadow .15s;outline:none;
 }
 .fi-inp::placeholder{color:#c0bfbc}
-.fi-inp:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(58,95,11,.12)}
+.fi-inp:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(237,41,57,.12)}
 .fiw:focus-within .fi-ico{color:var(--green)}
 
 .fi-eye{
@@ -240,9 +242,9 @@ html,body{height:100%;font-family:'Inter',-apple-system,sans-serif;font-size:14p
   display:flex;align-items:center;justify-content:center;gap:8px;
   margin-top:10px;letter-spacing:.01em;
   transition:background .15s,transform .1s,box-shadow .15s;
-  box-shadow:0 4px 16px rgba(58,95,11,.35);
+  box-shadow:0 4px 16px rgba(237,41,57,.35);
 }
-.btn-sub:hover{background:var(--green-l);box-shadow:0 6px 24px rgba(58,95,11,.4)}
+.btn-sub:hover{background:var(--green-l);box-shadow:0 6px 24px rgba(237,41,57,.4)}
 .btn-sub:active{transform:scale(.98)}
 .arr{transition:transform .2s}
 .btn-sub:hover .arr{transform:translateX(3px)}
@@ -306,7 +308,11 @@ html,body{height:100%;font-family:'Inter',-apple-system,sans-serif;font-size:14p
   <div class="tacos-stage">
     <?php
     $loginImg = setting('login_image', '');
-    if ($loginImg && file_exists(dirname(__DIR__).'/uploads/logo/'.$loginImg)):
+    // Varsayilan: logo SVG
+    if (!$loginImg || !file_exists(dirname(__DIR__).'/uploads/logo/'.$loginImg)) {
+        $loginImg = 'login_hero_logo.svg';
+    }
+    if (file_exists(dirname(__DIR__).'/uploads/logo/'.$loginImg)):
     ?>
     <img
       src="/uploads/logo/<?= htmlspecialchars($loginImg) ?>"
