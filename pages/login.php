@@ -87,7 +87,21 @@ html,body{height:100%;font-family:'Inter',-apple-system,sans-serif;font-size:14p
   display:flex;align-items:center;justify-content:center;
   flex:1;
 }
-.tacos-svg{ width:360px;max-width:90%;filter:drop-shadow(0 20px 60px rgba(0,0,0,.5)) }
+.login-visual{
+  width:360px;max-width:90%;
+  border-radius:20px;
+  object-fit:cover;
+  filter:drop-shadow(0 20px 60px rgba(0,0,0,.55));
+}
+.login-visual-placeholder{
+  width:320px;max-width:90%;aspect-ratio:1/1;
+  border-radius:20px;
+  border:2px dashed rgba(255,255,255,.1);
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  gap:10px;color:rgba(255,255,255,.2);
+  font-size:.78rem;text-align:center;
+}
 
 /* Tagline */
 .tagline{
@@ -288,115 +302,23 @@ html,body{height:100%;font-family:'Inter',-apple-system,sans-serif;font-size:14p
     </div>
   </div>
 
-  <!-- TACOS SVG ILLUSTRASYON -->
+  <!-- SOL PANEL GORSELI -->
   <div class="tacos-stage">
-    <svg class="tacos-svg" viewBox="0 0 380 320" xmlns="http://www.w3.org/2000/svg">
-      <!-- Tabak golge -->
-      <ellipse cx="190" cy="295" rx="130" ry="14" fill="rgba(0,0,0,.35)"/>
-
-      <!-- TACO KABUGU (buyuk, arkadaki) -->
-      <g transform="translate(190,155)">
-        <!-- Dis kabuk yari daire -->
-        <path d="M-130,30 Q-125,-80 0,-90 Q125,-80 130,30 Z" fill="#c8832a"/>
-        <!-- Ic kabuk golge -->
-        <path d="M-120,28 Q-115,-70 0,-80 Q115,-70 120,28 Z" fill="#b87320"/>
-        <!-- Kabuk ustu desen cizgiler -->
-        <path d="M-80,-40 Q0,-60 80,-40" stroke="rgba(255,255,255,.12)" stroke-width="2" fill="none"/>
-        <path d="M-95,-10 Q0,-30 95,-10" stroke="rgba(255,255,255,.1)" stroke-width="2" fill="none"/>
-        <path d="M-100,15 Q0,-5 100,15" stroke="rgba(255,255,255,.08)" stroke-width="2" fill="none"/>
-        <!-- Kabuk kenari -->
-        <path d="M-130,30 Q-128,35 -120,36 Q0,42 120,36 Q128,35 130,30" fill="#e09030"/>
-      </g>
-
-      <!-- IC DOLGU KATMANLARI -->
-      <!-- Marul (yesil yapraklar) -->
-      <g transform="translate(190,158)">
-        <ellipse cx="-30" cy="10" rx="48" ry="22" fill="#4a7c20" transform="rotate(-8,-30,10)"/>
-        <ellipse cx="30" cy="8" rx="44" ry="20" fill="#5a9228" transform="rotate(6,30,8)"/>
-        <ellipse cx="0" cy="5" rx="50" ry="20" fill="#3d6b18"/>
-        <!-- Yaprak damarlari -->
-        <path d="M-50,5 Q-20,-8 10,5" stroke="rgba(255,255,255,.15)" stroke-width="1.5" fill="none"/>
-        <path d="M10,4 Q35,-6 60,4" stroke="rgba(255,255,255,.15)" stroke-width="1.5" fill="none"/>
-      </g>
-
-      <!-- Et / Tavuk -->
-      <g transform="translate(190,150)">
-        <ellipse cx="-10" cy="0" rx="90" ry="18" fill="#8B4513"/>
-        <!-- Et doku -->
-        <ellipse cx="-25" cy="-3" rx="18" ry="7" fill="#7a3c10"/>
-        <ellipse cx="15" cy="-2" rx="22" ry="8" fill="#9b4f18"/>
-        <ellipse cx="-5" cy="2" rx="15" ry="6" fill="#7a3c10"/>
-        <!-- Izgara cizgileri -->
-        <path d="M-70,-5 L-60,10" stroke="rgba(0,0,0,.3)" stroke-width="3" stroke-linecap="round"/>
-        <path d="M-50,-8 L-40,7" stroke="rgba(0,0,0,.3)" stroke-width="3" stroke-linecap="round"/>
-        <path d="M-30,-10 L-20,5" stroke="rgba(0,0,0,.3)" stroke-width="3" stroke-linecap="round"/>
-        <path d="M-10,-10 L0,5" stroke="rgba(0,0,0,.3)" stroke-width="3" stroke-linecap="round"/>
-        <path d="M10,-8 L20,7" stroke="rgba(0,0,0,.3)" stroke-width="3" stroke-linecap="round"/>
-        <path d="M30,-6 L40,9" stroke="rgba(0,0,0,.3)" stroke-width="3" stroke-linecap="round"/>
-      </g>
-
-      <!-- Domates (kirmizi dilimler) -->
-      <g transform="translate(190,142)">
-        <ellipse cx="-45" cy="-5" rx="16" ry="10" fill="#c0392b" transform="rotate(-15,-45,-5)"/>
-        <ellipse cx="40" cy="-8" rx="14" ry="9" fill="#e74c3c" transform="rotate(10,40,-8)"/>
-        <ellipse cx="0" cy="-12" rx="18" ry="10" fill="#c0392b"/>
-        <!-- Domates ic -->
-        <ellipse cx="-45" cy="-5" rx="8" ry="5" fill="#e74c3c" transform="rotate(-15,-45,-5)" opacity=".7"/>
-        <ellipse cx="0" cy="-12" rx="9" ry="5" fill="#e74c3c" opacity=".7"/>
-      </g>
-
-      <!-- Soguk sos (sari) -->
-      <g transform="translate(190,138)">
-        <path d="M-60,-10 Q-30,-25 0,-18 Q30,-28 65,-12" stroke="#f1c40f" stroke-width="5" fill="none" stroke-linecap="round"/>
-        <path d="M-55,-5 Q-20,-20 20,-15 Q50,-22 70,-8" stroke="#f39c12" stroke-width="3" fill="none" stroke-linecap="round" opacity=".6"/>
-      </g>
-
-      <!-- Avokado (yesil noktalari) -->
-      <g transform="translate(190,148)">
-        <ellipse cx="-60" cy="-15" rx="12" ry="8" fill="#27ae60" transform="rotate(-20,-60,-15)"/>
-        <ellipse cx="55" cy="-18" rx="11" ry="7" fill="#2ecc71" transform="rotate(15,55,-18)"/>
-        <ellipse cx="-20" cy="-20" rx="10" ry="7" fill="#27ae60"/>
-      </g>
-
-      <!-- TACO KABUGU ONDE (on tarafi) -->
-      <g transform="translate(190,155)">
-        <!-- Sag kabuk yarisi -->
-        <path d="M0,-90 Q125,-80 130,30 L0,42 Z" fill="#d4902e" opacity=".85"/>
-        <!-- Sol kabuk kenar -->
-        <path d="M-130,30 L0,42 Z" fill="none" stroke="#e09030" stroke-width="1" opacity=".5"/>
-        <!-- Kabuk golge ic -->
-        <path d="M0,-88 Q110,-78 118,28 L0,40 Z" fill="rgba(0,0,0,.08)"/>
-      </g>
-
-      <!-- KUCUK DEKORATIF ELEMENTLER -->
-      <!-- Biber parcaciklari -->
-      <circle cx="125" cy="108" r="5" fill="#c0392b" opacity=".8"/>
-      <circle cx="255" cy="105" r="4" fill="#c0392b" opacity=".7"/>
-      <circle cx="145" cy="95" r="3" fill="#e74c3c" opacity=".9"/>
-      <circle cx="240" cy="98" r="3.5" fill="#e74c3c" opacity=".8"/>
-      <circle cx="170" cy="88" r="2.5" fill="#c0392b" opacity=".7"/>
-
-      <!-- Ses dalgalari / lezzet cizgileri -->
-      <path d="M80,60 Q95,45 110,60" stroke="rgba(255,255,255,.12)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-      <path d="M75,48 Q95,28 115,48" stroke="rgba(255,255,255,.08)" stroke-width="2" fill="none" stroke-linecap="round"/>
-
-      <path d="M270,62 Q285,47 300,62" stroke="rgba(255,255,255,.12)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-      <path d="M265,50 Q285,30 305,50" stroke="rgba(255,255,255,.08)" stroke-width="2" fill="none" stroke-linecap="round"/>
-
-      <!-- Yildiz dekoru -->
-      <g transform="translate(60,50)" opacity=".4">
-        <polygon points="0,-8 2,-3 7,-3 3,1 5,6 0,3 -5,6 -3,1 -7,-3 -2,-3" fill="#f1c40f"/>
-      </g>
-      <g transform="translate(320,55)" opacity=".35">
-        <polygon points="0,-6 1.5,-2.5 5.5,-2.5 2.5,1 3.5,5 0,2.5 -3.5,5 -2.5,1 -5.5,-2.5 -1.5,-2.5" fill="#f1c40f"/>
-      </g>
-      <g transform="translate(190,30)" opacity=".3">
-        <polygon points="0,-5 1.5,-2 4,-2 2,0.5 3,4 0,2 -3,4 -2,0.5 -4,-2 -1.5,-2" fill="#f39c12"/>
-      </g>
-
-      <!-- Kabuk alt tamamlayici -->
-      <path d="M60,185 Q190,200 320,185" stroke="rgba(200,131,42,.3)" stroke-width="2" fill="none"/>
-    </svg>
+    <?php
+    $loginImg = setting('login_image', '');
+    if ($loginImg && file_exists(dirname(__DIR__).'/uploads/logo/'.$loginImg)):
+    ?>
+    <img
+      src="/uploads/logo/<?= htmlspecialchars($loginImg) ?>"
+      alt="<?= htmlspecialchars($siteName) ?>"
+      class="login-visual"
+    >
+    <?php else: ?>
+    <div class="login-visual-placeholder">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      <span>Admin &rsaquo; Ayarlar &rsaquo;<br>Login Gorseli</span>
+    </div>
+    <?php endif; ?>
   </div>
 
   <div class="tagline">

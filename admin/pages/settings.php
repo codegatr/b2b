@@ -12,6 +12,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             settingSave($f, trim($_POST[$f] ?? ''));
         }
         $success = 'Genel ayarlar kaydedildi.';
+
+        // Login gorseli yukle
+        if (!empty($_FILES['login_image']['name'])) {
+            $file    = $_FILES['login_image'];
+            $maxSize = 5 * 1024 * 1024;
+            $allowed = ['image/png','image/jpeg','image/webp'];
+            if ($file['size'] > $maxSize) {
+                $error = 'Gorsel 5MB dan buyuk olamaz.';
+            } elseif (!in_array($file['type'], $allowed)) {
+                $error = 'Sadece PNG, JPG, WEBP kabul edilir.';
+            } else {
+                $ext    = pathinfo($file['name'], PATHINFO_EXTENSION);
+                $fname  = 'login_hero_'.time().'.'.$ext;
+                $dest   = dirname(__DIR__).'/uploads/logo/'.$fname;
+                // Eskiyi sil
+                $old_img = setting('login_image','');
+                if ($old_img && file_exists(dirname(__DIR__).'/uploads/logo/'.$old_img)) {
+                    @unlink(dirname(__DIR__).'/uploads/logo/'.$old_img);
+                }
+                if (move_uploaded_file($file['tmp_name'], $dest)) {
+                    settingSave('login_image', $fname);
+                    $success = 'Login gorseli yuklendi.';
+                } else {
+                    $error = 'Gorsel yuklenemedi.';
+                }
+            }
+        }
+
+        // Login gorseli kaldir
+        if (!empty($_POST['remove_login_image'])) {
+            $old_img = setting('login_image','');
+            if ($old_img && file_exists(dirname(__DIR__).'/uploads/logo/'.$old_img)) {
+                @unlink(dirname(__DIR__).'/uploads/logo/'.$old_img);
+            }
+            settingSave('login_image', '');
+            $success = 'Login gorseli kaldirildi.';
+        }
     }
 
     if ($tab === 'smtp') {
@@ -126,6 +163,49 @@ if (isset($_GET['test_parasut'])) {
     </div>
     <div class="form-actions"><button type="submit" class="btn btn-primary">Kaydet</button></div>
 </form>
+
+<!-- Login Gorseli -->
+<div style="border-top:1px solid var(--border);margin-top:1.5rem;padding-top:1.5rem">
+    <h4 style="font-size:.9rem;font-weight:600;margin-bottom:1rem">Giris Ekrani Gorseli (Sol Panel)</h4>
+    <div style="display:flex;align-items:flex-start;gap:1.5rem;flex-wrap:wrap">
+        <div style="flex-shrink:0">
+            <?php $li = setting('login_image',''); ?>
+            <?php if ($li && file_exists(dirname(__DIR__).'/uploads/logo/'.$li)): ?>
+            <div style="position:relative;display:inline-block">
+                <img src="/uploads/logo/<?= h($li) ?>" alt="Login Gorseli"
+                     style="width:160px;height:160px;object-fit:cover;border-radius:12px;border:1px solid var(--border)">
+                <form method="post" style="position:absolute;top:6px;right:6px">
+                    <?= csrfField() ?>
+                    <input type="hidden" name="tab" value="general">
+                    <input type="hidden" name="remove_login_image" value="1">
+                    <button type="submit" title="Kaldir"
+                        style="background:rgba(239,68,68,.85);border:none;border-radius:6px;padding:4px 6px;cursor:pointer;color:#fff;line-height:0">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </form>
+            </div>
+            <?php else: ?>
+            <div style="width:160px;height:160px;border:2px dashed var(--border);border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--text-muted);font-size:.78rem;text-align:center">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                Gorsel Yok
+            </div>
+            <?php endif; ?>
+        </div>
+        <div style="flex:1;min-width:220px">
+            <form method="post" enctype="multipart/form-data">
+                <?= csrfField() ?>
+                <input type="hidden" name="tab" value="general">
+                <input type="hidden" name="upload_login_image" value="1">
+                <div class="form-group">
+                    <label class="form-label">Yeni Gorsel Yukle</label>
+                    <input type="file" name="login_image" class="form-control" accept="image/png,image/jpeg,image/webp">
+                    <small style="color:var(--text-muted);font-size:.78rem">PNG, JPG, WEBP &mdash; Maks 5MB. Onerilen: 800x900px dikey.</small>
+                </div>
+                <button type="submit" class="btn btn-secondary">Gorseli Yukle</button>
+            </form>
+        </div>
+    </div>
+</div>
 </div>
 </div>
 
