@@ -218,7 +218,15 @@ function renderAdminPage(string $page, array $vars = []): void {
         <div class="logo-sub">Admin Paneli</div>
       </div>
     </div>
-    <div class="admin-version">v<?= h($cfg['version']) ?><?php if ($hasUpdate): ?> <span style="color:var(--warning)">● Güncelleme</span><?php endif; ?></div>
+    <div class="admin-version">
+  v<?= h($cfg['version']) ?>
+  <?php $_sha = updater()->getInstalledSha(); if ($_sha): ?>
+  <span style="opacity:.5">· <?= substr($_sha,0,7) ?></span>
+  <?php endif; ?>
+  <?php if ($hasUpdate): ?>
+  <span style="color:#f59e0b;margin-left:4px">● Güncelleme</span>
+  <?php endif; ?>
+</div>
 
     <nav class="sidebar-nav">
       <div class="nav-section">

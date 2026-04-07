@@ -111,10 +111,18 @@ $hasBranchUpdate = $latestCommit && ($latestCommit['sha'] !== $installedSha);
     </div>
     <?php if ($hasBranchUpdate): ?>
     <div class="alert alert-warning" style="margin-bottom:12px">
-      Yuklu commit (<code><?= h(substr($installedSha,0,7) ?: 'bilinmiyor') ?></code>) ile GitHub farklı. Guncelleme mevcut.
+      Yeni commit mevcut — (<code><?= h(substr($installedSha,0,7) ?: 'bilinmiyor') ?></code>) ile GitHub farklı. Guncelleme mevcut.
     </div>
     <?php else: ?>
-    <div style="color:var(--text-muted);font-size:.875rem;margin-bottom:12px">Sistem guncel. GitHub ile ayni commit yuklu.</div>
+    <div style="color:var(--text-muted);font-size:.875rem;margin-bottom:12px">
+      Sistem güncel.
+      <?php if ($installedSha): ?>
+      <span style="color:var(--success);font-size:.8rem">
+        ✓ Yüklü: <code style="font-size:11px"><?= h(substr($installedSha,0,7)) ?></code>
+        = GitHub: <code style="font-size:11px"><?= h($latestCommit['sha_short'] ?? '?') ?></code>
+      </span>
+      <?php endif; ?>
+    </div>
     <?php endif; ?>
     <form method="POST">
       <?= csrfField() ?>
