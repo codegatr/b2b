@@ -264,18 +264,14 @@ function renderAdminPage(string $page, array $vars = []): void {
       <div class="nav-section">
         <div class="nav-section-label">Sistem</div>
         <a href="?page=parasut" class="nav-item <?= $page==='parasut'?'active':'' ?>">🔗 Paraşüt</a>
-        <a href="?page=update" class="nav-item <?= $page==='update'?'active':'' ?>">
-          🔄 Güncelleme
-          <?php if ($hasUpdate): ?><span class="notif-dot" style="position:relative;display:inline-block;width:7px;height:7px;background:var(--warning);border-radius:50%;margin-left:4px"></span><?php endif; ?>
-        </a>
-        <a href="?page=admins" class="nav-item <?= $page==='admins'?'active':'' ?>">👥 Admin Kullanıcılar</a>
+
+
         <a href="?page=settings" class="nav-item <?= $page==='settings'?'active':'' ?>">⚙️ Ayarlar</a>
       </div>
     </nav>
 
     <div class="sidebar-footer">
-      <a href="<?= B2B_URL ?>/" target="_blank" class="nav-item">🌐 Bayi Portalı</a>
-      <a href="?page=logout" class="nav-item" style="color:var(--danger)">🚪 Çıkış</a>
+      <a href="?page=settings" class="nav-item <?= $page==='settings'?'active':'' ?>">⚙️ Ayarlar</a>
     </div>
   </aside>
 
@@ -287,8 +283,16 @@ function renderAdminPage(string $page, array $vars = []): void {
         <!-- Güncelleme butonu -->
         <?php if ($hasUpdate): ?>
         <a href="?page=update"
-           style="display:flex;align-items:center;gap:5px;padding:5px 12px;background:#ed2939;color:#fff;border-radius:6px;font-size:12px;font-weight:600;text-decoration:none;animation:pulse-red 1.5s infinite">
-          ↑ Güncelleme Mevcut
+           style="display:flex;align-items:center;gap:5px;padding:5px 12px;background:#ed2939;color:#fff;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;animation:pulse-red 1.5s infinite">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
+          Güncelleme Mevcut
+        </a>
+        <?php else: ?>
+        <a href="?page=update"
+           title="Güncelleme Merkezi"
+           style="display:flex;align-items:center;gap:5px;padding:5px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:500;color:var(--text-2);text-decoration:none">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+          Güncel
         </a>
         <?php endif; ?>
 

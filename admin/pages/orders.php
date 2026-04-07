@@ -240,6 +240,37 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
 <?php if (!empty($success)): ?><div class="alert alert-success"><?= h($success) ?></div><?php endif; ?>
 <?php if (!empty($error)):   ?><div class="alert alert-danger"><?= h($error) ?></div><?php endif; ?>
 
+<?php if (!empty($order['cancel_requested']) && $order['status'] !== 'iptal'): ?>
+<div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:10px;padding:16px 20px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
+  <div>
+    <div style="font-weight:700;font-size:15px;color:#92400e;margin-bottom:6px">⚠️ Bayi Sipariş İptali Talep Etti</div>
+    <div style="font-size:13px;color:#78350f">
+      <strong>Sebep:</strong> <?= h($order['cancel_reason'] ?? '—') ?>
+    </div>
+    <?php if ($order['cancel_requested_at'] ?? ''): ?>
+    <div style="font-size:12px;color:#a16207;margin-top:4px">Talep tarihi: <?= date('d.m.Y H:i', strtotime($order['cancel_requested_at'])) ?></div>
+    <?php endif; ?>
+  </div>
+  <div style="display:flex;gap:8px;flex-shrink:0">
+    <form method="post" style="display:inline">
+      <?= csrfField() ?>
+      <input type="hidden" name="form_action" value="approve_cancel">
+      <input type="hidden" name="order_id" value="<?= $order['id'] ?>">
+      <button type="submit" class="btn btn-danger"
+              onclick="return confirm('Sipariş iptal edilecek. Stoklar geri yüklenecek ve cari borç kapatılacak. Onaylıyor musunuz?')">
+        ✓ İptali Onayla
+      </button>
+    </form>
+    <form method="post" style="display:inline">
+      <?= csrfField() ?>
+      <input type="hidden" name="form_action" value="reject_cancel">
+      <input type="hidden" name="order_id" value="<?= $order['id'] ?>">
+      <button type="submit" class="btn btn-secondary">✗ Talebi Reddet</button>
+    </form>
+  </div>
+</div>
+<?php endif; ?>
+
 <div class="grid grid-cols-3 gap-4 mb-6">
     <div class="stat-card"><div class="stat-label">Durum</div><div class="stat-value"><?= orderStatusLabel($order['status']) ?></div></div>
     <div class="stat-card"><div class="stat-label">Toplam</div><div class="stat-value"><?= money($order['grand_total']) ?></div></div>
@@ -287,8 +318,9 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
         <thead><tr><th>Ürün</th><th>SKU</th><th>Birim Fiyat</th><th>Miktar</th><th>KDV</th><th>Toplam</th></tr></thead>
         <tbody>
         <?php $subtotal=0; $tax=0; foreach ($orderItems as $it):
-            $lineTotal = $it['unit_price'] * $it['quantity'];
-            $lineTax   = $lineTotal * ($it['tax_rate']/100);
+            $qty = (int)($it['qty'] ?? $it['quantity'] ?? 0);
+            $lineTotal = $it['unit_price'] * $qty;
+            $lineTax   = $lineTotal * ((float)($it['vat_rate'] ?? $it['tax_rate'] ?? 0)/100);
             $subtotal += $lineTotal; $tax += $lineTax;
         ?>
         <tr>
