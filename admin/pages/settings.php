@@ -22,61 +22,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $success = 'Genel ayarlar kaydedildi.';
         }
 
-        // ── Logo yükleme ───────────────────────────────────────────
+                // ── Logo yükleme ───────────────────────────────────────────
         if ($isImageUpload) {
             $file    = $_FILES['login_image'];
             $maxSize = 5 * 1024 * 1024;
             $allowed = ['image/png','image/jpeg','image/webp','image/svg+xml'];
-            // Dosya uzantısından MIME belirle (tarayıcı tutarsız gönderebilir)
+
+            // Uzantıdan MIME tespit (tarayıcı tutarsız gönderebilir)
             $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-            $extMimeMap = [
-                'svg'  => 'image/svg+xml',
-                'png'  => 'image/png',
-                'jpg'  => 'image/jpeg',
-                'jpeg' => 'image/jpeg',
-                'webp' => 'image/webp',
-            ];
-            if (isset($extMimeMap[$ext])) {
-                $file['type'] = $extMimeMap[$ext];
-            }
+            $mimeMap = ['svg'=>'image/svg+xml','png'=>'image/png','jpg'=>'image/jpeg','jpeg'=>'image/jpeg','webp'=>'image/webp'];
+            if (isset($mimeMap[$ext])) $file['type'] = $mimeMap[$ext];
 
-            if ($file['size'] > $maxSize) {
-                $error = 'Görsel 5MB'dan büyük olamaz.';
-            } elseif (!in_array($file['type'], $allowed) && $ext !== 'svg') {
-                $error = 'Sadece PNG, JPG, WEBP, SVG kabul edilir. (Tip: ' . h($file['type']) . ')';
-            } elseif ($file['error'] !== UPLOAD_ERR_OK) {
-                $error = 'Yükleme hatası: ' . $file['error'];
+            $uploadErr = '';
+            if ($file['error'] !== UPLOAD_ERR_OK) {
+                $uploadErr = 'PHP yükleme hatası: ' . $file['error'];
+            } elseif ($file['size'] > $maxSize && $ext !== 'svg') {
+                $uploadErr = 'Görsel 5MB'dan büyük olamaz.';
+            } elseif (!in_array($file['type'], $allowed)) {
+                $uploadErr = 'Desteklenmeyen format: ' . h($file['type']) . ' (.'. $ext .')';
             } else {
-                $fname = 'login_hero_' . time() . '.' . $ext;
-                $dest  = dirname(__DIR__) . '/uploads/logo/' . $fname;
+                $fname     = 'login_hero_' . time() . '.' . $ext;
+                $uploadDir = dirname(__DIR__) . '/uploads/logo';
+                $dest      = $uploadDir . '/' . $fname;
 
-                // Klasör var mı, yazılabilir mi kontrol
-                $uploadDir = dirname($dest);
-                if (!is_dir($uploadDir)) {
-                    mkdir($uploadDir, 0775, true);
-                }
+                if (!is_dir($uploadDir)) mkdir($uploadDir, 0775, true);
+
                 if (!is_writable($uploadDir)) {
-                    $error = 'Yükleme klasörü yazılamıyor: ' . $uploadDir;
+                    $uploadErr = 'Klasör yazılamıyor: ' . $uploadDir;
+                } else {
+                    // Eski görseli sil (varsayılan logo hariç)
+                    $oldImg = setting('login_image', '');
+                    if ($oldImg && $oldImg !== 'login_hero_logo.svg') {
+                        $oldPath = $uploadDir . '/' . $oldImg;
+                        if (file_exists($oldPath)) @unlink($oldPath);
+                    }
+                    if (move_uploaded_file($file['tmp_name'], $dest)) {
+                        settingSave('login_image', $fname);
+                        settingClearCache();
+                        $success = 'Görsel yüklendi: ' . h($fname);
+                    } else {
+                        $uploadErr = 'Dosya taşınamadı. Dizin: ' . $uploadDir;
+                    }
                 }
-                if (empty($error)):
-
-                // Eski varsayılan olmayan görseli sil
-                $old_img = setting('login_image', '');
-                if ($old_img && $old_img !== 'login_hero_logo.svg' &&
-                    file_exists(dirname(__DIR__) . '/uploads/logo/' . $old_img)) {
-                    @unlink(dirname(__DIR__) . '/uploads/logo/' . $old_img);
-                }
-
-                if (empty($error) && move_uploaded_file($file['tmp_name'], $dest)) {
-                    settingSave('login_image', $fname);
-                    settingClearCache();
-                    $success = 'Giriş ekranı görseli yüklendi.';
-                } elseif (empty($error)) {
-                    $error = 'Görsel taşınamadı. PHP move_uploaded_file başarısız. Dizin: ' . $uploadDir .
-                             ' | Yazılabilir: ' . (is_writable($uploadDir) ? 'Evet' : 'Hayır');
-                }
-                endif; // is_writable check
             }
+            if ($uploadErr) $error = $uploadErr;
         }
 
         // ── Logo kaldırma ──────────────────────────────────────────
