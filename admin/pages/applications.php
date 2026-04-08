@@ -30,8 +30,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'is_active'         => 1,
                 'created_at'        => date('Y-m-d H:i:s'),
             ]);
-            dbExec("UPDATE b2b_applications SET status='onaylandi', reviewed_by=?, reviewed_at=NOW(), dealer_id=? WHERE id=?",
-                [adminId(), $did, $aid]);
+            dbExec("UPDATE b2b_applications SET status='onaylandi', reviewed_by=?, reviewed_at=NOW() WHERE id=?",
+                [adminId(), $aid]);
             // Paraşüt sync
             try { parasut()->syncDealer($did); } catch (Exception $e) {}
             auditLog('application_approved', 'b2b_applications', $aid, ['dealer_id'=>$did]);
@@ -40,8 +40,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($act === 'reject') {
-        $reason = trim($_POST['reject_reason'] ?? '');
-        dbExec("UPDATE b2b_applications SET status='reddedildi', reject_reason=?, reviewed_by=?, reviewed_at=NOW() WHERE id=?",
+        $reason = trim($_POST['admin_note'] ?? '');
+        dbExec("UPDATE b2b_applications SET status='reddedildi', admin_note=?, reviewed_by=?, reviewed_at=NOW() WHERE id=?",
             [$reason, adminId(), $aid]);
         $success = 'Başvuru reddedildi.';
     }
@@ -107,11 +107,11 @@ $_acounts = [
                     <span>🏢 <?= h($a['tax_number']) ?> / <?= h($a['tax_office']) ?></span>
                     <span>📍 <?= h($a['address']) ?>, <?= h($a['city']) ?></span>
                 </div>
-                <?php if ($a['notes']): ?>
-                <div class="mt-2 p-2 bg-muted rounded text-sm"><?= h($a['notes']) ?></div>
+                <?php if ($a['message']): ?>
+                <div class="mt-2 p-2 bg-muted rounded text-sm"><?= h($a['message']) ?></div>
                 <?php endif; ?>
-                <?php if ($a['reject_reason']): ?>
-                <div class="mt-2 text-sm text-danger">Red Nedeni: <?= h($a['reject_reason']) ?></div>
+                <?php if ($a['admin_note']): ?>
+                <div class="mt-2 text-sm text-danger">Red Nedeni: <?= h($a['admin_note']) ?></div>
                 <?php endif; ?>
             </div>
             <?php if ($a['status'] === 'bekliyor'): ?>
@@ -123,8 +123,6 @@ $_acounts = [
                     <button class="btn btn-success w-full">✓ Onayla</button>
                 </form>
                 <button class="btn btn-danger w-full" onclick="rejectApp(<?= $a['id'] ?>)">✕ Reddet</button>
-                <?php if ($a['dealer_id']): ?>
-                <a href="?page=dealers&action=detail&id=<?= $a['dealer_id'] ?>" class="btn btn-ghost w-full text-sm">Bayi →</a>
                 <?php endif; ?>
             </div>
             <?php endif; ?>
@@ -149,7 +147,7 @@ $_acounts = [
             <input type="hidden" name="app_id" id="reject-app-id" value="">
             <div class="form-group">
                 <label>Red Nedeni</label>
-                <textarea name="reject_reason" class="form-control" rows="3" placeholder="Başvuruya neden reddedildiğini açıklayın…"></textarea>
+                <textarea name="admin_note" class="form-control" rows="3" placeholder="Başvuruya neden reddedildiğini açıklayın…"></textarea>
             </div>
         </form>
     </div>

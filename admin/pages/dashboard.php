@@ -106,7 +106,7 @@ $recentPayments = dbRows(
           <td><?= money((float)$o['grand_total']) ?></td>
           <td><?= orderStatusLabel($o['status']) ?></td>
           <td class="text-muted fs-12"><?= fmtDateTime($o['created_at']) ?></td>
-          <td><a href="?page=order&id=<?= $o['id'] ?>" class="btn btn-ghost btn-sm">Detay</a></td>
+          <td><a href="?page=orders&action=detail&id=<?= $o['id'] ?>" class="btn btn-ghost btn-sm">Detay</a></td>
         </tr>
         <?php endforeach; ?>
         <?php if (empty($recentOrders)): ?>

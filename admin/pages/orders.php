@@ -18,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Stok geri yükle
             $items = dbRows("SELECT * FROM b2b_order_items WHERE order_id=?", [$oid]);
             foreach ($items as $it) {
-                $qty = (int)($it['qty'] ?? $it['quantity'] ?? 0);
+                $qty = (int)$it['qty'];
                 if ($qty > 0) dbExec("UPDATE b2b_products SET stock=stock+? WHERE id=?", [$qty, $it['product_id']]);
             }
             // Cari borcu kapat
@@ -293,7 +293,7 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
         <div class="card-body">
             <dl class="info-list">
                 <dt>Firma</dt><dd><?= h($order['company_name']) ?></dd>
-                <dt>Bayi</dt><dd><?= h($order['dealer_company'] ?? $order['dealer_id']) ?></dd>
+                <dt>Bayi</dt><dd><?= h($order['contact_name']) ?></dd>
                 <dt>E-posta</dt><dd><?= h($order['dealer_email']) ?></dd>
                 <dt>Telefon</dt><dd><?= h($order['dealer_phone']) ?></dd>
                 <dt>Adres</dt><dd><?= h($order['address']) ?>, <?= h($order['city']) ?></dd>

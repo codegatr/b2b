@@ -67,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($act === 'stock_adjust') {
         $pid    = intval($_POST['product_id']);
         $type   = $_POST['change_type'];
-        $qty    = abs(intval($_POST['quantity']));
+        $qty    = abs(intval($_POST['qty'] ?? $_POST['quantity'] ?? 0));
         $note   = trim($_POST['note']);
         if ($qty > 0) {
             // Güncelleme öncesi stok miktarını al
@@ -243,7 +243,7 @@ $stockLog = dbRows("SELECT sl.*, COALESCE(a.name, 'Sistem') AS created_by_name F
             </div>
             <div class="form-group">
                 <label>Miktar</label>
-                <input type="number" name="quantity" min="1" value="1" class="form-control" style="max-width:100px">
+                <input type="number" name="qty" min="1" value="1" class="form-control" style="max-width:100px">
             </div>
             <div class="form-group" style="flex:1">
                 <label>Not</label>
@@ -322,9 +322,9 @@ $stockLog = dbRows("SELECT sl.*, COALESCE(a.name, 'Sistem') AS created_by_name F
         </div>
         <div class="form-group">
             <label>KDV Oranı (%)</label>
-            <select name="tax_rate" class="form-control">
+            <select name="vat_rate" class="form-control">
                 <?php foreach ([0,1,8,10,18,20] as $t): ?>
-                <option value="<?= $t ?>" <?= ($product['vat_rate']??$product['tax_rate']??18)==$t?'selected':'' ?>>%<?= $t ?></option>
+                <option value="<?= $t ?>" <?= ((int)($product['vat_rate']??18))===$t?'selected':'' ?>>%<?= $t ?></option>
                 <?php endforeach; ?>
             </select>
         </div>

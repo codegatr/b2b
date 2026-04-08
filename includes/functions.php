@@ -185,8 +185,8 @@ function slugify(string $text): string {
     return trim($text, '-');
 }
 
-function h(string $val): string {
-    return htmlspecialchars($val, ENT_QUOTES, 'UTF-8');
+function h(mixed $val): string {
+    return htmlspecialchars((string)($val ?? ''), ENT_QUOTES, 'UTF-8');
 }
 
 function jsonResponse(array $data, int $code = 200): never {
@@ -241,19 +241,19 @@ function calcDueDate(int $termDays): string {
 }
 
 /** Para formatla */
-function money(float $amount): string {
-    return number_format($amount, 2, ',', '.') . ' ₺';
+function money(mixed $amount): string {
+    return number_format((float)($amount ?? 0), 2, ',', '.') . ' ₺';
 }
 
 /** Tarih formatla */
-function fmtDate(string $date): string {
+function fmtDate(mixed $date): string {
     if (!$date || $date === '0000-00-00') return '—';
-    return date('d.m.Y', strtotime($date));
+    return date('d.m.Y', strtotime((string)$date));
 }
 
-function fmtDateTime(string $dt): string {
+function fmtDateTime(mixed $dt): string {
     if (!$dt) return '—';
-    return date('d.m.Y H:i', strtotime($dt));
+    return date('d.m.Y H:i', strtotime((string)$dt));
 }
 
 /** Pagination */

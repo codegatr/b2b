@@ -39,10 +39,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($act === 'reject') {
-        $reason = trim($_POST['reject_reason'] ?? '');
+        $reason = trim($_POST['admin_note'] ?? '');
         $p = dbRow("SELECT * FROM b2b_payments WHERE id=?", [$pid]);
         if ($p && $p['status'] === 'bekliyor') {
-            dbExec("UPDATE b2b_payments SET status='reddedildi', reject_reason=? WHERE id=?", [$reason, $pid]);
+            dbExec("UPDATE b2b_payments SET status='reddedildi', admin_note=? WHERE id=?", [$reason, $pid]);
             notifyDealer($p['dealer_id'], 'payment', 'Ödemeniz Reddedildi', 'Ödemeniz reddedildi.' . ($reason ? " Neden: $reason" : ''), '?page=payments');
             $success = 'Ödeme reddedildi.';
         }
@@ -168,7 +168,7 @@ $_tabs = ['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','reddedildi'=>'Reddedi
     </tr>
     <?php if ($p['note']): ?>
     <tr class="row-sub">
-        <td colspan="7" class="text-sm text-muted pl-6">Not: <?= h($p['note']) ?> <?= $p['reject_reason'] ? '| Red: '.h($p['reject_reason']) : '' ?></td>
+        <td colspan="7" class="text-sm text-muted pl-6">Not: <?= h($p['note']) ?> <?= $p['admin_note'] ? '| Red: '.h($p['admin_note']) : '' ?></td>
     </tr>
     <?php endif; ?>
     <?php endforeach; ?>
@@ -237,7 +237,7 @@ $_tabs = ['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','reddedildi'=>'Reddedi
             <input type="hidden" name="payment_id" id="reject-payment-id" value="">
             <div class="form-group">
                 <label>Red Nedeni</label>
-                <textarea name="reject_reason" class="form-control" rows="3" placeholder="Bayi bilgilendirilecektir…"></textarea>
+                <textarea name="admin_note" class="form-control" rows="3" placeholder="Bayi bilgilendirilecektir…"></textarea>
             </div>
         </form>
     </div>
