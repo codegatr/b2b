@@ -91,7 +91,7 @@ function isAdmin(): bool {
 
 function requireAdmin(string $role = 'staff'): void {
     if (!isAdmin()) {
-        header('Location: ' . B2B_URL . '/admin/?page=login');
+        header('Location: ' . B2B_URL . '/?page=login');
         exit;
     }
     $roles = ['staff'=>1,'admin'=>2,'superadmin'=>3];

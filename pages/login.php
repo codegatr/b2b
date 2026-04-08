@@ -1,16 +1,37 @@
 <?php
+// Zaten giriş yapmışsa yönlendir
 if (isset($_SESSION['dealer_id'])) { header('Location: ?page=dashboard'); exit; }
+if (isset($_SESSION['admin_id']))  { header('Location: ' . B2B_URL . '/admin/?page=dashboard'); exit; }
+
+// Flash mesajı oku
+$flash = null;
+if (!empty($_SESSION['flash'])) {
+    $flash = $_SESSION['flash'];
+    unset($_SESSION['flash']);
+}
+
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrfCheck();
     $email = trim($_POST['email'] ?? '');
     $pass  = trim($_POST['password'] ?? '');
     if (!$email || !$pass) {
-        $error = 'E-posta ve sifre zorunludur.';
+        $error = 'E-posta ve şifre zorunludur.';
     } else {
+        // Önce admin tablosuna bak
+        $admin = dbRow("SELECT * FROM b2b_admin_users WHERE email=? AND is_active=1", [$email]);
+        if ($admin && password_verify($pass, $admin['password'])) {
+            $_SESSION['admin_id']   = $admin['id'];
+            $_SESSION['admin_name'] = $admin['name'];
+            $_SESSION['admin_role'] = $admin['role'];
+            dbExec("UPDATE b2b_admin_users SET last_login=NOW() WHERE id=?", [$admin['id']]);
+            session_regenerate_id(true);
+            header('Location: ' . B2B_URL . '/admin/?page=dashboard');
+            exit;
+        }
+        // Sonra bayi tablosuna bak
         $dealer = dbRow("SELECT * FROM b2b_dealers WHERE email=? AND is_active=1", [$email]);
         if ($dealer && password_verify($pass, $dealer['password'])) {
-            // dealerLogin() email+password bekliyor — direkt session set et
             $_SESSION['dealer_id']    = $dealer['id'];
             $_SESSION['dealer_name']  = $dealer['company_name'] ?: trim($dealer['first_name'].' '.$dealer['last_name']);
             $_SESSION['dealer_type']  = $dealer['type'];
@@ -21,9 +42,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $next = preg_replace('/[^a-z0-9\-\/\.\?\=\&]/i', '', $_GET['next'] ?? '');
             header('Location: ' . ($next ?: '?page=dashboard'));
             exit;
-        } else {
-            $error = 'E-posta veya sifre hatali ya da hesabiniz aktif degil.';
         }
+        $error = 'E-posta veya şifre hatalı ya da hesabınız aktif değil.';
     }
 }
 $siteName = setting('site_name', 'Le Monde Du Tacos B2B');
@@ -368,9 +388,9 @@ html,body{height:100%;font-family:'Inter',-apple-system,sans-serif;font-size:14p
   <div class="form-inner">
 
     <div class="form-head">
-      <div class="welcome">Bayi Girisi</div>
-      <h1>Hos Geldiniz</h1>
-      <p>Hesabiniza giris yaparak siparisleri yonetin.</p>
+      <div class="welcome">Giriş</div>
+      <h1>Hoş Geldiniz</h1>
+      <p>Hesabınıza giriş yapın. Yönetici veya bayi hesabı kullanabilirsiniz.</p>
     </div>
 
     <?php if ($error): ?>
@@ -380,17 +400,31 @@ html,body{height:100%;font-family:'Inter',-apple-system,sans-serif;font-size:14p
     </div>
     <?php endif; ?>
 
+    <?php if ($flash): ?>
+    <div class="f-alert <?= $flash['type'] === 'success' ? 'ok' : 'err' ?>">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      <?= htmlspecialchars($flash['msg']) ?>
+    </div>
+    <?php endif; ?>
+
     <?php if (isset($_GET['applied'])): ?>
     <div class="f-alert ok">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-      Basvurunuz alindi, onay surecinde bilgilendirileceksiniz.
+      Başvurunuz alındı, onay sürecinde bilgilendirileceksiniz.
     </div>
     <?php endif; ?>
 
     <?php if (isset($_GET['reset'])): ?>
     <div class="f-alert ok">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-      Sifreniz guncellendi, giris yapabilirsiniz.
+      Şifreniz güncellendi, giriş yapabilirsiniz.
+    </div>
+    <?php endif; ?>
+
+    <?php if (isset($_GET['loggedout'])): ?>
+    <div class="f-alert ok">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      Başarıyla çıkış yaptınız. Görüşmek üzere!
     </div>
     <?php endif; ?>
 

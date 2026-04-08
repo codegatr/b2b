@@ -215,7 +215,7 @@ $pageTitle = match($page) {
     <?php
     if ($page === 'logout') {
         dealerLogout();
-        header('Location: ?page=login');
+        header('Location: ?page=login&loggedout=1');
         exit;
     }
 

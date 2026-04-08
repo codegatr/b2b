@@ -53,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Stok düş
             $items = dbRows("SELECT * FROM b2b_order_items WHERE order_id=?", [$oid]);
             foreach ($items as $it) {
-                stockUpdate($it['product_id'], -$it['quantity'], 'siparis', $oid);
+                stockUpdate($it['product_id'], -$it['qty'], 'siparis', $oid);
             }
             // Cari kayıt
             $dealer = dbRow("SELECT * FROM b2b_dealers WHERE id=?", [$order['dealer_id']]);
@@ -78,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Stok iade (onaylandıysa)
             if ($order['status'] === 'onaylandi') {
                 $items = dbRows("SELECT * FROM b2b_order_items WHERE order_id=?", [$oid]);
-                foreach ($items as $it) { stockUpdate($it['product_id'], $it['quantity'], 'iade', $oid); }
+                foreach ($items as $it) { stockUpdate($it['product_id'], $it['qty'], 'iade', $oid); }
                 // Cari iptal
                 dbExec("UPDATE b2b_ledger SET is_closed=1 WHERE ref_id=? AND ref_type='order'", [$oid]);
             }
@@ -327,8 +327,8 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
             <td><?= h($it['product_name']) ?></td>
             <td class="mono text-sm"><?= h($it['sku']) ?></td>
             <td><?= money($it['unit_price']) ?></td>
-            <td><?= $it['quantity'] ?> <?= h($it['unit']) ?></td>
-            <td>%<?= $it['tax_rate'] ?></td>
+            <td><?= $qty ?> <?= h($it['unit']) ?></td>
+            <td>%<?= $it['vat_rate'] ?></td>
             <td class="font-medium"><?= money($lineTotal) ?></td>
         </tr>
         <?php endforeach; ?>

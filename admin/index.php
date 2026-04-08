@@ -28,10 +28,12 @@ b2b_session_start();
 
 $page = preg_replace('/[^a-z0-9\-]/', '', strtolower($_GET['page'] ?? 'dashboard'));
 
-// Public: sadece login
-if ($page !== 'login') {
-    requireAdmin();
+// Public: sadece login — artık tek login noktası bayi portalı
+if ($page === 'login') {
+    header('Location: ' . B2B_URL . '/?page=login');
+    exit;
 }
+requireAdmin();
 
 $siteName  = setting('site_name', 'B2B Bayi Portalı');
 $admin     = isAdmin() ? currentAdmin() : null;
@@ -164,51 +166,6 @@ function renderAdminPage(string $page, array $vars = []): void {
 </head>
 <body>
 
-<?php if ($page === 'login'): ?>
-  <?php
-  // Admin login işlemi
-  $loginError = '';
-  if (isPost()) {
-      csrfCheck();
-      if (adminLogin(trim($_POST['email']??''), $_POST['password']??'')) {
-          header('Location: ?page=dashboard');
-          exit;
-      }
-      $loginError = 'E-posta veya şifre hatalı.';
-  }
-  ?>
-  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px">
-    <div style="width:100%;max-width:360px">
-      <div style="text-align:center;margin-bottom:32px">
-        <div style="width:48px;height:48px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:12px;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:#fff">B2</div>
-        <h1 style="font-size:20px;font-weight:700;color:#1a1d2e"><?= h($siteName) ?></h1>
-        <p style="color:#4a5568;font-size:13px;margin-top:4px">Admin Paneli</p>
-      </div>
-      <div class="card">
-        <div class="card-body">
-          <?php if ($loginError): ?><div class="alert alert-danger"><?= h($loginError) ?></div><?php endif; ?>
-          <form method="post">
-            <?= csrfField() ?>
-            <div class="form-group">
-              <label class="form-label">E-posta</label>
-              <input type="email" name="email" class="form-control" autofocus required>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Şifre</label>
-              <input type="password" name="password" class="form-control" required>
-            </div>
-            <button type="submit" class="btn btn-primary" style="width:100%">Giriş Yap</button>
-          </form>
-        </div>
-      </div>
-      <p style="text-align:center;margin-top:16px;font-size:12px;color:var(--text-muted)">
-        <a href="<?= B2B_URL ?>/">← Bayi Portalına Git</a>
-      </p>
-    </div>
-  </div>
-
-<?php else: ?>
-
 <div class="layout">
   <!-- ── Admin Sidebar ── -->
   <aside class="sidebar">
@@ -271,7 +228,6 @@ function renderAdminPage(string $page, array $vars = []): void {
     </nav>
 
     <div class="sidebar-footer">
-      <a href="?page=settings" class="nav-item <?= $page==='settings'?'active':'' ?>">⚙️ Ayarlar</a>
     </div>
   </aside>
 
@@ -339,7 +295,7 @@ function renderAdminPage(string $page, array $vars = []): void {
     <?php
     if ($page === 'logout') {
         adminLogout();
-        header('Location: ?page=login');
+        header('Location: ' . B2B_URL . '/?page=login&loggedout=1');
         exit;
     }
 
@@ -353,8 +309,6 @@ function renderAdminPage(string $page, array $vars = []): void {
     ?>
   </div>
 </div>
-
-<?php endif; ?>
 
 <script src="<?= B2B_URL ?>/assets/js/main.js?v=<?= $cfg['version'] ?>"></script>
 </body>
