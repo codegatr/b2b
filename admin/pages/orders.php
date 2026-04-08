@@ -140,7 +140,7 @@ if ($order) {
          FROM b2b_order_items oi
          LEFT JOIN b2b_products p ON p.id=oi.product_id
          WHERE oi.order_id=?",
-        [$id]
+        [$order['id']]
     );
 }
 
