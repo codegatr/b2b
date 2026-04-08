@@ -197,7 +197,7 @@ if ($action === 'list') {
 
 <?php elseif ($action === 'detail' && $product): ?>
 <?php
-$stockLog = dbRows("SELECT sl.*, COALESCE(a.full_name, 'Sistem') AS created_by_name FROM b2b_stock_log sl LEFT JOIN b2b_admin_users a ON a.id=sl.created_by WHERE sl.product_id=? ORDER BY sl.created_at DESC LIMIT 20", [$id]);
+$stockLog = dbRows("SELECT sl.*, COALESCE(a.name, 'Sistem') AS created_by_name FROM b2b_stock_log sl LEFT JOIN b2b_admin_users a ON a.id=sl.created_by WHERE sl.product_id=? ORDER BY sl.created_at DESC LIMIT 20", [$id]);
 ?>
 <div class="page-header">
     <div>

@@ -90,9 +90,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!empty($_POST['parasut_password'])) settingSave('parasut_password', $_POST['parasut_password']);
         settingSave('parasut_access_token', '');
         settingSave('parasut_token_expires', '');
-        settingSave('parasut_auto_invoice', isset(\$_POST['parasut_auto_invoice'])?'1':'0');
+        settingSave('parasut_auto_invoice', isset($_POST['parasut_auto_invoice'])?'1':'0');
         settingClearCache();
-        \$success = 'Paraşüt ayarları kaydedildi.';
+        $success = 'Paraşüt ayarları kaydedildi.';
     }
 
     // Rubikpara
