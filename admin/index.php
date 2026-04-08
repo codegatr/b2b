@@ -194,47 +194,116 @@ function renderAdminPage(string $page, array $vars = []): void {
 </div>
 
     <nav class="sidebar-nav">
+      <?php
+        // Bekleyen sayılar - tek sorguda
+        $pendingOrders  = (int)dbVal("SELECT COUNT(*) FROM b2b_orders WHERE status='bekliyor'");
+        $pendingPay     = (int)dbVal("SELECT COUNT(*) FROM b2b_payments WHERE status='bekliyor'");
+        $pendingApps    = (int)dbVal("SELECT COUNT(*) FROM b2b_applications WHERE status='bekliyor'");
+        $lowStock       = (int)dbVal("SELECT COUNT(*) FROM b2b_products WHERE stock<=stock_critical AND is_active=1");
+      ?>
+
       <div class="nav-section">
         <div class="nav-section-label">Genel</div>
-        <a href="?page=dashboard" class="nav-item <?= $page==='dashboard'?'active':'' ?>">📊 Dashboard</a>
-        <a href="?page=reports" class="nav-item <?= $page==='reports'?'active':'' ?>">📈 Raporlar</a>
+        <a href="?page=dashboard" class="nav-item <?= $page==='dashboard'?'active':'' ?>">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          Dashboard
+        </a>
+        <a href="?page=reports" class="nav-item <?= $page==='reports'?'active':'' ?>">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          Raporlar
+        </a>
       </div>
 
       <div class="nav-section">
         <div class="nav-section-label">Satış</div>
-        <a href="?page=orders" class="nav-item <?= $page==='orders'||$page==='order'?'active':'' ?>">📦 Siparişler</a>
-        <a href="?page=payments" class="nav-item <?= $page==='payments'?'active':'' ?>">💳 Tahsilat</a>
-        <a href="?page=ledger" class="nav-item <?= $page==='ledger'?'active':'' ?>">📒 Cari Hesap</a>
+        <a href="?page=orders" class="nav-item <?= $page==='orders'?'active':'' ?>">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+          Siparişler
+          <?php if ($pendingOrders): ?><span class="nav-badge"><?= $pendingOrders ?></span><?php endif; ?>
+        </a>
+        <a href="?page=payments" class="nav-item <?= $page==='payments'?'active':'' ?>">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+          Tahsilat
+          <?php if ($pendingPay): ?><span class="nav-badge"><?= $pendingPay ?></span><?php endif; ?>
+        </a>
+        <a href="?page=ledger" class="nav-item <?= $page==='ledger'?'active':'' ?>">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+          Cari Hesap
+        </a>
       </div>
 
       <div class="nav-section">
         <div class="nav-section-label">Bayiler</div>
-        <a href="?page=dealers" class="nav-item <?= $page==='dealers'||$page==='dealer'?'active':'' ?>">🏪 Bayiler</a>
-        <a href="?page=applications" class="nav-item <?= $page==='applications'?'active':'' ?>">
-          📋 Başvurular
-          <?php $pendingApps = (int)dbVal("SELECT COUNT(*) FROM b2b_applications WHERE status='bekliyor'");
-          if ($pendingApps): ?><span class="badge-count"><?= $pendingApps ?></span><?php endif; ?>
+        <a href="?page=dealers" class="nav-item <?= $page==='dealers'?'active':'' ?>">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          Bayiler
         </a>
-        <a href="?page=price-lists" class="nav-item <?= str_starts_with($page,'price')?'active':'' ?>">💰 Fiyat Listeleri</a>
+        <a href="?page=applications" class="nav-item <?= $page==='applications'?'active':'' ?>">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          Başvurular
+          <?php if ($pendingApps): ?><span class="nav-badge"><?= $pendingApps ?></span><?php endif; ?>
+        </a>
+        <a href="?page=price-lists" class="nav-item <?= str_starts_with($page,'price')?'active':'' ?>">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+          Fiyat Listeleri
+        </a>
       </div>
 
       <div class="nav-section">
         <div class="nav-section-label">Ürünler</div>
-        <a href="?page=products" class="nav-item <?= $page==='products'||$page==='product'?'active':'' ?>">🛍 Ürünler</a>
-        <a href="?page=categories" class="nav-item <?= $page==='categories'?'active':'' ?>">📁 Kategoriler</a>
-        <a href="?page=stock" class="nav-item <?= $page==='stock'?'active':'' ?>">📊 Stok</a>
+        <a href="?page=products" class="nav-item <?= $page==='products'?'active':'' ?>">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+          Ürünler
+        </a>
+        <a href="?page=categories" class="nav-item <?= $page==='categories'?'active':'' ?>">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+          Kategoriler
+        </a>
+        <a href="?page=stock" class="nav-item <?= $page==='stock'?'active':'' ?>">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+          Stok
+          <?php if ($lowStock): ?><span class="nav-badge warn"><?= $lowStock ?></span><?php endif; ?>
+        </a>
       </div>
 
       <div class="nav-section">
         <div class="nav-section-label">Sistem</div>
-        <a href="?page=parasut" class="nav-item <?= $page==='parasut'?'active':'' ?>">🔗 Paraşüt</a>
-
-
-        <a href="?page=settings" class="nav-item <?= $page==='settings'?'active':'' ?>">⚙️ Ayarlar</a>
+        <a href="?page=tickets" class="nav-item <?= $page==='tickets'?'active':'' ?>">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          Destek Talepleri
+        </a>
+        <a href="?page=announcements" class="nav-item <?= $page==='announcements'?'active':'' ?>">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Duyurular
+        </a>
+        <a href="?page=parasut" class="nav-item <?= $page==='parasut'?'active':'' ?>">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+          Paraşüt
+        </a>
+        <a href="?page=update" class="nav-item <?= $page==='update'?'active':'' ?>">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+          Güncelleme<?php if ($hasUpdate): ?> <span class="nav-badge warn">!</span><?php endif; ?>
+        </a>
+        <a href="?page=settings" class="nav-item <?= $page==='settings'?'active':'' ?>">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          Ayarlar
+        </a>
       </div>
     </nav>
 
     <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <div class="sidebar-avatar"><?= mb_substr($admin['name']??'A',0,1) ?></div>
+        <div class="sidebar-user-info">
+          <div class="sidebar-user-name"><?= h($admin['name']??'') ?></div>
+          <div class="sidebar-user-role"><?= h($admin['role']??'') ?></div>
+        </div>
+        <a href="?page=logout" title="Çıkış"
+           onclick="return confirm('Çıkış yapmak istediğinize emin misiniz?')"
+           style="color:var(--sidebar-muted);margin-left:auto;padding:4px;display:flex">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </a>
+      </div>
     </div>
   </aside>
 
@@ -243,57 +312,44 @@ function renderAdminPage(string $page, array $vars = []): void {
       <div class="topbar-title"><?= h($pageTitle) ?></div>
       <div class="topbar-actions" style="gap:6px">
 
-        <!-- Güncelleme butonu -->
         <?php if ($hasUpdate): ?>
         <a href="?page=update"
            style="display:flex;align-items:center;gap:5px;padding:5px 12px;background:#ed2939;color:#fff;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;animation:pulse-red 1.5s infinite">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
-          Güncelleme Mevcut
-        </a>
-        <?php else: ?>
-        <a href="?page=update"
-           title="Güncelleme Merkezi"
-           style="display:flex;align-items:center;gap:5px;padding:5px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:500;color:var(--text-2);text-decoration:none">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-          Güncel
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+          Güncelleme Var
         </a>
         <?php endif; ?>
 
-        <!-- Bayi Portalı -->
-        <a href="<?= B2B_URL ?>"
-           target="_blank"
-           title="Bayi Portalı"
-           style="display:flex;align-items:center;gap:5px;padding:5px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:500;color:var(--text-2);text-decoration:none">
+        <a href="<?= B2B_URL ?>" target="_blank" title="Bayi Portalı"
+           style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:12px;color:var(--text-2);text-decoration:none">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           Bayi Portalı
         </a>
 
-        <!-- Admin Kullanıcılar -->
-        <a href="?page=admins"
-           title="Admin Kullanıcılar"
-           style="display:flex;align-items:center;gap:5px;padding:5px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:500;color:var(--text-2);text-decoration:none">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
-          Kullanıcılar
+        <!-- Bildirimler -->
+        <?php if ($unread > 0): ?>
+        <a href="?page=notifications" title="Bildirimler"
+           style="position:relative;display:flex;align-items:center;padding:5px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text-2);text-decoration:none">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+          <span style="position:absolute;top:3px;right:3px;width:8px;height:8px;background:#ed2939;border-radius:50%;border:1px solid #fff"></span>
         </a>
+        <?php endif; ?>
 
-        <!-- Çıkış -->
-        <a href="?page=logout"
-           title="Çıkış Yap"
-           style="display:flex;align-items:center;gap:5px;padding:5px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:500;color:var(--danger);text-decoration:none"
-           onclick="return confirm('Çıkış yapmak istediğinize emin misiniz?')">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-          Çıkış
-        </a>
-
-        <!-- Kullanıcı Avatar -->
+        <!-- Avatar + Dropdown -->
         <div class="dropdown">
-          <div class="avatar" data-dropdown="admin-menu"><?= mb_substr($admin['name']??'A', 0, 1) ?></div>
+          <div class="avatar" data-dropdown="admin-menu" style="cursor:pointer"><?= mb_substr($admin['name']??'A', 0, 1) ?></div>
           <div class="dropdown-menu" id="admin-menu">
             <div style="padding:12px 14px;font-size:13px;font-weight:600;color:var(--text)"><?= h($admin['name']??'') ?></div>
-            <div style="padding:0 14px 10px;font-size:11px;color:var(--text-muted)"><?= h($admin['role']??'') ?></div>
+            <div style="padding:0 14px 10px;font-size:11px;color:var(--text-muted);text-transform:capitalize"><?= h($admin['role']??'') ?></div>
             <hr class="dropdown-divider">
+            <a href="?page=admins"   class="dropdown-item">👥 Admin Kullanıcılar</a>
             <a href="?page=settings" class="dropdown-item">⚙️ Sistem Ayarları</a>
-            <a href="?page=update" class="dropdown-item">🚀 Güncelleme Merkezi</a>
+            <a href="?page=update"   class="dropdown-item">🚀 Güncelleme Merkezi</a>
+            <hr class="dropdown-divider">
+            <a href="?page=logout" class="dropdown-item" style="color:var(--danger)"
+               onclick="return confirm('Çıkış yapmak istediğinize emin misiniz?')">
+              🚪 Çıkış Yap
+            </a>
           </div>
         </div>
       </div>
