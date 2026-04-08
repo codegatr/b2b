@@ -53,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Stok düş
             $items = dbRows("SELECT * FROM b2b_order_items WHERE order_id=?", [$oid]);
             foreach ($items as $it) {
-                stockUpdate($it['product_id'], -$it['qty'], 'siparis', $oid);
+                stockUpdate($it['product_id'], -$it['qty'], 'siparis', 'order', $oid);
             }
             // Cari kayıt
             $dealer = dbRow("SELECT * FROM b2b_dealers WHERE id=?", [$order['dealer_id']]);
@@ -62,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Paraşüt fatura
             try { parasut()->createInvoice($oid); } catch (Exception $e) {}
             // Bildirim
-            notifyDealer($order['dealer_id'], 'Siparişiniz Onaylandı', "#{$order['order_no']} numaralı siparişiniz onaylandı.", 'order', $oid);
+            notifyDealer($order['dealer_id'], 'order', 'Siparişiniz Onaylandı', "#{$order['order_no']} numaralı siparişiniz onaylandı.", '?page=orders&action=detail&id='.$oid);
             auditLog('order_approved', 'b2b_orders', $oid, []);
             $success = 'Sipariş onaylandı.';
         }
@@ -78,11 +78,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Stok iade (onaylandıysa)
             if ($order['status'] === 'onaylandi') {
                 $items = dbRows("SELECT * FROM b2b_order_items WHERE order_id=?", [$oid]);
-                foreach ($items as $it) { stockUpdate($it['product_id'], $it['qty'], 'iade', $oid); }
+                foreach ($items as $it) { stockUpdate($it['product_id'], $it['qty'], 'iade', 'order', $oid); }
                 // Cari iptal
-                dbExec("UPDATE b2b_ledger SET is_closed=1 WHERE ref_id=? AND ref_type='order'", [$oid]);
+                dbExec("UPDATE b2b_ledger SET is_closed=1 WHERE reference_id=? AND reference_type='order'", [$oid]);
             }
-            notifyDealer($order['dealer_id'], 'Sipariş İptal Edildi', "#{$order['order_no']} numaralı siparişiniz iptal edildi." . ($reason ? " Neden: $reason" : ''), 'order', $oid);
+            notifyDealer($order['dealer_id'], 'order', 'Sipariş İptal Edildi', "#{$order['order_no']} numaralı siparişiniz iptal edildi." . ($reason ? " Neden: $reason" : ''), '?page=orders&action=detail&id='.$oid);
             $success = 'Sipariş iptal edildi.';
         }
         $action = 'detail'; $id = $oid;
@@ -100,7 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 dbExec("UPDATE b2b_orders SET delivered_at=NOW() WHERE id=?", [$oid]);
             }
             $order = dbRow("SELECT * FROM b2b_orders WHERE id=?", [$oid]);
-            notifyDealer($order['dealer_id'], 'Sipariş Durumu Güncellendi', "#{$order['order_no']}: " . orderStatusLabel($status, false), 'order', $oid);
+            notifyDealer($order['dealer_id'], 'order', 'Sipariş Durumu Güncellendi', "#{$order['order_no']}: " . orderStatusLabel($status, false), '?page=orders&action=detail&id='.$oid);
             $success = 'Durum güncellendi.';
         }
         $action = 'detail'; $id = $oid;
@@ -121,7 +121,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $order = null;
 if ($action === 'detail' && $id) {
     $order = dbRow(
-        "SELECT o.*, d.company_name, d.contact_name, d.email AS dealer_email, d.phone AS dealer_phone,
+        "SELECT o.*, d.company_name,
+                COALESCE(NULLIF(d.company_name,''), CONCAT(TRIM(d.first_name),' ',TRIM(d.last_name))) AS contact_name,
+                d.email AS dealer_email, d.phone AS dealer_phone,
                 d.address, d.city, d.tax_number, d.payment_term_days
          FROM b2b_orders o JOIN b2b_dealers d ON d.id=o.dealer_id WHERE o.id=?",
         [$id]

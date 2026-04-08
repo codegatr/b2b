@@ -41,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'new_p
 // Bekleyen siparişler (ödeme bağlama için)
 $openOrders = dbRows(
     "SELECT id, order_no, grand_total FROM b2b_orders
-     WHERE dealer_id=? AND payment_status IN ('odenmedi','kismi_odeme')
+     WHERE dealer_id=? AND payment_status IN ('odenmedi','kismi')
      ORDER BY created_at DESC LIMIT 20",
     [$dealer['id']]
 );

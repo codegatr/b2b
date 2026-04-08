@@ -47,8 +47,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $old = dbRow("SELECT stock FROM b2b_products WHERE id=?", [$id]);
                 if ($old && $old['stock'] != $data['stock']) {
                     $diff = $data['stock'] - $old['stock'];
-                    try { dbExec("INSERT INTO b2b_stock_log (product_id, change_type, quantity, note, created_by, created_at) VALUES (?,?,?,?,?,NOW())",
-                        [$id, $diff>0?'giris':'cikis', abs($diff), 'Admin düzenlemesi', adminId()]); } catch (Exception $e) {}
+                    try { dbExec("INSERT INTO b2b_stock_log (product_id, change_type, qty_before, qty_change, qty_after, note, created_by, created_at) VALUES (?,?,?,?,?,?,?,NOW())",
+                        [$id, $diff>0?'giris':'cikis', $old['stock'], abs($diff), $data['stock'], 'Admin düzenlemesi', adminId()]); } catch (Exception $e) {}
                 }
                 auditLog('product_updated', 'b2b_products', $id, ['name'=>$data['name']]);
                 $success = 'Ürün güncellendi.';
@@ -70,17 +70,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $qty    = abs(intval($_POST['quantity']));
         $note   = trim($_POST['note']);
         if ($qty > 0) {
+            // Güncelleme öncesi stok miktarını al
+            $p = dbRow("SELECT * FROM b2b_products WHERE id=?", [$pid]);
+            $qtyBefore = $p ? (int)$p['stock'] : 0;
             if ($type === 'giris') {
                 dbExec("UPDATE b2b_products SET stock=stock+? WHERE id=?", [$qty, $pid]);
+                $qtyAfter = $qtyBefore + $qty;
             } else {
                 dbExec("UPDATE b2b_products SET stock=GREATEST(0,stock-?) WHERE id=?", [$qty, $pid]);
+                $qtyAfter = max(0, $qtyBefore - $qty);
             }
-            try { dbExec("INSERT INTO b2b_stock_log (product_id, change_type, quantity, note, created_by, created_at) VALUES (?,?,?,?,?,NOW())",
-                [$pid, $type, $qty, $note, adminId()]); } catch (Exception $e) {}
+            try { dbExec("INSERT INTO b2b_stock_log (product_id, change_type, qty_before, qty_change, qty_after, note, created_by, created_at) VALUES (?,?,?,?,?,?,?,NOW())",
+                [$pid, $type, $qtyBefore, $qty, $qtyAfter, $note, adminId()]); } catch (Exception $e) {}
             // Kritik stok kontrolü
             $p = dbRow("SELECT * FROM b2b_products WHERE id=?", [$pid]);
             if ($p && $p['stock'] <= $p['stock_critical']) {
-                notifyAdmin('Kritik Stok', "'{$p['name']}' ürünü kritik stok seviyesine düştü: {$p['stock']} {$p['unit']}", 'stock', $pid);
+                notifyAdmin('stock_critical', 'Kritik Stok', "'{$p['name']}' ürünü kritik stok seviyesine düştü: {$p['stock']} {$p['unit']}", '?page=products&action=detail&id='.$pid);
             }
             $success = 'Stok güncellendi.';
         }
@@ -261,7 +266,7 @@ $stockLog = dbRows("SELECT sl.*, COALESCE(a.name, 'Sistem') AS created_by_name F
         <tr>
             <td><?= fmtDate($sl['created_at']) ?></td>
             <td><span class="badge badge-<?= $sl['change_type']==='giris'||$sl['change_type']==='iade'?'green':'red' ?>"><?= h($sl['change_type']) ?></span></td>
-            <td><?= $sl['quantity'] ?> <?= h($product['unit']) ?></td>
+            <td><?= $sl['qty_change'] ?> <?= h($product['unit']) ?></td>
             <td><?= h($sl['note']) ?></td>
             <td><?= h($sl['created_by_name']) ?></td>
         </tr>

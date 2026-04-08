@@ -26,12 +26,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($orderBalance <= 0) {
                     dbExec("UPDATE b2b_orders SET payment_status='odendi' WHERE id=?", [$p['order_id']]);
                 } else {
-                    dbExec("UPDATE b2b_orders SET payment_status='kismi_odeme' WHERE id=?", [$p['order_id']]);
+                    dbExec("UPDATE b2b_orders SET payment_status='kismi' WHERE id=?", [$p['order_id']]);
                 }
             }
             // Paraşüt ödeme
             try { parasut()->createPayment($pid); } catch (Exception $e) {}
-            notifyDealer($p['dealer_id'], 'Ödemeniz Onaylandı', money($p['amount']).' tutarındaki ödemeniz sisteme işlendi.', 'payment', $pid);
+            notifyDealer($p['dealer_id'], 'payment', 'Ödemeniz Onaylandı', money($p['amount']).' tutarındaki ödemeniz sisteme işlendi.', '?page=payments');
             auditLog('payment_approved', 'b2b_payments', $pid, ['amount'=>$p['amount']]);
             $success = 'Ödeme onaylandı ve cari hesaba işlendi.';
         }
@@ -43,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $p = dbRow("SELECT * FROM b2b_payments WHERE id=?", [$pid]);
         if ($p && $p['status'] === 'bekliyor') {
             dbExec("UPDATE b2b_payments SET status='reddedildi', reject_reason=? WHERE id=?", [$reason, $pid]);
-            notifyDealer($p['dealer_id'], 'Ödemeniz Reddedildi', 'Ödemeniz reddedildi.' . ($reason ? " Neden: $reason" : ''), 'payment', $pid);
+            notifyDealer($p['dealer_id'], 'payment', 'Ödemeniz Reddedildi', 'Ödemeniz reddedildi.' . ($reason ? " Neden: $reason" : ''), '?page=payments');
             $success = 'Ödeme reddedildi.';
         }
         $action = 'list';

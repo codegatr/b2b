@@ -42,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'created_at'     => date('Y-m-d H:i:s'),
         ]);
         // Admin bildirim
-        notifyAdmin('Yeni Bayilik Başvurusu', "$company başvuruda bulundu.", 'application', 0);
+        notifyAdmin('application', 'Yeni Bayilik Başvurusu', "$company başvuruda bulundu.", '?page=applications');
         $success = true;
     }
 }
