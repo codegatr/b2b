@@ -38,6 +38,13 @@ if (!in_array($page, $publicPages)) {
     requireDealer();
 }
 
+// Logout — HTML başlamadan önce işle
+if ($page === 'logout') {
+    dealerLogout();
+    header('Location: ?page=login&loggedout=1');
+    exit;
+}
+
 // Bayi sitemi adı & ayarlar
 $siteName = setting('site_name', 'B2B Bayi Portalı');
 $currency = setting('currency', 'TRY');
@@ -213,12 +220,6 @@ $pageTitle = match($page) {
 
     <!-- Sayfa içeriği -->
     <?php
-    if ($page === 'logout') {
-        dealerLogout();
-        header('Location: ?page=login&loggedout=1');
-        exit;
-    }
-
     // Flash mesaj
     if (!empty($_SESSION['flash'])) {
         $flash = $_SESSION['flash'];

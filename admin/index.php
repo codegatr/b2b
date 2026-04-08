@@ -35,6 +35,13 @@ if ($page === 'login') {
 }
 requireAdmin();
 
+// Logout — HTML başlamadan önce işle
+if ($page === 'logout') {
+    adminLogout();
+    header('Location: ' . B2B_URL . '/?page=login&loggedout=1');
+    exit;
+}
+
 $siteName  = setting('site_name', 'B2B Bayi Portalı');
 $admin     = isAdmin() ? currentAdmin() : null;
 $unread    = isAdmin() ? unreadNotifCount('admin') : 0;
@@ -293,12 +300,6 @@ function renderAdminPage(string $page, array $vars = []): void {
     </div>
 
     <?php
-    if ($page === 'logout') {
-        adminLogout();
-        header('Location: ' . B2B_URL . '/?page=login&loggedout=1');
-        exit;
-    }
-
     if (!empty($_SESSION['flash_admin'])) {
         $flash = $_SESSION['flash_admin'];
         unset($_SESSION['flash_admin']);
