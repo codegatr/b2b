@@ -130,9 +130,16 @@ if ($action === 'detail' && $id) {
     );
     if (!$order) { $action = 'list'; $id = 0; }
 }
+$orderItems = [];
 if ($order) {
     $orderItems = dbRows(
-        "SELECT oi.*, p.sku, p.unit FROM b2b_order_items oi LEFT JOIN b2b_products p ON p.id=oi.product_id WHERE oi.order_id=?",
+        "SELECT oi.id, oi.order_id, oi.product_id, oi.product_name,
+                oi.product_sku AS sku, oi.qty, oi.unit_price,
+                oi.vat_rate, oi.discount_percent, oi.line_total,
+                COALESCE(p.unit, 'adet') AS unit
+         FROM b2b_order_items oi
+         LEFT JOIN b2b_products p ON p.id=oi.product_id
+         WHERE oi.order_id=?",
         [$id]
     );
 }
@@ -319,11 +326,12 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
     <table class="table">
         <thead><tr><th>Ürün</th><th>SKU</th><th>Birim Fiyat</th><th>Miktar</th><th>KDV</th><th>Toplam</th></tr></thead>
         <tbody>
-        <?php $subtotal=0; $tax=0; foreach ($orderItems as $it):
-            $qty = (int)($it['qty'] ?? $it['quantity'] ?? 0);
-            $lineTotal = $it['unit_price'] * $qty;
-            $lineTax   = $lineTotal * ((float)($it['vat_rate'] ?? $it['tax_rate'] ?? 0)/100);
-            $subtotal += $lineTotal; $tax += $lineTax;
+        <?php $subtotal=0; $vatTotal=0; foreach ($orderItems as $it):
+            $qty       = (int)$it['qty'];
+            $lineNet   = $it['unit_price'] * $qty * (1 - (float)$it['discount_percent']/100);
+            $lineVat   = $lineNet * ((float)$it['vat_rate']/100);
+            $lineTotal = (float)$it['line_total'];
+            $subtotal += $lineNet; $vatTotal += $lineVat;
         ?>
         <tr>
             <td><?= h($it['product_name']) ?></td>
@@ -338,7 +346,7 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
             <td colspan="5" class="text-right">Ara Toplam</td><td><?= money($subtotal) ?></td>
         </tr>
         <tr class="table-footer">
-            <td colspan="5" class="text-right">KDV</td><td><?= money($tax) ?></td>
+            <td colspan="5" class="text-right">KDV</td><td><?= money($vatTotal) ?></td>
         </tr>
         <tr class="table-footer font-bold">
             <td colspan="5" class="text-right">Genel Toplam</td><td><?= money($order['grand_total']) ?></td>
