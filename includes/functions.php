@@ -384,13 +384,20 @@ function sendMail(string $to, string $subject, string $html): bool {
     }
 
     // Fallback: PHP mail()
-    $boundary = md5(uniqid());
+    // From adresi sunucunun kabul ettiği bir domain olmalı
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    if (!$fromEmail || str_ends_with($fromEmail, 'localhost')) {
+        $fromEmail = 'noreply@' . $host;
+    }
+    $encSubj = '=?UTF-8?B?' . base64_encode($subject) . '?=';
     $headers  = implode("\r\n", [
         "From: $fromName <$fromEmail>",
+        "Reply-To: $fromEmail",
         "MIME-Version: 1.0",
         "Content-Type: text/html; charset=UTF-8",
+        "X-Mailer: PHP/" . phpversion(),
     ]);
-    return @mail($to, '=?UTF-8?B?' . base64_encode($subject) . '?=', $html, $headers);
+    return @mail($to, $encSubj, $html, $headers);
 }
 
 /** SMTP ile gönder — cURL tabanlı, blocking yok */
