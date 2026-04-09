@@ -23,6 +23,7 @@ require B2B_ROOT . '/includes/functions.php';
 require B2B_ROOT . '/includes/parasut.php';
 require B2B_ROOT . '/includes/updater.php';
 require B2B_ROOT . '/includes/migrations.php';
+if (file_exists(B2B_ROOT . '/includes/sms.php')) require B2B_ROOT . '/includes/sms.php';
 if (file_exists(B2B_ROOT . '/includes/rubikpara.php')) require B2B_ROOT . '/includes/rubikpara.php';
 
 b2b_session_start();

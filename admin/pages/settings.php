@@ -115,6 +115,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $success = 'GitHub ayarları kaydedildi.';
     }
 
+    // SMS / NETGSM
+    if ($tab === 'sms') {
+        settingSave('netgsm_enabled', isset($_POST['netgsm_enabled']) ? '1' : '0');
+        settingSave('netgsm_user',        trim($_POST['netgsm_user']        ?? ''));
+        settingSave('netgsm_header',      trim($_POST['netgsm_header']      ?? ''));
+        settingSave('netgsm_admin_phone', trim($_POST['netgsm_admin_phone'] ?? ''));
+        if (!empty($_POST['netgsm_pass'])) settingSave('netgsm_pass', $_POST['netgsm_pass']);
+        $events = array_values(array_filter($_POST['netgsm_events'] ?? []));
+        settingSave('netgsm_events', json_encode($events));
+        settingClearCache();
+        $success = 'SMS ayarları kaydedildi.';
+    }
+
     // Sipariş
     if ($tab === 'order') {
         settingSave('order_auto_approve_limit', (string)floatval($_POST['order_auto_approve_limit'] ?? 0));
@@ -125,6 +138,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $activeTab = $_GET['tab'] ?? 'general';
+
+// SMS test
+$smsTest = null;
+if (isset($_GET['test_sms']) && function_exists('smsAdmin')) {
+    $smsTest = smsAdmin(setting('site_name','B2B') . ': SMS test mesajı. Sistem çalışıyor!');
+}
 
 // Paraşüt test
 $parasutTest = null;
@@ -170,6 +189,7 @@ $tabs = [
     'rubikpara' => '💳 Rubikpara',
     'github'    => '🐙 GitHub',
     'order'     => '📦 Sipariş',
+    'sms'       => '📱 SMS (NETGSM)',
 ];
 foreach ($tabs as $k => $v):
 ?>
@@ -444,6 +464,114 @@ if ($li && !file_exists($liPath)) {
         <?php endif; ?>
     </div>
 </div>
+</div></div>
+
+<?php elseif ($activeTab === 'sms'): ?>
+<div class="card">
+<div class="card-header"><h3 class="card-title">📱 NETGSM SMS Bildirimleri</h3></div>
+<div class="card-body">
+
+<?php if ($smsTest): ?>
+<div class="alert alert-<?= $smsTest['ok']?'success':'danger' ?>"><?= htmlspecialchars($smsTest['message']) ?></div>
+<?php endif; ?>
+
+<form method="post">
+  <?= csrfField() ?>
+  <input type="hidden" name="tab" value="sms">
+
+  <div class="form-group">
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;font-weight:600">
+      <input type="checkbox" name="netgsm_enabled" value="1" <?= setting('netgsm_enabled','0')==='1'?'checked':'' ?>>
+      SMS Bildirimlerini Aktifleştir
+    </label>
+    <p style="font-size:12px;color:var(--text-muted);margin-top:4px">
+      Aktif olduğunda aşağıdaki olaylarda belirtilen numaraya SMS gönderilir.
+    </p>
+  </div>
+
+  <div class="form-grid-2" style="margin-top:16px">
+    <div class="form-group">
+      <label class="form-label">NETGSM Kullanıcı Kodu</label>
+      <input type="text" name="netgsm_user" value="<?= htmlspecialchars(setting('netgsm_user')) ?>"
+             class="form-control" placeholder="8501234567">
+    </div>
+    <div class="form-group">
+      <label class="form-label">NETGSM Şifre</label>
+      <input type="password" name="netgsm_pass" class="form-control" placeholder="Değiştirmek için girin">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Mesaj Başlığı (Header)</label>
+      <input type="text" name="netgsm_header" value="<?= htmlspecialchars(setting('netgsm_header')) ?>"
+             class="form-control" placeholder="FIRMADINIZ" maxlength="11">
+      <p style="font-size:11px;color:var(--text-muted);margin-top:3px">Maks 11 karakter, NETGSM panelinde onaylanmış başlık.</p>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Yönetici Telefon Numarası</label>
+      <input type="text" name="netgsm_admin_phone" value="<?= htmlspecialchars(setting('netgsm_admin_phone')) ?>"
+             class="form-control" placeholder="05XXXXXXXXX">
+      <p style="font-size:11px;color:var(--text-muted);margin-top:3px">Bildirimlerin gönderileceği numara.</p>
+    </div>
+  </div>
+
+  <div style="border-top:1px solid var(--border);margin-top:20px;padding-top:20px">
+    <h4 style="font-size:13px;font-weight:600;margin-bottom:12px">SMS Gönderilecek Olaylar</h4>
+    <?php
+    $activeEvents = json_decode(setting('netgsm_events','[]'), true) ?: [];
+    $eventList = [
+        'new_order'            => ['🛒', 'Yeni Sipariş',          'Bayi sipariş verdiğinde'],
+        'order_cancel_request' => ['❌', 'İptal Talebi',          'Bayi sipariş iptali istediğinde'],
+        'new_payment'          => ['💳', 'Ödeme Bildirimi',       'Bayi ödeme bildirdiğinde'],
+        'new_dealer'           => ['👤', 'Yeni Bayi Başvurusu',   'Yeni bayilik başvurusu geldiğinde'],
+        'new_ticket'           => ['🎫', 'Destek Talebi',         'Yeni destek talebi açıldığında'],
+        'low_stock'            => ['📦', 'Kritik Stok Uyarısı',   'Ürün kritik stok seviyesine düştüğünde'],
+    ];
+    foreach ($eventList as $key => [$icon, $label, $desc]):
+    ?>
+    <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px 0;border-bottom:1px solid var(--border)">
+      <input type="checkbox" name="netgsm_events[]" value="<?= $key ?>"
+             <?= in_array($key, $activeEvents)?'checked':'' ?> style="margin-top:2px">
+      <div>
+        <div style="font-size:13px;font-weight:500"><?= $icon ?> <?= $label ?></div>
+        <div style="font-size:12px;color:var(--text-muted)"><?= $desc ?></div>
+      </div>
+    </label>
+    <?php endforeach; ?>
+  </div>
+
+  <div class="form-actions" style="margin-top:16px">
+    <button type="submit" class="btn btn-primary">Kaydet</button>
+    <?php if (setting('netgsm_enabled','0')==='1'): ?>
+    <a href="?page=settings&tab=sms&test_sms=1" class="btn btn-secondary">📱 Test SMS Gönder</a>
+    <?php endif; ?>
+    <a href="https://www.netgsm.com.tr/api/" target="_blank" class="btn btn-ghost">📖 API Dokümantasyonu</a>
+  </div>
+</form>
+
+<!-- Son SMS Logları -->
+<?php
+try {
+    $smsLogs = dbRows("SELECT * FROM b2b_sms_log ORDER BY created_at DESC LIMIT 10");
+} catch (Exception $e) { $smsLogs = []; }
+?>
+<?php if (!empty($smsLogs)): ?>
+<div style="border-top:1px solid var(--border);margin-top:24px;padding-top:24px">
+  <h4 style="font-size:13px;font-weight:600;margin-bottom:12px">Son SMS Logları</h4>
+  <table class="table" style="font-size:12px">
+    <thead><tr><th>Tarih</th><th>Numara</th><th>Mesaj</th><th>Durum</th></tr></thead>
+    <tbody>
+    <?php foreach ($smsLogs as $sl): ?>
+    <tr>
+      <td style="color:var(--text-muted)"><?= date('d.m.Y H:i', strtotime($sl['created_at'])) ?></td>
+      <td><?= htmlspecialchars($sl['phone']) ?></td>
+      <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><?= htmlspecialchars($sl['message']) ?></td>
+      <td><span class="badge badge-<?= $sl['status']==='success'?'success':'danger' ?>"><?= $sl['status']==='success'?'Gönderildi':'Hata' ?></span></td>
+    </tr>
+    <?php endforeach; ?>
+    </tbody>
+  </table>
+</div>
+<?php endif; ?>
+
 </div></div>
 
 <?php elseif ($activeTab === 'order'): ?>
