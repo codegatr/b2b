@@ -2,6 +2,23 @@
 // admin/pages/tickets.php — Destek Talepleri (Admin)
 requireAdmin();
 
+try {
+    db()->exec("CREATE TABLE IF NOT EXISTS `b2b_tickets` (
+        `id` int(11) NOT NULL AUTO_INCREMENT,
+        `dealer_id` int(11) NOT NULL,
+        `subject` varchar(255) NOT NULL,
+        `message` text NOT NULL,
+        `status` enum('acik','bekliyor','kapali') DEFAULT 'acik',
+        `priority` enum('dusuk','normal','yuksek') DEFAULT 'normal',
+        `admin_reply` text DEFAULT NULL,
+        `replied_at` datetime DEFAULT NULL,
+        `replied_by` int(11) DEFAULT NULL,
+        `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+        `updated_at` datetime DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (`id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+} catch (Exception $e) {}
+
 $success = '';
 $error   = '';
 $id      = intval($_GET['id'] ?? 0);

@@ -56,13 +56,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['flash_admin'] = ['type'=>'success','msg'=>$msg];
                 header('Location: ?page=update&updated=1');
                 exit;
-                // Güncelleme sonrası bekleyen migration varsa otomatik çalıştır
-                $pending = migrationGetPending();
-                if ($pending) {
-                    $migrationResults = migrationRunAll();
-                    $ok = count(array_filter($migrationResults, fn($r) => $r['ok']));
-                    $success .= " — {$ok} migration otomatik çalıştırıldı.";
-                }
             } else {
                 $error = $result['message'] ?? 'Guncelleme basarisiz.';
             }

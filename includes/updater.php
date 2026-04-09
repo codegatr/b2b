@@ -155,7 +155,7 @@ class B2BUpdater {
             ]
         );
 
-        $migrations = ['run'=>0,'errors'=>[]];
+        $migrations = $this->runMigrations();
 
         return [
             'ok'        => true,
