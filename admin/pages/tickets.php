@@ -77,6 +77,7 @@ $counts = [
 ];
 
 $allDealers = dbRows("SELECT id, company_name, first_name, last_name FROM b2b_dealers WHERE is_active=1 ORDER BY company_name");
+?>
 <div class="page-header">
   <div><h1 class="page-title">Destek Talepleri</h1></div>
   <button class="btn btn-primary" onclick="openModal('modal-new-ticket')">+ Yeni Talep Aç</button>
