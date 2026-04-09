@@ -116,6 +116,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = 'detail'; $id = $oid;
     }
 
+    // ── Arşivle / Arşivden Çıkar ──────────────────────────────
+    if ($act === 'archive') {
+        $oids = array_map('intval', (array)($_POST['order_ids'] ?? [$oid]));
+        foreach ($oids as $aid) {
+            $o = dbRow("SELECT status FROM b2b_orders WHERE id=?", [$aid]);
+            if ($o && in_array($o['status'], ['iptal','teslim_edildi','iade'])) {
+                dbExec("UPDATE b2b_orders SET is_archived=1, archived_by=?, archived_at=NOW() WHERE id=?",
+                    [adminId(), $aid]);
+                auditLog('order_archived', 'b2b_orders', $aid);
+            }
+        }
+        $success = count($oids) === 1 ? 'Sipariş arşivlendi.' : count($oids).' sipariş arşivlendi.';
+        $action = 'list';
+    }
+
+    if ($act === 'unarchive') {
+        $oid = intval($_POST['order_id'] ?? 0);
+        dbExec("UPDATE b2b_orders SET is_archived=0, archived_by=NULL, archived_at=NULL WHERE id=?", [$oid]);
+        auditLog('order_unarchived', 'b2b_orders', $oid);
+        $success = 'Sipariş arşivden çıkarıldı.';
+        $action = 'archive_list';
+    }
+
     // ── İptal edilen siparişi yeniden işleme al ───────────────
     if ($act === 'reactivate') {
         $order = dbRow("SELECT * FROM b2b_orders WHERE id=?", [$oid]);
@@ -187,7 +210,7 @@ if ($action === 'list') {
     $page    = max(1, intval($_GET['p'] ?? 1));
     $offset  = ($page-1)*$perPage;
 
-    $where = ['1=1']; $params = [];
+    $where = ['1=1', 'o.is_archived=0']; $params = [];
     if ($search) {
         $where[] = '(o.order_no LIKE ? OR d.company_name LIKE ?)';
         $s = "%$search%"; $params[] = $s; $params[] = $s;
@@ -202,9 +225,22 @@ if ($action === 'list') {
         $params
     );
     $pager  = pagination($total, $perPage, $page, "?page=orders&q=".urlencode($search)."&status=$status&dealer_id=$dealerId&p=");
+    $pendingCount  = dbVal("SELECT COUNT(*) FROM b2b_orders WHERE status='bekliyor' AND is_archived=0", []);
+    $archiveCount  = dbVal("SELECT COUNT(*) FROM b2b_orders WHERE is_archived=1", []);
+    $archivableCount = dbVal("SELECT COUNT(*) FROM b2b_orders WHERE is_archived=0 AND status IN('iptal','teslim_edildi','iade')", []);
+}
 
-    // Bekleyen sipariş sayısı
-    $pendingCount = dbVal("SELECT COUNT(*) FROM b2b_orders WHERE status='bekliyor'", []);
+if ($action === 'archive_list') {
+    $page   = max(1, intval($_GET['p'] ?? 1));
+    $perPage = 25;
+    $offset  = ($page-1)*$perPage;
+    $search  = trim($_GET['q'] ?? '');
+    $where = ['o.is_archived=1']; $params = [];
+    if ($search) { $where[]='(o.order_no LIKE ? OR d.company_name LIKE ?)'; $s="%$search%"; $params[]=$s; $params[]=$s; }
+    $w = implode(' AND ',$where);
+    $total        = dbVal("SELECT COUNT(*) FROM b2b_orders o JOIN b2b_dealers d ON d.id=o.dealer_id WHERE $w",$params);
+    $archivedOrders = dbRows("SELECT o.*,d.company_name FROM b2b_orders o JOIN b2b_dealers d ON d.id=o.dealer_id WHERE $w ORDER BY o.archived_at DESC LIMIT $perPage OFFSET $offset",$params);
+    $pager = pagination($total,$perPage,$page,"?page=orders&action=archive_list&q=".urlencode($search)."&p=");
 }
 
 $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','iptal','iade'];
@@ -215,6 +251,26 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
     <div>
         <h1 class="page-title">Siparişler <?php if ($pendingCount): ?><span class="badge badge-yellow"><?= $pendingCount ?> bekliyor</span><?php endif; ?></h1>
         <p class="page-sub">Toplam <?= $total ?> sipariş</p>
+    </div>
+    <div class="btn-group">
+        <?php if ($archivableCount > 0): ?>
+        <form method="post" style="display:inline" onsubmit="return confirm('<?= $archivableCount ?> tamamlanan/iptal sipariş arşivlenecek. Onaylıyor musunuz?')">
+            <?= csrfField() ?>
+            <input type="hidden" name="form_action" value="archive">
+            <input type="hidden" name="order_ids[]" value="bulk">
+            <?php
+            $archivable = dbRows("SELECT id FROM b2b_orders WHERE is_archived=0 AND status IN('iptal','teslim_edildi','iade')");
+            foreach ($archivable as $a): ?>
+            <input type="hidden" name="order_ids[]" value="<?= $a['id'] ?>">
+            <?php endforeach; ?>
+            <button type="submit" class="btn btn-ghost" style="color:var(--text-muted)">
+                📦 Arşivle (<?= $archivableCount ?>)
+            </button>
+        </form>
+        <?php endif; ?>
+        <a href="?page=orders&action=archive_list" class="btn btn-ghost">
+            🗄️ Arşiv<?php if ($archiveCount): ?> <span class="badge badge-gray"><?= $archiveCount ?></span><?php endif; ?>
+        </a>
     </div>
 </div>
 <?php if (!empty($success)): ?><div class="alert alert-success"><?= h($success) ?></div><?php endif; ?>
@@ -261,6 +317,55 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
 </div>
 <?= $pager ?>
 
+<?php elseif ($action === 'archive_list'): ?>
+<div class="page-header">
+    <div>
+        <h1 class="page-title">🗄️ Sipariş Arşivi</h1>
+        <p class="page-sub">Toplam <?= $total ?> arşivlenmiş sipariş</p>
+    </div>
+    <a href="?page=orders" class="btn btn-ghost">← Aktif Siparişler</a>
+</div>
+<?php if (!empty($success)): ?><div class="alert alert-success"><?= h($success) ?></div><?php endif; ?>
+<div class="filter-bar card mb-4">
+    <form method="get" class="filter-form">
+        <input type="hidden" name="page" value="orders">
+        <input type="hidden" name="action" value="archive_list">
+        <input type="text" name="q" value="<?= h($search ?? '') ?>" placeholder="Sipariş no veya firma…" class="form-control" style="max-width:260px">
+        <button type="submit" class="btn btn-secondary">Ara</button>
+        <a href="?page=orders&action=archive_list" class="btn btn-ghost">Temizle</a>
+    </form>
+</div>
+<div class="card">
+<table class="table">
+    <thead><tr><th>Sipariş No</th><th>Bayi</th><th>Tarih</th><th>Tutar</th><th>Durum</th><th>Arşiv Tarihi</th><th></th></tr></thead>
+    <tbody>
+    <?php foreach ($archivedOrders as $o): ?>
+    <tr style="opacity:.8">
+        <td><a href="?page=orders&action=detail&id=<?= $o['id'] ?>" class="font-medium"><?= h($o['order_no']) ?></a></td>
+        <td><?= h($o['company_name']) ?></td>
+        <td><?= fmtDate($o['created_at']) ?></td>
+        <td><?= money($o['grand_total']) ?></td>
+        <td><?= orderStatusLabel($o['status']) ?></td>
+        <td style="font-size:12px;color:var(--text-muted)"><?= fmtDate($o['archived_at']) ?></td>
+        <td class="text-right">
+            <a href="?page=orders&action=detail&id=<?= $o['id'] ?>" class="btn btn-xs btn-ghost">Detay</a>
+            <form method="post" style="display:inline" onsubmit="return confirm('Arşivden çıkarılsın mı?')">
+                <?= csrfField() ?>
+                <input type="hidden" name="form_action" value="unarchive">
+                <input type="hidden" name="order_id" value="<?= $o['id'] ?>">
+                <button type="submit" class="btn btn-xs btn-secondary">Arşivden Çıkar</button>
+            </form>
+        </td>
+    </tr>
+    <?php endforeach; ?>
+    <?php if (empty($archivedOrders)): ?>
+    <tr><td colspan="7" class="text-center text-muted py-8">Arşivde sipariş yok.</td></tr>
+    <?php endif; ?>
+    </tbody>
+</table>
+</div>
+<?= $pager ?>
+
 <?php elseif ($action === 'detail' && $order): ?>
 <div class="page-header">
     <div>
@@ -281,6 +386,21 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
         <button class="btn btn-warning" onclick="openModal('modal-reactivate')" style="background:#f59e0b;color:#fff;border-color:#f59e0b">
           🔄 Yeniden İşleme Al
         </button>
+        <?php endif; ?>
+        <?php if (!$order['is_archived'] && in_array($order['status'], ['iptal','teslim_edildi','iade'])): ?>
+        <form method="post" style="display:inline" onsubmit="return confirm('Bu sipariş arşivlensin mi?')">
+            <?= csrfField() ?>
+            <input type="hidden" name="form_action" value="archive">
+            <input type="hidden" name="order_ids[]" value="<?= $id ?>">
+            <button type="submit" class="btn btn-ghost" style="color:var(--text-muted)">📦 Arşivle</button>
+        </form>
+        <?php elseif ($order['is_archived']): ?>
+        <form method="post" style="display:inline">
+            <?= csrfField() ?>
+            <input type="hidden" name="form_action" value="unarchive">
+            <input type="hidden" name="order_id" value="<?= $id ?>">
+            <button type="submit" class="btn btn-ghost">🗄️ Arşivden Çıkar</button>
+        </form>
         <?php endif; ?>
     </div>
 </div>
