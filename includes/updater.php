@@ -135,9 +135,10 @@ class B2BUpdater {
         // commit.txt kaydet
         file_put_contents($this->root . '/commit.txt', $commit['sha']);
 
-        // DB cache'i güncelle — badge anında kapansın
-        settingSave('update_latest_sha',  $commit['sha']);
-        settingSave('update_last_check',  (string)time());
+        // DB'yi güncelle — update_latest_sha = installedSha → badge kapanır
+        settingSave('update_latest_sha', $commit['sha']);
+        // last_check sıfırla → sonraki sayfa açılışında GitHub'dan taze veri çekilsin
+        settingSave('update_last_check', '0');
         settingClearCache();
 
         // version.txt — manifest'ten

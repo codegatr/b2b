@@ -97,20 +97,27 @@ $unread    = isAdmin() ? unreadNotifCount('admin') : 0;
 
 // Güncelleme kontrolü (saatte bir)
 // Guncelleme kontrolü (saatte 1)
-$hasUpdate  = false;
-$lastCheck  = (int)setting('update_last_check', '0');
+$hasUpdate    = false;
+$lastCheck    = (int)setting('update_last_check', '0');
+$installedSha = updater()->getInstalledSha();
+
+// Saatlik veya last_check=0 (güncelleme sonrası) ise GitHub'dan taze çek
 if (isAdmin() && (time() - $lastCheck) > 3600) {
     try {
         $commit = updater()->getLatestCommit();
         if ($commit) {
-            settingSave('update_last_check',  (string)time());
-            settingSave('update_latest_sha',  $commit['sha']);
+            settingSave('update_last_check', (string)time());
+            settingSave('update_latest_sha', $commit['sha']);
+            settingClearCache();
         }
     } catch (Exception) {}
 }
-$latestSha    = setting('update_latest_sha', '');
-$installedSha = updater()->getInstalledSha();
-// Güncelleme var mı? Her iki SHA de doluysa ve farklıysa
+
+$latestSha = setting('update_latest_sha', '');
+
+// Güncelleme var mı?
+// installedSha boşsa (commit.txt yok) → badge gösterme
+// Her ikisi de doluysa ve farklıysa → badge göster
 $hasUpdate = $latestSha && $installedSha && ($latestSha !== $installedSha);
 
 $pageTitle = match($page) {
