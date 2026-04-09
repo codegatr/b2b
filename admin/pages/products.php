@@ -17,6 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'name'              => trim($_POST['name']),
             'sku'               => trim($_POST['sku']),
             'description'       => trim($_POST['description']),
+            'short_description' => substr(trim($_POST['short_description'] ?? ''), 0, 100),
             'base_price'        => floatval($_POST['base_price']),
             'unit'              => trim($_POST['unit']) ?: 'adet',
             'min_order_qty'     => intval($_POST['min_order_qty']) ?: 1,
@@ -399,7 +400,7 @@ $stockLog = dbRows("SELECT sl.*, COALESCE(a.name, 'Sistem') AS created_by_name F
     <div class="form-group">
         <label>Ürün Görseli</label>
         <?php if (!empty($product['image'])): ?>
-        <div class="mb-2"><img src="<?= h($product['image']) ?>" style="height:80px;border-radius:6px"></div>
+        <div class="mb-2"><img src="/uploads/products/<?= h($product['image']) ?>" style="height:80px;border-radius:6px;border:1px solid var(--border)"></div>
         <?php endif; ?>
         <input type="file" name="image" class="form-control" accept="image/*">
     </div>

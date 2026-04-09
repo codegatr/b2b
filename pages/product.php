@@ -1,7 +1,7 @@
 <?php
 requireDealer();
 $dealerId  = $_SESSION['dealer_id'];
-$dealer    = getCurrentDealer();
+$dealer    = currentDealer();
 $productId = (int)($_GET['id'] ?? 0);
 
 if (!$productId) { header('Location: ?page=products'); exit; }
@@ -16,13 +16,13 @@ $basePrice = $product['base_price'];
 $discount = $basePrice > 0 ? round((1 - $price / $basePrice) * 100) : 0;
 
 // Stok hareketi (son 10)
-$logs = dbRows("SELECT sl.*, COALESCE(o.order_no, '-') as order_no FROM b2b_stock_log sl LEFT JOIN b2b_orders o ON o.id = sl.order_id WHERE sl.product_id = ? ORDER BY sl.created_at DESC LIMIT 10", [$productId]);
+$logs = []; try { $logs = dbRows("SELECT sl.*, COALESCE(o.order_no,'-') as order_no FROM b2b_stock_log sl LEFT JOIN b2b_orders o ON o.id=sl.order_id WHERE sl.product_id=? ORDER BY sl.created_at DESC LIMIT 5", [$productId]); } catch(Exception $e) {}
 
 // Sepetteki miktar
-$cartQty = dbExec("SELECT qty FROM b2b_cart WHERE dealer_id=? AND product_id=?", [$dealerId, $productId]);
+$cartQty = (int)dbVal("SELECT COALESCE(qty,0) FROM b2b_cart WHERE dealer_id=? AND product_id=?", [$dealerId, $productId]);
 
 // Benzer ürünler
-$related = dbRows("SELECT p.*, (SELECT price FROM b2b_price_list_items WHERE product_id=p.id AND price_list_id=? LIMIT 1) as list_price FROM b2b_products p WHERE p.category_id = ? AND p.id != ? AND p.is_active=1 LIMIT 4");
+$related = dbRows("SELECT p.* FROM b2b_products p WHERE p.category_id=? AND p.id!=? AND p.is_active=1 LIMIT 4", [(int)$product['category_id'], $productId]);
 ?>
 <div style="margin-bottom:1rem">
     <a href="?page=products" style="color:var(--text-muted);text-decoration:none;font-size:.875rem;display:inline-flex;align-items:center;gap:.4rem">

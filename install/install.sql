@@ -408,3 +408,8 @@ ALTER TABLE `b2b_orders`
   ADD COLUMN IF NOT EXISTS `cancel_requested_at` datetime DEFAULT NULL,
   ADD COLUMN IF NOT EXISTS `cancel_reviewed_by`  int(11) DEFAULT NULL,
   ADD COLUMN IF NOT EXISTS `cancel_reviewed_at`  datetime DEFAULT NULL;
+
+-- ── Ürün Kısa Açıklama ───────────────────────────────────────
+ALTER TABLE `b2b_products`
+  ADD COLUMN IF NOT EXISTS `short_description` varchar(255) DEFAULT NULL
+  AFTER `description`;

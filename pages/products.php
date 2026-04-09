@@ -116,6 +116,7 @@ $plId = (int)($dealer['price_list_id'] ?? 0);
   <th style="width:56px">Resim</th>
   <th style="width:80px">Kod</th>
   <th>Ürün Tanımı</th>
+  <th style="width:130px">Kısa Açıklama</th>
   <th style="width:115px;text-align:right">Liste Fiyatı</th>
   <th style="width:115px;text-align:right">
     <span style="color:var(--success);font-weight:700">İndr. Fiyat</span>
@@ -168,6 +169,9 @@ $plId = (int)($dealer['price_list_id'] ?? 0);
     <div style="font-size:11px;color:var(--text-muted);margin-top:1px"><?= h($p['cat_name']) ?></div>
     <?php endif; ?>
   </td>
+
+  <!-- Kısa Açıklama -->
+  <td style="font-size:12px;color:var(--text-2)"><?= h($p['short_description'] ?? '') ?></td>
 
   <!-- Liste Fiyatı -->
   <td style="text-align:right;font-size:13px">
