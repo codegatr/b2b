@@ -40,12 +40,12 @@ $typeIcon  = ['bilgi'=>'ℹ️','uyari'=>'⚠️','onemli'=>'📢'];
   $txt  = $typeTxt[$t] ?? '#374151';
   $icon = $typeIcon[$t] ?? 'ℹ️';
   $lbl  = $typeLabel[$t] ?? 'Bilgi';
-  $hasImg = !empty($ann['image']) && file_exists(dirname(__DIR__).'/uploads/announcements/'.$ann['image']);
+  $hasImg = !empty($ann['image']) && file_exists(B2B_ROOT.'/uploads/announcements/'.$ann['image']);
 ?>
 <div style="background:#fff;border:1px solid <?= $brd ?>;border-radius:12px;overflow:hidden;border-left:4px solid <?= $txt ?>">
   <?php if ($hasImg): ?>
   <div style="width:100%;max-height:320px;overflow:hidden;border-bottom:1px solid <?= $brd ?>">
-    <img src="<?= h(BASE_URL.'uploads/announcements/'.$ann['image']) ?>"
+    <img src="<?= h(B2B_URL.'/uploads/announcements/'.$ann['image']) ?>"
          alt="<?= h($ann['title']) ?>"
          style="width:100%;max-height:320px;object-fit:cover;display:block">
   </div>

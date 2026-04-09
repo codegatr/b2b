@@ -178,6 +178,13 @@ $pageTitle = match($page) {
           Sepetim
           <?php if ($cartCount > 0): ?><span class="cart-badge"><?= $cartCount ?></span><?php endif; ?>
         </a>
+        <?php if ($announceCount > 0): ?>
+        <a href="?page=announcements" class="nav-item <?= $page==='announcements'?'active':'' ?>">
+          <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M14.5 3a.5.5 0 01.5.5v9a.5.5 0 01-.5.5h-13a.5.5 0 01-.5-.5v-9a.5.5 0 01.5-.5h13zm-13-1A1.5 1.5 0 000 3.5v9A1.5 1.5 0 001.5 14h13a1.5 1.5 0 001.5-1.5v-9A1.5 1.5 0 0014.5 2h-13zM3 5.5a.5.5 0 01.5-.5h9a.5.5 0 010 1h-9a.5.5 0 01-.5-.5zM3 8a.5.5 0 01.5-.5h9a.5.5 0 010 1h-9A.5.5 0 013 8zm0 2.5a.5.5 0 01.5-.5h6a.5.5 0 010 1h-6a.5.5 0 01-.5-.5z"/></svg>
+          Duyurular
+          <span class="cart-badge" style="background:#f59e0b"><?= $announceCount ?></span>
+        </a>
+        <?php endif; ?>
       </div>
 
       <div class="nav-section">
@@ -207,11 +214,7 @@ $pageTitle = match($page) {
           Bildirimler
           <?php if ($unread > 0): ?><span class="badge-count"><?= $unread ?></span><?php endif; ?>
         </a>
-        <a href="?page=announcements" class="nav-item <?= $page==='announcements'?'active':'' ?>">
-          <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M13.5 2a1.5 1.5 0 00-1.5 1.5v9A1.5 1.5 0 0013.5 14h-11A1.5 1.5 0 001 12.5v-9A1.5 1.5 0 012.5 2h11zm-1 5H3.5v1h9v-1zm0-2H3.5v1h9V5z"/></svg>
-          Duyurular
-          <?php if ($announceCount > 0): ?><span class="badge-count warn"><?= $announceCount ?></span><?php endif; ?>
-        </a>
+
         <a href="?page=profile" class="nav-item <?= $page==='profile'?'active':'' ?>">
           <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 8a3 3 0 100-6 3 3 0 000 6zm2-3a2 2 0 11-4 0 2 2 0 014 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4z"/></svg>
           Profilim
