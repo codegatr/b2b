@@ -10,8 +10,67 @@ if (!empty($_SESSION['flash'])) {
     unset($_SESSION['flash']);
 }
 
-$error = '';
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+$error        = '';
+$fpSuccess    = false;
+$fpError      = '';
+
+// Şifremi Unuttum — modal POST
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? '') === 'forgot_password') {
+    csrfCheck();
+    $fpEmail = trim($_POST['fp_email'] ?? '');
+    if (!$fpEmail) {
+        $fpError = 'E-posta adresi zorunludur.';
+    } else {
+        $found = dbRow("SELECT id,'dealer' AS utype FROM b2b_dealers    WHERE email=? AND is_active=1", [$fpEmail])
+              ?? dbRow("SELECT id,'admin'  AS utype FROM b2b_admin_users WHERE email=? AND is_active=1", [$fpEmail]);
+        if ($found) {
+            $tok     = bin2hex(random_bytes(32));
+            $expires = date('Y-m-d H:i:s', strtotime('+1 hour'));
+            $table   = $found['utype'] === 'admin' ? 'b2b_admin_users' : 'b2b_dealers';
+            dbExec("UPDATE `$table` SET reset_token=?, reset_expires=? WHERE id=?", [$tok, $expires, $found['id']]);
+
+            $siteUrl   = rtrim(setting('site_url', ''), '/');
+            $from      = setting('smtp_from_email', 'noreply@' . ($_SERVER['HTTP_HOST'] ?? 'localhost'));
+            $resetLink = $siteUrl . '/?page=forgot-password&token=' . $tok;
+            $logoFile  = setting('login_image', '');
+            $logoHtml  = $logoFile
+                ? '<img src="' . $siteUrl . '/uploads/logo/' . $logoFile . '" alt="' . htmlspecialchars($siteName) . '" style="height:72px;max-width:220px;object-fit:contain;display:block;margin:0 auto">'
+                : '<span style="font-size:26px;font-weight:800;color:#ffffff">' . htmlspecialchars($siteName) . '</span>';
+
+            $subject = $siteName . ' - Sifre Sifirlama';
+            $html = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"></head>'
+                . '<body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,sans-serif">'
+                . '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:40px 16px"><tr><td align="center">'
+                . '<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">'
+                . '<tr><td style="background:#1e3a5f;border-radius:12px 12px 0 0;padding:32px 40px;text-align:center;border-bottom:4px solid #dc2626">'
+                . $logoHtml
+                . '<div style="margin-top:14px;font-size:11px;font-weight:600;letter-spacing:2px;color:rgba(255,255,255,.5);text-transform:uppercase">Bayi Portali</div>'
+                . '</td></tr>'
+                . '<tr><td style="background:#ffffff;padding:44px 52px">'
+                . '<h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#1a1d23">' . mb_convert_encoding('&#350;ifre S&#305;f&#305;rlama','UTF-8','HTML-ENTITIES') . '</h2>'
+                . '<div style="width:40px;height:3px;background:#dc2626;border-radius:2px;margin-bottom:24px"></div>'
+                . '<p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.8">Merhaba,<br><br>' . mb_convert_encoding('&#350;ifre s&#305;f&#305;rlama talebinizi ald&#305;k. A&#351;a&#287;&#305;daki butona t&#305;klayarak yeni &#351;ifrenizi belirleyebilirsiniz.','UTF-8','HTML-ENTITIES') . '</p>'
+                . '<table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:8px 0 32px">'
+                . '<a href="' . $resetLink . '" style="display:inline-block;background:#dc2626;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:16px 44px;border-radius:8px">' . mb_convert_encoding('&#350;ifremi S&#305;f&#305;rla','UTF-8','HTML-ENTITIES') . '</a>'
+                . '</td></tr></table>'
+                . '<p style="margin:0 0 6px;font-size:13px;color:#6b7280">' . mb_convert_encoding('Butona t&#305;klayam&#305;yorsan&#305;z a&#351;a&#287;&#305;daki ba&#287;lant&#305;y&#305; taray&#305;c&#305;n&#305;za yap&#305;&#351;t&#305;r&#305;n:','UTF-8','HTML-ENTITIES') . '</p>'
+                . '<p style="margin:0 0 28px;font-size:12px;word-break:break-all"><a href="' . $resetLink . '" style="color:#2563eb">' . $resetLink . '</a></p>'
+                . '<div style="background:#fef9f0;border-left:4px solid #f59e0b;border-radius:0 8px 8px 0;padding:14px 18px">'
+                . '<p style="margin:0;font-size:13px;color:#92400e">' . mb_convert_encoding('Bu ba&#287;lant&#305; <strong>1 saat</strong> ge&#231;erlidir.','UTF-8','HTML-ENTITIES') . '</p>'
+                . '</div></td></tr>'
+                . '<tr><td style="background:#f8fafc;border-radius:0 0 12px 12px;padding:20px 40px;text-align:center;border-top:1px solid #e5e7eb">'
+                . '<p style="margin:0;font-size:12px;color:#6b7280">&copy; ' . date('Y') . ' ' . htmlspecialchars($siteName) . '</p>'
+                . '</td></tr></table></td></tr></table></body></html>';
+
+            $headers = implode("
+", ['From: ' . $siteName . ' <' . $from . '>', 'MIME-Version: 1.0', 'Content-Type: text/html; charset=UTF-8']);
+            @mail($fpEmail, $subject, $html, $headers);
+        }
+        $fpSuccess = true; // E-posta bulunsa da bulunmasa da başarı göster (güvenlik)
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? '') === 'login') {
     csrfCheck();
     $email = trim($_POST['email'] ?? '');
     $pass  = trim($_POST['password'] ?? '');
@@ -430,6 +489,7 @@ html,body{height:100%;font-family:'Inter',-apple-system,sans-serif;font-size:14p
 
     <form method="POST" id="lf">
       <?= csrfField() ?>
+      <input type="hidden" name="_action" value="login">
 
       <div class="fg">
         <label class="fl" for="em">E-posta Adresi</label>
@@ -447,7 +507,7 @@ html,body{height:100%;font-family:'Inter',-apple-system,sans-serif;font-size:14p
       <div class="fg">
         <div class="frow">
           <label class="fl" for="pw" style="margin-bottom:0">Sifre</label>
-          <a href="?page=forgot-password" class="flink">Sifremi Unuttum</a>
+          <button type="button" class="flink" onclick="openFP()" style="background:none;border:none;cursor:pointer;padding:0;font-family:inherit;font-size:inherit">Sifremi Unuttum?</button>
         </div>
         <div class="fiw">
           <span class="fi-ico">
@@ -497,6 +557,66 @@ document.getElementById('lf').addEventListener('submit',function(){
   document.getElementById('st').textContent='Giris yapiliyor...';
   b.disabled=true;b.style.opacity='.7';
 });
+</script>
+
+<!-- Sifremi Unuttum Modal -->
+<div id="fp-modal" style="display:none;position:fixed;inset:0;z-index:9999;align-items:center;justify-content:center">
+  <div style="position:absolute;inset:0;background:rgba(15,23,42,.55);backdrop-filter:blur(4px)" onclick="closeFP()"></div>
+  <div style="position:relative;background:#fff;border-radius:16px;width:100%;max-width:420px;margin:16px;box-shadow:0 24px 64px rgba(0,0,0,.25);overflow:hidden;animation:fpIn .2s ease">
+    <div style="background:#1e3a5f;padding:24px 28px;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:16px;font-weight:700;color:#fff">Sifre Sifirlama</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.55);margin-top:2px">E-postaniza sifirlama baglantisi gonderilecek</div>
+      </div>
+      <button onclick="closeFP()" style="background:rgba(255,255,255,.12);border:none;border-radius:8px;width:32px;height:32px;cursor:pointer;color:#fff;font-size:20px;line-height:1;display:flex;align-items:center;justify-content:center">&times;</button>
+    </div>
+    <div style="padding:28px">
+      <?php if ($fpSuccess): ?>
+      <div style="text-align:center;padding:8px 0 12px">
+        <div style="font-size:48px;margin-bottom:14px">&#x1F4E7;</div>
+        <div style="font-size:15px;font-weight:700;color:#1a1d23;margin-bottom:8px">E-posta Gonderildi</div>
+        <div style="font-size:13px;color:#6b7280;line-height:1.6">Kayitli bir hesap bulunduysa sifirlama baglantisi gonderildi. Gelen kutunuzu kontrol edin.</div>
+        <button onclick="closeFP()" style="margin-top:20px;background:#1e3a5f;color:#fff;border:none;border-radius:8px;padding:11px 32px;font-size:14px;font-weight:600;cursor:pointer">Tamam</button>
+      </div>
+      <?php else: ?>
+      <?php if ($fpError): ?><div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:11px 14px;margin-bottom:16px;font-size:13px;color:#dc2626"><?= h($fpError) ?></div><?php endif; ?>
+      <form method="post" id="fp-form">
+        <?= csrfField() ?>
+        <input type="hidden" name="_action" value="forgot_password">
+        <div style="margin-bottom:18px">
+          <label style="display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px">E-posta Adresiniz</label>
+          <input type="email" name="fp_email" required placeholder="bayi@sirket.com"
+                 value="<?= h($_POST['fp_email'] ?? '') ?>"
+                 style="width:100%;box-sizing:border-box;padding:11px 14px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;outline:none"
+                 onfocus="this.style.borderColor='#1e3a5f'" onblur="this.style.borderColor='#d1d5db'">
+        </div>
+        <button type="submit" style="width:100%;background:#dc2626;color:#fff;border:none;border-radius:8px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:.3px">
+          Sifirlama Baglantisi Gonder
+        </button>
+      </form>
+      <?php endif; ?>
+    </div>
+  </div>
+</div>
+<style>
+@keyframes fpIn {
+  from { opacity:0; transform:scale(.95) translateY(-8px) }
+  to   { opacity:1; transform:scale(1)  translateY(0) }
+}
+</style>
+<script>
+function openFP() {
+  var m = document.getElementById('fp-modal');
+  m.style.display = 'flex';
+  setTimeout(function(){ var i = m.querySelector('input[type=email]'); if(i) i.focus(); }, 60);
+}
+function closeFP() {
+  document.getElementById('fp-modal').style.display = 'none';
+}
+document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeFP(); });
+<?php if ($fpError || (!$fpSuccess && isset($_POST['_action']) && $_POST['_action']==='forgot_password')): ?>
+document.addEventListener('DOMContentLoaded', function(){ openFP(); });
+<?php endif; ?>
 </script>
 </body>
 </html>
