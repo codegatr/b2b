@@ -42,7 +42,20 @@
     "admin/pages/admins.php",
     "admin/pages/reports.php",
     "api/cart.php",
-    "api/notifications.php"
+    "api/notifications.php",
+    "pages/announcements.php",
+    "includes/migrations.php",
+    "includes/rubikpara.php",
+    "includes/sms.php",
+    "admin/pages/announcements.php",
+    "admin/pages/stock.php",
+    "admin/pages/tickets.php"
   ],
-  "migrations": []
+  "migrations": [
+    "migrations/migration_001.sql",
+    "migrations/migration_002.sql",
+    "migrations/migration_003.sql",
+    "migrations/migration_004.sql",
+    "migrations/migration_005.sql"
+  ]
 }
