@@ -32,21 +32,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    if ($act === 'update_branch') {
-        try {
-            $result = $updater->updateFromBranch();
-            if ($result['success']) {
-                $fc   = is_array($result['files'] ?? null) ? count($result['files']) : 0;
-                $sha  = $result['commit']['sha_short'] ?? '';
-                $migr = $result['migrations'] ?? ['run'=>0,'errors'=>[]];
-                $msg  = "✅ Güncelleme tamamlandı! {$fc} dosya. Commit: {$sha}";
-                if ($migr['run'] > 0) $msg .= " · {$migr['run']} migration uygulandı.";
-                if (!empty($migr['errors'])) $msg .= " ⚠️ " . implode(', ', $migr['errors']);
-                $_SESSION['flash_admin'] = ['type'=>'success','msg'=>$msg];
-                header('Location: ?page=update&done=1'); exit;
-            } else { $error = $result['message'] ?? 'Güncelleme başarısız.'; }
-        } catch (Exception $e) { $error = $e->getMessage(); }
-    }
+    // update_branch ve rollback artık admin/index.php early handler'da
+    // (header() redirect için HTML öncesi çalışması gerekiyor)
 
     if ($act === 'update_release') {
         $ver = trim($_POST['version'] ?? '');
@@ -62,16 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    if ($act === 'rollback') {
-        $backup = trim($_POST['backup_file'] ?? '');
-        if ($backup) {
-            try {
-                $result = $updater->rollback($backup);
-                if ($result['success']) $success = 'Geri alma başarılı.';
-                else $error = $result['message'] ?? 'Geri alma başarısız.';
-            } catch (Exception $e) { $error = $e->getMessage(); }
-        }
-    }
+    // rollback: admin/index.php early handler'da
 }
 
 // ── Veri ─────────────────────────────────────────────────────
