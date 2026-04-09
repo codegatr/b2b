@@ -10,6 +10,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrfCheck();
     $act = $_POST['form_action'] ?? '';
 
+    // ── Sipariş Sil ───────────────────────────────────────────
+    if ($act === 'delete_order') {
+        $oid = intval($_POST['order_id'] ?? 0);
+        $ord = dbRow("SELECT * FROM b2b_orders WHERE id=?", [$oid]);
+        if ($ord) {
+            dbExec("DELETE FROM b2b_order_items WHERE order_id=?", [$oid]);
+            dbExec("DELETE FROM b2b_orders WHERE id=?", [$oid]);
+            auditLog('order_deleted', 'b2b_orders', $oid, ['order_no' => $ord['order_no']]);
+            $_SESSION['flash_admin'] = ['type' => 'success', 'msg' => "#{$ord['order_no']} siparişi silindi."];
+        }
+        header('Location: ?page=orders');
+        exit;
+    }
+
     // ── İptal onayla ─────────────────────────────────────────
     if ($act === 'approve_cancel') {
         $oid = intval($_POST['order_id'] ?? 0);
@@ -374,6 +388,7 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
     </div>
     <div class="btn-group">
         <a href="?page=orders" class="btn btn-ghost">← Geri</a>
+        <button class="btn btn-danger" style="margin-left:auto" onclick="openModal('modal-delete-order')">🗑 Siparişi Sil</button>
         <?php if ($order['status'] === 'bekliyor'): ?>
         <button class="btn btn-success" onclick="openModal('modal-approve')">✓ Onayla</button>
         <button class="btn btn-danger" onclick="openModal('modal-cancel')">✕ İptal</button>

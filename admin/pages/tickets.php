@@ -10,6 +10,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrfCheck();
     $act = $_POST['form_action'] ?? 'reply';
 
+    // Sil
+    if ($act === 'delete_ticket') {
+        $tid = intval($_POST['ticket_id'] ?? 0);
+        $t   = dbRow("SELECT subject FROM b2b_tickets WHERE id=?", [$tid]);
+        if ($t) {
+            dbExec("DELETE FROM b2b_tickets WHERE id=?", [$tid]);
+            auditLog('ticket_deleted', 'b2b_tickets', $tid, ['subject' => $t['subject']]);
+            $_SESSION['flash_admin'] = ['type' => 'success', 'msg' => 'Destek talebi silindi.'];
+        }
+        header('Location: ?page=tickets');
+        exit;
+    }
+
     // Admin adına yeni talep aç
     if ($act === 'create') {
         $dealerId = intval($_POST['dealer_id'] ?? 0);
@@ -84,6 +97,7 @@ $allDealers = dbRows("SELECT id, company_name, first_name, last_name FROM b2b_de
     <div class="card-header">
       <h3 class="card-title"><?= h($ticket['subject']) ?></h3>
       <a href="?page=tickets" class="btn btn-ghost btn-sm">← Liste</a>
+      <button class="btn btn-danger btn-sm" onclick="openModal('modal-delete-ticket')">🗑 Sil</button>
     </div>
     <div class="card-body">
       <!-- Mesaj -->
@@ -137,6 +151,26 @@ $allDealers = dbRows("SELECT id, company_name, first_name, last_name FROM b2b_de
   </div>
 </div>
 
+
+<!-- Modal: Talep Sil (detay) -->
+<div id="modal-delete-ticket" class="modal-overlay">
+<div class="modal">
+  <div class="modal-header">🗑 Talebi Sil</div>
+  <div class="modal-body">
+    <p>Bu destek talebi kalıcı olarak silinecek. Geri alınamaz.</p>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="closeModal('modal-delete-ticket')">Vazgeç</button>
+    <form method="post" style="display:inline">
+      <?= csrfField() ?>
+      <input type="hidden" name="form_action" value="delete_ticket">
+      <input type="hidden" name="ticket_id" value="<?= $id ?>">
+      <button type="submit" class="btn btn-danger">Evet, Sil</button>
+    </form>
+  </div>
+</div>
+</div>
+
 <?php else: ?>
 <!-- Talep Listesi -->
 <div style="display:flex;gap:8px;margin-bottom:16px">
@@ -167,7 +201,15 @@ $allDealers = dbRows("SELECT id, company_name, first_name, last_name FROM b2b_de
         <td><?= h($t['subject']) ?><?php if (!$t['admin_reply'] && $t['status']==='acik'): ?> <span style="font-size:10px;background:var(--red);color:#fff;border-radius:3px;padding:1px 5px;margin-left:4px">YENİ</span><?php endif; ?></td>
         <td><?php $pmap=['dusuk'=>'neutral','normal'=>'info','yuksek'=>'danger']; ?><span class="badge badge-<?= $pmap[$t['priority']??'normal'] ?>"><?= ['dusuk'=>'Düşük','normal'=>'Normal','yuksek'=>'Yüksek'][$t['priority']??'normal'] ?></span></td>
         <td><span class="badge badge-<?= $sbadge ?>"><?= $slabel ?></span></td>
-        <td><a href="?page=tickets&id=<?= $t['id'] ?>" class="btn btn-ghost btn-sm">Yanıtla</a></td>
+        <td style="display:flex;gap:6px">
+          <a href="?page=tickets&id=<?= $t['id'] ?>" class="btn btn-ghost btn-sm">Yanıtla</a>
+          <form method="post" onsubmit="return confirm('Talep silinsin mi?')">
+            <?= csrfField() ?>
+            <input type="hidden" name="form_action" value="delete_ticket">
+            <input type="hidden" name="ticket_id" value="<?= $t['id'] ?>">
+            <button class="btn btn-ghost btn-sm" style="color:var(--danger)">🗑</button>
+          </form>
+        </td>
       </tr>
       <?php endforeach; ?>
       </tbody>
@@ -271,6 +313,26 @@ $allDealers = dbRows("SELECT id, company_name, first_name, last_name FROM b2b_de
   </div>
 </div>
 
+
+<!-- Modal: Talep Sil (detay) -->
+<div id="modal-delete-ticket" class="modal-overlay">
+<div class="modal">
+  <div class="modal-header">🗑 Talebi Sil</div>
+  <div class="modal-body">
+    <p>Bu destek talebi kalıcı olarak silinecek. Geri alınamaz.</p>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="closeModal('modal-delete-ticket')">Vazgeç</button>
+    <form method="post" style="display:inline">
+      <?= csrfField() ?>
+      <input type="hidden" name="form_action" value="delete_ticket">
+      <input type="hidden" name="ticket_id" value="<?= $id ?>">
+      <button type="submit" class="btn btn-danger">Evet, Sil</button>
+    </form>
+  </div>
+</div>
+</div>
+
 <?php else: ?>
 <!-- Talep Listesi -->
 <div style="display:flex;gap:8px;margin-bottom:16px">
@@ -301,7 +363,15 @@ $allDealers = dbRows("SELECT id, company_name, first_name, last_name FROM b2b_de
         <td><?= h($t['subject']) ?><?php if (!$t['admin_reply'] && $t['status']==='acik'): ?> <span style="font-size:10px;background:var(--red);color:#fff;border-radius:3px;padding:1px 5px;margin-left:4px">YENİ</span><?php endif; ?></td>
         <td><?php $pmap=['dusuk'=>'neutral','normal'=>'info','yuksek'=>'danger']; ?><span class="badge badge-<?= $pmap[$t['priority']??'normal'] ?>"><?= ['dusuk'=>'Düşük','normal'=>'Normal','yuksek'=>'Yüksek'][$t['priority']??'normal'] ?></span></td>
         <td><span class="badge badge-<?= $sbadge ?>"><?= $slabel ?></span></td>
-        <td><a href="?page=tickets&id=<?= $t['id'] ?>" class="btn btn-ghost btn-sm">Yanıtla</a></td>
+        <td style="display:flex;gap:6px">
+          <a href="?page=tickets&id=<?= $t['id'] ?>" class="btn btn-ghost btn-sm">Yanıtla</a>
+          <form method="post" onsubmit="return confirm('Talep silinsin mi?')">
+            <?= csrfField() ?>
+            <input type="hidden" name="form_action" value="delete_ticket">
+            <input type="hidden" name="ticket_id" value="<?= $t['id'] ?>">
+            <button class="btn btn-ghost btn-sm" style="color:var(--danger)">🗑</button>
+          </form>
+        </td>
       </tr>
       <?php endforeach; ?>
       </tbody>
