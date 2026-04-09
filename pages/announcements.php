@@ -1,73 +1,77 @@
 <?php
-// pages/announcements.php — Bayi Duyurular Sayfası
+// Duyurular sayfası - bayi görünümü
 $anns = dbRows(
-    "SELECT * FROM b2b_announcements WHERE is_active=1
-     AND (starts_at IS NULL OR starts_at <= NOW())
-     AND (ends_at IS NULL OR ends_at >= NOW())
+    "SELECT * FROM b2b_announcements
+     WHERE is_active=1
+       AND (starts_at IS NULL OR starts_at <= NOW())
+       AND (ends_at   IS NULL OR ends_at   >= NOW())
      ORDER BY type DESC, created_at DESC"
 );
 
 $typeLabel = ['bilgi'=>'Bilgi','uyari'=>'Uyarı','onemli'=>'Önemli'];
-$typeBg    = ['bilgi'=>'#eff6ff','uyari'=>'#fffbeb','onemli'=>'#fef2f2'];
-$typeBdr   = ['bilgi'=>'#bfdbfe','uyari'=>'#fde68a','onemli'=>'#fecaca'];
-$typeTag   = ['bilgi'=>'#1d4ed8','uyari'=>'#92400e','onemli'=>'#991b1b'];
-$typeIcon  = ['bilgi'=>'ℹ️','uyari'=>'⚠️','onemli'=>'🔴'];
+$typeBg    = ['bilgi'=>'#eff6ff','uyari'=>'#fffbeb','onemli'=>'#fff1f2'];
+$typeBrd   = ['bilgi'=>'#bfdbfe','uyari'=>'#fde68a','onemli'=>'#fecdd3'];
+$typeTxt   = ['bilgi'=>'#1d4ed8','uyari'=>'#92400e','onemli'=>'#be123c'];
+$typeIcon  = ['bilgi'=>'ℹ️','uyari'=>'⚠️','onemli'=>'📢'];
 ?>
-<div class="page-header">
+
+<div class="page-header" style="margin-bottom:28px">
   <div>
-    <div class="page-title">Duyurular</div>
-    <div class="page-subtitle"><?= count($anns) ?> aktif duyuru</div>
+    <h1 class="page-title">Duyurular</h1>
+    <p style="color:var(--muted);font-size:14px;margin-top:4px">
+      <?= count($anns) ?> aktif duyuru
+    </p>
   </div>
 </div>
 
 <?php if (empty($anns)): ?>
-<div class="empty-state">
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-    <path stroke-linecap="round" stroke-linejoin="round" d="M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 110-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 01-1.44-4.282m3.102.069a18.03 18.03 0 01-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 018.835 2.535M10.34 6.66a23.847 23.847 0 008.835-2.535m0 0A23.74 23.74 0 0018.795 3m.38 1.125a23.91 23.91 0 011.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 001.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73"/>
-  </svg>
-  Şu an aktif bir duyuru yok.
+<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:64px 32px;text-align:center">
+  <div style="font-size:48px;margin-bottom:12px">📭</div>
+  <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px">Duyuru bulunmuyor</div>
+  <div style="color:var(--muted);font-size:14px">Şu an aktif duyuru yok.</div>
 </div>
+
 <?php else: ?>
 <div style="display:flex;flex-direction:column;gap:16px">
-  <?php foreach ($anns as $a):
-    $t  = $a['type'] ?? 'bilgi';
-    $bg = $typeBg[$t]  ?? '#eff6ff';
-    $bd = $typeBdr[$t] ?? '#bfdbfe';
-    $tc = $typeTag[$t] ?? '#1d4ed8';
-    $ic = $typeIcon[$t]?? 'ℹ️';
-    $lbl= $typeLabel[$t]?? 'Bilgi';
-    $hasImg = !empty($a['image']) && file_exists(B2B_ROOT . '/uploads/announcements/' . $a['image']);
-  ?>
-  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)">
-    <?php if ($hasImg): ?>
-    <div style="width:100%;max-height:320px;overflow:hidden;border-bottom:1px solid #f3f4f6">
-      <img src="<?= h(BASE_URL) ?>/uploads/announcements/<?= h($a['image']) ?>"
-           alt="<?= h($a['title']) ?>"
-           style="width:100%;height:100%;object-fit:cover;display:block">
-    </div>
-    <?php endif; ?>
-    <div style="padding:20px 24px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-        <span style="background:<?= $bg ?>;color:<?= $tc ?>;border:1px solid <?= $bd ?>;border-radius:6px;font-size:11px;font-weight:700;padding:3px 10px;letter-spacing:.3px">
-          <?= $ic ?> <?= $lbl ?>
-        </span>
-        <span style="font-size:12px;color:#9ca3af;margin-left:auto">
-          <?= date('d.m.Y', strtotime($a['created_at'])) ?>
-        </span>
-      </div>
-      <div style="font-size:17px;font-weight:700;color:#111;margin-bottom:8px;line-height:1.3">
-        <?= h($a['title']) ?>
-      </div>
-      <div style="font-size:14px;color:#4b5563;line-height:1.7">
-        <?= nl2br(h($a['content'])) ?>
-      </div>
-      <?php if ($a['ends_at']): ?>
-      <div style="margin-top:14px;font-size:11px;color:#9ca3af;border-top:1px solid #f3f4f6;padding-top:10px">
-        🕐 Bitiş: <?= date('d.m.Y', strtotime($a['ends_at'])) ?>
-      </div>
+<?php foreach ($anns as $ann):
+  $t    = $ann['type'] ?? 'bilgi';
+  $bg   = $typeBg[$t]  ?? '#f9fafb';
+  $brd  = $typeBrd[$t] ?? '#e5e7eb';
+  $txt  = $typeTxt[$t] ?? '#374151';
+  $icon = $typeIcon[$t] ?? 'ℹ️';
+  $lbl  = $typeLabel[$t] ?? 'Bilgi';
+  $hasImg = !empty($ann['image']) && file_exists(dirname(__DIR__).'/uploads/announcements/'.$ann['image']);
+?>
+<div style="background:#fff;border:1px solid <?= $brd ?>;border-radius:12px;overflow:hidden;border-left:4px solid <?= $txt ?>">
+  <?php if ($hasImg): ?>
+  <div style="width:100%;max-height:320px;overflow:hidden;border-bottom:1px solid <?= $brd ?>">
+    <img src="<?= h(BASE_URL.'uploads/announcements/'.$ann['image']) ?>"
+         alt="<?= h($ann['title']) ?>"
+         style="width:100%;max-height:320px;object-fit:cover;display:block">
+  </div>
+  <?php endif; ?>
+  <div style="padding:20px 24px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <span style="background:<?= $bg ?>;color:<?= $txt ?>;border:1px solid <?= $brd ?>;border-radius:99px;font-size:11px;font-weight:700;padding:3px 10px;letter-spacing:.4px">
+        <?= $icon ?> <?= $lbl ?>
+      </span>
+      <span style="color:var(--muted);font-size:12px">
+        <?= date('d.m.Y', strtotime($ann['created_at'])) ?>
+      </span>
+      <?php if ($ann['ends_at']): ?>
+      <span style="color:var(--muted);font-size:12px">
+        · <?= date('d.m.Y', strtotime($ann['ends_at'])) ?> tarihine kadar
+      </span>
       <?php endif; ?>
     </div>
+    <h2 style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:10px;line-height:1.3">
+      <?= h($ann['title']) ?>
+    </h2>
+    <div style="color:var(--muted);font-size:14px;line-height:1.7;white-space:pre-line">
+      <?= nl2br(h($ann['content'])) ?>
+    </div>
   </div>
-  <?php endforeach; ?>
+</div>
+<?php endforeach; ?>
 </div>
 <?php endif; ?>
