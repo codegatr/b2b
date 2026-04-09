@@ -614,7 +614,7 @@ function closeFP() {
   document.getElementById('fp-modal').style.display = 'none';
 }
 document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeFP(); });
-<?php if ($fpError || (!$fpSuccess && isset($_POST['_action']) && $_POST['_action']==='forgot_password')): ?>
+<?php if ($fpSuccess || $fpError || (isset($_POST['_action']) && $_POST['_action']==='forgot_password')): ?>
 document.addEventListener('DOMContentLoaded', function(){ openFP(); });
 <?php endif; ?>
 </script>
