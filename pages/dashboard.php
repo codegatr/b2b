@@ -30,30 +30,7 @@ $upcomingDue = dbRows(
     "SELECT * FROM b2b_ledger WHERE dealer_id=? AND is_closed=0 AND type='borc' AND due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(),INTERVAL 7 DAY) ORDER BY due_date",
     [$dealer['id']]
 );
-// Aktif duyurular
-$announcements = [];
-try {
-    // Tablo yoksa oluştur (migration çalışmadan önce)
-    db()->exec("CREATE TABLE IF NOT EXISTS `b2b_announcements` (
-        `id` int(11) NOT NULL AUTO_INCREMENT,
-        `title` varchar(255) NOT NULL,
-        `content` text NOT NULL,
-        `type` enum('bilgi','uyari','onemli') DEFAULT 'bilgi',
-        `is_active` tinyint(1) DEFAULT 1,
-        `starts_at` datetime DEFAULT NULL,
-        `ends_at` datetime DEFAULT NULL,
-        `created_by` int(11) DEFAULT NULL,
-        `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (`id`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-
-    $announcements = dbRows(
-        "SELECT * FROM b2b_announcements WHERE is_active=1
-         AND (starts_at IS NULL OR starts_at <= NOW())
-         AND (ends_at IS NULL OR ends_at >= NOW())
-         ORDER BY created_at DESC LIMIT 5"
-    );
-} catch (Exception $e) { /* sessizce geç */ }
+// Duyurular index.php'den geliyor (\$announcements)
 ?>
 
 <div class="page-header">

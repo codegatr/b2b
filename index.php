@@ -60,6 +60,32 @@ if ($dealer) {
 // Okunmamış bildirim
 $unread = isDealer() ? unreadNotifCount('dealer') : 0;
 
+// Aktif duyurular
+$announceCount = 0;
+$announcements = [];
+try {
+    db()->exec("CREATE TABLE IF NOT EXISTS `b2b_announcements` (
+        `id` int NOT NULL AUTO_INCREMENT,
+        `title` varchar(255) NOT NULL,
+        `content` text NOT NULL,
+        `type` enum('bilgi','uyari','onemli') DEFAULT 'bilgi',
+        `is_active` tinyint(1) DEFAULT 1,
+        `starts_at` datetime DEFAULT NULL,
+        `ends_at` datetime DEFAULT NULL,
+        `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (`id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    if (isDealer()) {
+        $announcements = dbRows(
+            "SELECT * FROM b2b_announcements WHERE is_active=1
+             AND (starts_at IS NULL OR starts_at <= NOW())
+             AND (ends_at IS NULL OR ends_at >= NOW())
+             ORDER BY type DESC, created_at DESC LIMIT 10"
+        );
+        $announceCount = count($announcements);
+    }
+} catch (Exception \$e) {}
+
 // Dealer adı
 $dealerName = '';
 if ($dealer) {
@@ -133,6 +159,29 @@ $pageTitle = match($page) {
     </div>
 
     <nav class="sidebar-nav">
+      <?php if (!empty($announcements)): ?>
+      <div class="nav-section">
+        <div class="nav-section-label" style="display:flex;align-items:center;gap:6px">
+          Duyurular
+          <?php if ($announceCount > 0): ?><span style="background:var(--red);color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:1px 6px"><?= $announceCount ?></span><?php endif; ?>
+        </div>
+        <?php foreach ($announcements as $ann):
+          $aColor = ['bilgi'=>'#2563eb','uyari'=>'#d97706','onemli'=>'#dc2626'][$ann['type']??'bilgi'];
+          $aIcon  = ['bilgi'=>'ℹ','uyari'=>'⚠','onemli'=>'🔴'][$ann['type']??'bilgi'];
+        ?>
+        <div style="margin:3px 0;padding:8px 12px;background:rgba(255,255,255,.05);border-left:3px solid <?= $aColor ?>;border-radius:0 6px 6px 0">
+          <div style="font-size:11px;font-weight:600;color:#fff;line-height:1.3">
+            <?= $aIcon ?> <?= h($ann['title']) ?>
+          </div>
+          <?php if ($ann['content']): ?>
+          <div style="font-size:10px;color:rgba(255,255,255,.55);margin-top:2px;line-height:1.4">
+            <?= h(mb_substr(strip_tags($ann['content']),0,70)) ?>
+          </div>
+          <?php endif; ?>
+        </div>
+        <?php endforeach; ?>
+      </div>
+      <?php endif; ?>
       <div class="nav-section">
         <div class="nav-section-label">Ana Menü</div>
         <a href="?page=dashboard" class="nav-item <?= $page==='dashboard'?'active':'' ?>">
@@ -203,7 +252,7 @@ $pageTitle = match($page) {
           🛒<?php if ($cartCount > 0): ?><span class="notif-dot"></span><?php endif; ?>
         </a>
         <a href="?page=notifications" class="topbar-btn">
-          🔔<?php if ($unread > 0): ?><span class="notif-dot"></span><?php endif; ?>
+          🔔<?php if ($unread > 0 || $announceCount > 0): ?><span class="notif-dot"></span><?php endif; ?>
         </a>
         <div class="dropdown">
           <div class="avatar" data-dropdown="user-menu"><?= mb_substr($dealerName, 0, 1) ?></div>
@@ -229,7 +278,7 @@ $pageTitle = match($page) {
     }
 
     echo '<div class="page-body">';
-    renderPage($page, compact('dealer', 'cartCount', 'currency', 'siteName'));
+    renderPage($page, compact('dealer', 'cartCount', 'currency', 'siteName', 'announcements', 'announceCount'));
     echo '</div>';
     ?>
   </div>
