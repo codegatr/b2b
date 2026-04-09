@@ -109,7 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
 
         auditLog('order_created', 'b2b_orders', $orderId, ['order_no'=>$orderNo]);
         $_SESSION['flash'] = ['type'=>'success','msg'=>"Sipariş #$orderNo oluşturuldu."];
-        header('Location: ?page=orders&action=detail&id='.$orderId);
+        header('Location: ?page=orders&action=detail&id='.$orderId.'&ordered=1');
         exit;
     }
 }

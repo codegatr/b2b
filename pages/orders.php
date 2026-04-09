@@ -107,6 +107,29 @@ if ($action === 'list') {
 
 <?php elseif ($action === 'detail' && $order): ?>
 
+<?php if (!empty($_GET['ordered'])): ?>
+<!-- ── SİPARİŞ ALINDI BANNER ── -->
+<?php
+$isAuto = ($order['status'] === 'onaylandi');
+?>
+<div style="background:<?= $isAuto ? 'linear-gradient(135deg,#f0fdf4,#dcfce7)' : 'linear-gradient(135deg,#eff6ff,#dbeafe)' ?>;border:1px solid <?= $isAuto ? '#86efac' : '#93c5fd' ?>;border-radius:12px;padding:28px 32px;margin-bottom:24px;display:flex;align-items:center;gap:20px">
+  <div style="font-size:48px;line-height:1"><?= $isAuto ? '🎉' : '✅' ?></div>
+  <div style="flex:1">
+    <div style="font-size:18px;font-weight:700;color:<?= $isAuto ? '#15803d' : '#1d4ed8' ?>;margin-bottom:4px">
+      <?= $isAuto ? 'Siparişiniz onaylandı!' : 'Siparişiniz alındı!' ?>
+    </div>
+    <div style="font-size:14px;color:<?= $isAuto ? '#166534' : '#1e40af' ?>;line-height:1.5">
+      <?php if ($isAuto): ?>
+        <strong><?= h($order['order_no']) ?></strong> numaralı siparişiniz otomatik olarak onaylandı ve hazırlanmaya başlandı.
+      <?php else: ?>
+        <strong><?= h($order['order_no']) ?></strong> numaralı siparişiniz alındı. Satış ekibimiz inceleyip en kısa sürede onaylayacak.
+      <?php endif; ?>
+    </div>
+  </div>
+  <a href="?page=orders" class="btn" style="background:<?= $isAuto ? '#16a34a' : '#2563eb' ?>;color:#fff;border:none;flex-shrink:0">Tüm Siparişler</a>
+</div>
+<?php endif; ?>
+
 <!-- Sipariş Başlık -->
 <div class="page-header">
   <div>

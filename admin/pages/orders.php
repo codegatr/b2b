@@ -362,6 +362,15 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
 
 <?php elseif ($action === 'detail' && $order): ?>
 
+<?php if (!empty($success)): ?>
+<?php $isApprove = str_contains($success, 'onaylandı'); ?>
+<div style="background:<?= $isApprove ? 'linear-gradient(135deg,#f0fdf4,#dcfce7)' : 'linear-gradient(135deg,#eff6ff,#dbeafe)' ?>;border:1px solid <?= $isApprove ? '#86efac' : '#93c5fd' ?>;border-radius:10px;padding:18px 24px;margin-bottom:20px;display:flex;align-items:center;gap:16px">
+  <span style="font-size:28px"><?= $isApprove ? '✅' : 'ℹ️' ?></span>
+  <div style="flex:1;font-size:14px;font-weight:600;color:<?= $isApprove ? '#15803d' : '#1d4ed8' ?>"><?= h($success) ?></div>
+</div>
+<?php endif; ?>
+<?php if (!empty($error)): ?><div class="alert alert-danger" style="margin-bottom:16px"><?= h($error) ?></div><?php endif; ?>
+
 <!-- Sipariş Detayı Başlık -->
 <div class="page-header">
   <div>
