@@ -565,8 +565,8 @@ document.getElementById('lf').addEventListener('submit',function(){
   <div style="position:relative;background:#fff;border-radius:16px;width:100%;max-width:420px;margin:16px;box-shadow:0 24px 64px rgba(0,0,0,.25);overflow:hidden;animation:fpIn .2s ease">
     <div style="background:#1e3a5f;padding:24px 28px;display:flex;align-items:center;justify-content:space-between">
       <div>
-        <div style="font-size:16px;font-weight:700;color:#fff">Sifre Sifirlama</div>
-        <div style="font-size:12px;color:rgba(255,255,255,.55);margin-top:2px">E-postaniza sifirlama baglantisi gonderilecek</div>
+        <div style="font-size:16px;font-weight:700;color:#fff">Şifre Sıfırlama</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.55);margin-top:2px">E-postanıza sıfırlama bağlantısı gönderilecek</div>
       </div>
       <button onclick="closeFP()" style="background:rgba(255,255,255,.12);border:none;border-radius:8px;width:32px;height:32px;cursor:pointer;color:#fff;font-size:20px;line-height:1;display:flex;align-items:center;justify-content:center">&times;</button>
     </div>
@@ -574,8 +574,8 @@ document.getElementById('lf').addEventListener('submit',function(){
       <?php if ($fpSuccess): ?>
       <div style="text-align:center;padding:8px 0 12px">
         <div style="font-size:48px;margin-bottom:14px">&#x1F4E7;</div>
-        <div style="font-size:15px;font-weight:700;color:#1a1d23;margin-bottom:8px">E-posta Gonderildi</div>
-        <div style="font-size:13px;color:#6b7280;line-height:1.6">Kayitli bir hesap bulunduysa sifirlama baglantisi gonderildi. Gelen kutunuzu kontrol edin.</div>
+        <div style="font-size:15px;font-weight:700;color:#1a1d23;margin-bottom:8px">E-posta Gönderildi</div>
+        <div style="font-size:13px;color:#6b7280;line-height:1.6">Kayıtlı bir hesap bulunduysa sıfırlama bağlantısı gönderildi. Gelen kutunuzu kontrol edin.</div>
         <button onclick="closeFP()" style="margin-top:20px;background:#1e3a5f;color:#fff;border:none;border-radius:8px;padding:11px 32px;font-size:14px;font-weight:600;cursor:pointer">Tamam</button>
       </div>
       <?php else: ?>
@@ -591,7 +591,7 @@ document.getElementById('lf').addEventListener('submit',function(){
                  onfocus="this.style.borderColor='#1e3a5f'" onblur="this.style.borderColor='#d1d5db'">
         </div>
         <button type="submit" style="width:100%;background:#dc2626;color:#fff;border:none;border-radius:8px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:.3px">
-          Sifirlama Baglantisi Gonder
+          Sıfırlama Bağlantısı Gönder
         </button>
       </form>
       <?php endif; ?>
