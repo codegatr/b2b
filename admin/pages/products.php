@@ -110,15 +110,19 @@ if ($action === 'list') {
     $search  = trim($_GET['q'] ?? '');
     $catId   = intval($_GET['cat'] ?? 0);
     $stock   = $_GET['stock'] ?? '';
+    $active  = $_GET['active'] ?? '';
     $perPage = 25;
     $page    = max(1, intval($_GET['p'] ?? 1));
     $offset  = ($page-1)*$perPage;
 
     $where = ['1=1']; $params = [];
-    if ($search) { $where[] = '(p.name LIKE ? OR p.sku LIKE ?)'; $s="%$search%"; $params[]=$s; $params[]=$s; }
+    if ($search) { $where[] = '(p.name LIKE ? OR p.sku LIKE ? OR p.barcode LIKE ?)'; $s="%$search%"; $params[]=$s; $params[]=$s; $params[]=$s; }
     if ($catId)  { $where[] = 'p.category_id=?'; $params[] = $catId; }
     if ($stock === 'critical') { $where[] = 'p.stock <= p.stock_critical AND p.stock > 0'; }
-    if ($stock === 'zero')     { $where[] = 'p.stock = 0'; }
+    elseif ($stock === 'zero') { $where[] = 'p.stock = 0'; }
+    elseif ($stock === 'ok')   { $where[] = 'p.stock > p.stock_critical'; }
+    if ($active === '1')       { $where[] = 'p.is_active=1'; }
+    elseif ($active === '0')   { $where[] = 'p.is_active=0'; }
 
     $w = implode(' AND ',$where);
     $total    = dbVal("SELECT COUNT(*) FROM b2b_products p WHERE $w", $params);
@@ -126,7 +130,15 @@ if ($action === 'list') {
         "SELECT p.*, c.name AS cat_name FROM b2b_products p LEFT JOIN b2b_categories c ON c.id=p.category_id WHERE $w ORDER BY p.name LIMIT $perPage OFFSET $offset",
         $params
     );
-    $pager = pagination($total, $perPage, $page, "?page=products&q=".urlencode($search)."&cat=$catId&stock=$stock&p=");
+    $pager = pagination($total, $perPage, $page, "?page=products&q=".urlencode($search)."&cat=$catId&stock=$stock&active=$active&p=");
+
+    // Stok özet sayıları
+    $stockCounts = [
+        'all'      => (int)dbVal("SELECT COUNT(*) FROM b2b_products"),
+        'ok'       => (int)dbVal("SELECT COUNT(*) FROM b2b_products WHERE stock > stock_critical"),
+        'critical' => (int)dbVal("SELECT COUNT(*) FROM b2b_products WHERE stock <= stock_critical AND stock > 0"),
+        'zero'     => (int)dbVal("SELECT COUNT(*) FROM b2b_products WHERE stock = 0"),
+    ];
 }
 ?>
 
@@ -134,7 +146,7 @@ if ($action === 'list') {
 <div class="page-header">
     <div>
         <h1 class="page-title">Ürünler</h1>
-        <p class="page-sub">Toplam <?= $total ?> ürün</p>
+        <p class="page-sub">Toplam <?= $total ?> ürün gösteriliyor</p>
     </div>
     <div class="btn-group">
         <a href="?page=categories" class="btn btn-ghost">Kategoriler</a>
@@ -143,22 +155,55 @@ if ($action === 'list') {
 </div>
 <?php if (!empty($success)): ?><div class="alert alert-success"><?= h($success) ?></div><?php endif; ?>
 
+<!-- Stok Hızlı Filtreler -->
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+    <?php
+    $stockFilters = [
+        ''         => ['label'=>'Tümü',          'count'=>$stockCounts['all'],      'color'=>'var(--text-2)',   'bg'=>'var(--bg)'],
+        'ok'       => ['label'=>'Stokta',         'count'=>$stockCounts['ok'],       'color'=>'var(--success)', 'bg'=>'#f0fdf4'],
+        'critical' => ['label'=>'Kritik Stok',    'count'=>$stockCounts['critical'], 'color'=>'var(--warning)', 'bg'=>'#fffbeb'],
+        'zero'     => ['label'=>'Stok Yok',       'count'=>$stockCounts['zero'],     'color'=>'var(--danger)',  'bg'=>'#fef2f2'],
+    ];
+    foreach ($stockFilters as $sv => $sf):
+        $isActive = $stock === $sv;
+        $href = "?page=products&q=".urlencode($search)."&cat=$catId&stock=$sv&active=$active";
+    ?>
+    <a href="<?= $href ?>" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;font-size:13px;font-weight:500;text-decoration:none;border:1px solid <?= $isActive?$sf['color']:'var(--border)' ?>;background:<?= $isActive?$sf['bg']:'#fff' ?>;color:<?= $sf['color'] ?>">
+        <?= h($sf['label']) ?>
+        <span style="background:<?= $sf['color'] ?>;color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:1px 6px;min-width:18px;text-align:center"><?= $sf['count'] ?></span>
+    </a>
+    <?php endforeach; ?>
+</div>
+
+<!-- Kategori Hızlı Filtreler -->
+<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">
+    <a href="?page=products&q=<?= urlencode($search) ?>&cat=0&stock=<?= $stock ?>&active=<?= $active ?>"
+       style="display:inline-flex;align-items:center;padding:5px 12px;border-radius:99px;font-size:12px;font-weight:500;text-decoration:none;border:1px solid <?= $catId===0?'var(--red)':'var(--border)' ?>;background:<?= $catId===0?'var(--red)':'#fff' ?>;color:<?= $catId===0?'#fff':'var(--text-2)' ?>">
+        Tümü
+    </a>
+    <?php foreach ($categories as $c): ?>
+    <?php $cnt = (int)dbVal("SELECT COUNT(*) FROM b2b_products WHERE category_id=?",[$c['id']]); ?>
+    <a href="?page=products&q=<?= urlencode($search) ?>&cat=<?= $c['id'] ?>&stock=<?= $stock ?>&active=<?= $active ?>"
+       style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:99px;font-size:12px;font-weight:500;text-decoration:none;border:1px solid <?= $catId==$c['id']?'var(--red)':'var(--border)' ?>;background:<?= $catId==$c['id']?'var(--red)':'#fff' ?>;color:<?= $catId==$c['id']?'#fff':'var(--text-2)' ?>">
+        <?= h($c['name']) ?>
+        <span style="font-size:10px;opacity:.75"><?= $cnt ?></span>
+    </a>
+    <?php endforeach; ?>
+</div>
+
+<!-- Arama + Aktif Filtresi -->
 <div class="filter-bar card mb-4">
     <form method="get" class="filter-form">
         <input type="hidden" name="page" value="products">
-        <input type="text" name="q" value="<?= h($search) ?>" placeholder="Ürün adı veya SKU…" class="form-control" style="max-width:240px">
-        <select name="cat" class="form-control" style="max-width:180px">
-            <option value="">Tüm Kategoriler</option>
-            <?php foreach ($categories as $c): ?>
-            <option value="<?= $c['id'] ?>" <?= $catId==$c['id']?'selected':'' ?>><?= h($c['name']) ?></option>
-            <?php endforeach; ?>
+        <input type="hidden" name="cat" value="<?= $catId ?>">
+        <input type="hidden" name="stock" value="<?= h($stock) ?>">
+        <input type="text" name="q" value="<?= h($search) ?>" placeholder="Ürün adı, SKU veya barkod…" class="form-control" style="max-width:280px">
+        <select name="active" class="form-control" style="max-width:140px">
+            <option value="">Tüm Durum</option>
+            <option value="1" <?= $active==='1'?'selected':'' ?>>Aktif</option>
+            <option value="0" <?= $active==='0'?'selected':'' ?>>Pasif</option>
         </select>
-        <select name="stock" class="form-control" style="max-width:160px">
-            <option value="">Tüm Stok</option>
-            <option value="critical" <?= $stock==='critical'?'selected':'' ?>>Kritik Stok</option>
-            <option value="zero"     <?= $stock==='zero'?'selected':'' ?>>Stok Yok</option>
-        </select>
-        <button type="submit" class="btn btn-secondary">Filtrele</button>
+        <button type="submit" class="btn btn-secondary">Ara</button>
         <a href="?page=products" class="btn btn-ghost">Temizle</a>
     </form>
 </div>
