@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($p && $p['status'] === 'bekliyor') {
             dbExec("UPDATE b2b_payments SET status='onaylandi', approved_by=?, approved_at=NOW() WHERE id=?", [adminId(), $pid]);
             // Cari alacak yaz
-            ledgerAdd($p['dealer_id'], 'alacak', $p['amount'], "Ödeme onaylandı: " . h($p['payment_method']), null, $pid, 'payment');
+            ledgerAdd($p['dealer_id'], 'alacak', $p['amount'], "Ödeme onaylandı: " . h($p['type']), 'payment', $pid);
             // Sipariş ödeme durumu güncelle
             if ($p['order_id']) {
                 $orderBalance = dbVal(
@@ -53,22 +53,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($act === 'manual') {
         $did    = intval($_POST['dealer_id']);
         $amount = floatval($_POST['amount']);
-        $method = $_POST['payment_method'] ?? 'nakit';
+        $method = $_POST['type'] ?? 'nakit';
         $note   = trim($_POST['note']);
         $date   = $_POST['payment_date'] ?: date('Y-m-d');
         if ($did > 0 && $amount > 0) {
             $newId = dbInsertRow('b2b_payments', [
                 'dealer_id'      => $did,
                 'amount'         => $amount,
-                'payment_method' => $method,
+                'type'           => $method,
                 'payment_date'   => $date,
-                'note'           => $note,
+                'dealer_note'    => $note,
                 'status'         => 'onaylandi',
                 'approved_by'    => adminId(),
                 'approved_at'    => date('Y-m-d H:i:s'),
                 'created_at'     => date('Y-m-d H:i:s'),
             ]);
-            ledgerAdd($did, 'alacak', $amount, "Manuel tahsilat: $note", null, $newId, 'payment');
+            ledgerAdd($did, 'alacak', $amount, "Manuel tahsilat: $note", 'payment', $newId);
             auditLog('payment_manual', 'b2b_payments', $newId, ['dealer_id'=>$did,'amount'=>$amount]);
             $success = 'Manuel tahsilat kaydedildi.';
         } else { $error = 'Bayi ve tutar zorunludur.'; }
@@ -141,7 +141,7 @@ $_tabs = ['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','reddedildi'=>'Reddedi
         <td><?= fmtDate($p['created_at']) ?></td>
         <td><a href="?page=dealers&action=detail&id=<?= $p['dealer_id'] ?>"><?= h($p['company_name']) ?></a></td>
         <td class="font-medium text-success"><?= money($p['amount']) ?></td>
-        <td><?= h($p['payment_method']) ?></td>
+        <td><?= h($p['type']) ?></td>
         <td>
             <?php if ($p['receipt_file']): ?>
             <a href="<?= h($p['receipt_file']) ?>" target="_blank" class="btn btn-xs btn-ghost">📄 Dekont</a>
@@ -166,9 +166,9 @@ $_tabs = ['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','reddedildi'=>'Reddedi
             <?php endif; ?>
         </td>
     </tr>
-    <?php if ($p['note']): ?>
+    <?php if ($p['dealer_note']): ?>
     <tr class="row-sub">
-        <td colspan="7" class="text-sm text-muted pl-6">Not: <?= h($p['note']) ?> <?= $p['admin_note'] ? '| Red: '.h($p['admin_note']) : '' ?></td>
+        <td colspan="7" class="text-sm text-muted pl-6">Not: <?= h($p['dealer_note']) ?> <?= $p['admin_note'] ? '| Red: '.h($p['admin_note']) : '' ?></td>
     </tr>
     <?php endif; ?>
     <?php endforeach; ?>
@@ -201,7 +201,7 @@ $_tabs = ['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','reddedildi'=>'Reddedi
             </div>
             <div class="form-group">
                 <label>Ödeme Yöntemi</label>
-                <select name="payment_method" class="form-control">
+                <select name="type" class="form-control">
                     <option value="havale">Havale/EFT</option>
                     <option value="nakit">Nakit</option>
                     <option value="kredi_karti">Kredi Kartı</option>

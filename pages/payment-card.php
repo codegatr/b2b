@@ -51,7 +51,7 @@ if ($step === 'callback' && isset($_POST['ThreeDSessionId'])) {
                 dbExec("UPDATE b2b_orders SET payment_status='odendi' WHERE id=?", [$orderId]);
 
                 $_SESSION['flash'] = ['type'=>'success','msg'=>'Ödeme başarıyla tamamlandı!'];
-                header('Location: ?page=order&id=' . $orderId);
+                header('Location: ?page=orders&action=detail&id=' . $orderId);
                 exit;
             }
             $error = '3DS doğrulandı ancak provizyon başarısız.';
@@ -111,7 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 'card') {
     <h1 class="page-title">Kart ile Ödeme</h1>
     <p class="page-sub">Sipariş: <strong><?= h($order['order_no']) ?></strong> — Tutar: <strong><?= money((float)$order['grand_total']) ?></strong></p>
   </div>
-  <a href="?page=order&id=<?= $orderId ?>" class="btn btn-secondary">← Geri</a>
+  <a href="?page=orders&action=detail&id=<?= $orderId ?>" class="btn btn-secondary">← Geri</a>
 </div>
 
 <?php if ($error): ?>

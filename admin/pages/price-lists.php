@@ -28,7 +28,7 @@ if (isPost() && $action === 'save-list') {
         $_SESSION['flash_admin'] = ['type'=>'success','msg'=>'Fiyat listesi oluşturuldu.'];
     }
     auditLog('price_list_save','b2b_price_lists',$listId);
-    header("Location: ?page=price-list&id=$listId&action=items");
+    header("Location: ?page=price-lists&id=$listId&action=items");
     exit;
 }
 
@@ -77,7 +77,7 @@ if (isPost() && $action === 'assign-dealers') {
         dbExec("UPDATE b2b_dealers SET price_list_id=$listId WHERE id IN($in)");
         $_SESSION['flash_admin'] = ['type'=>'success','msg'=>count($dealerIds).' bayiye atandı.'];
     }
-    header("Location: ?page=price-list&id=$listId&action=dealers");
+    header("Location: ?page=price-lists&id=$listId&action=dealers");
     exit;
 }
 
@@ -108,7 +108,7 @@ if (isPost() && $action === 'import-csv' && isset($_FILES['csv'])) {
         fclose($handle);
         $_SESSION['flash_admin'] = ['type'=>'success','msg'=>"$imported ürün fiyatı içe aktarıldı.".($errors?" ".count($errors)." hata.":'')];
     }
-    header("Location: ?page=price-list&id=$listId&action=items");
+    header("Location: ?page=price-lists&id=$listId&action=items");
     exit;
 }
 
@@ -117,7 +117,7 @@ if ($action === 'list' || !$listId): ?>
 <div class="page-body">
 <div class="card-header" style="margin-bottom:16px;padding:0">
   <h2 style="font-size:16px;flex:1">Fiyat Listeleri</h2>
-  <a href="?page=price-list&action=edit" class="btn btn-primary">+ Yeni Liste</a>
+  <a href="?page=price-lists&action=edit" class="btn btn-primary">+ Yeni Liste</a>
 </div>
 
 <?php
@@ -150,9 +150,9 @@ $lists = dbRows("SELECT pl.*, COUNT(pli.id) as item_count,
   <td><?= $l['is_active'] ? '<span class="badge badge-success">Aktif</span>' : '<span class="badge badge-secondary">Pasif</span>' ?></td>
   <td>
     <div class="btn-group">
-      <a href="?page=price-list&id=<?= $l['id'] ?>&action=items" class="btn btn-secondary btn-sm">Fiyatlar</a>
-      <a href="?page=price-list&id=<?= $l['id'] ?>&action=dealers" class="btn btn-secondary btn-sm">Bayiler</a>
-      <a href="?page=price-list&id=<?= $l['id'] ?>&action=edit" class="btn btn-secondary btn-sm">Düzenle</a>
+      <a href="?page=price-lists&id=<?= $l['id'] ?>&action=items" class="btn btn-secondary btn-sm">Fiyatlar</a>
+      <a href="?page=price-lists&id=<?= $l['id'] ?>&action=dealers" class="btn btn-secondary btn-sm">Bayiler</a>
+      <a href="?page=price-lists&id=<?= $l['id'] ?>&action=edit" class="btn btn-secondary btn-sm">Düzenle</a>
     </div>
   </td>
 </tr>
@@ -172,7 +172,7 @@ $lists = dbRows("SELECT pl.*, COUNT(pli.id) as item_count,
     <h2><?= $list ? 'Liste Düzenle' : 'Yeni Fiyat Listesi' ?></h2>
   </div>
   <div class="card-body">
-    <form method="post" action="?page=price-list&id=<?= $listId ?>&action=save-list">
+    <form method="post" action="?page=price-lists&id=<?= $listId ?>&action=save-list">
       <?= csrfField() ?>
       <div class="form-group">
         <label class="form-label">Liste Adı *</label>
@@ -247,7 +247,7 @@ $products = dbRows(
     <div class="text-muted fs-12">Global iskonto: %<?= $list['discount_percent'] ?></div>
   </div>
   <div class="btn-group">
-    <a href="?page=price-list&id=<?= $listId ?>&action=edit" class="btn btn-secondary btn-sm">Düzenle</a>
+    <a href="?page=price-lists&id=<?= $listId ?>&action=edit" class="btn btn-secondary btn-sm">Düzenle</a>
     <button class="btn btn-primary btn-sm" data-modal-open="modal-add-price">+ Ürün Ekle</button>
     <button class="btn btn-secondary btn-sm" data-modal-open="modal-import">CSV İçe Aktar</button>
   </div>
@@ -297,14 +297,14 @@ $products = dbRows(
 </div>
 <div class="card-footer">
   <span class="text-muted fs-12">Toplam <?= count($items) ?> ürün · Listede olmayan ürünlere global iskonto uygulanır</span>
-  <a href="?page=price-list&id=<?= $listId ?>&action=export-csv" class="btn btn-secondary btn-sm" style="margin-left:auto">CSV İndir</a>
+  <a href="?page=price-lists&id=<?= $listId ?>&action=export-csv" class="btn btn-secondary btn-sm" style="margin-left:auto">CSV İndir</a>
 </div>
 </div>
 
 <!-- Alt navigasyon -->
 <div style="display:flex;gap:12px;margin-top:16px">
   <a href="?page=price-lists" class="btn btn-secondary btn-sm">← Tüm Listeler</a>
-  <a href="?page=price-list&id=<?= $listId ?>&action=dealers" class="btn btn-secondary btn-sm">Bayi Atamaları →</a>
+  <a href="?page=price-lists&id=<?= $listId ?>&action=dealers" class="btn btn-secondary btn-sm">Bayi Atamaları →</a>
 </div>
 </div>
 
@@ -316,7 +316,7 @@ $products = dbRows(
       <button class="btn btn-ghost btn-icon" data-modal-close>✕</button>
     </div>
     <div class="modal-body">
-      <form id="form-price-item" method="post" action="?page=price-list&id=<?= $listId ?>&action=save-item">
+      <form id="form-price-item" method="post" action="?page=price-lists&id=<?= $listId ?>&action=save-item">
         <?= csrfField() ?>
         <input type="hidden" name="item_id" id="price-item-id">
         <div class="form-group">
@@ -369,7 +369,7 @@ $products = dbRows(
         Örnek: <code>URN001;150.00;10</code><br>
         Separator: noktalı virgül (;) · İlk satır header olarak atlanır
       </div>
-      <form method="post" enctype="multipart/form-data" action="?page=price-list&id=<?= $listId ?>&action=import-csv">
+      <form method="post" enctype="multipart/form-data" action="?page=price-lists&id=<?= $listId ?>&action=import-csv">
         <?= csrfField() ?>
         <div class="form-group">
           <div class="file-drop" onclick="this.querySelector('input').click()">
@@ -402,7 +402,7 @@ function editPriceItem(id, productId, name, price, discount, minQty) {
 
 function deletePriceItem(id) {
   confirmAction('Bu fiyat kaydını silmek istediğinize emin misiniz?', async () => {
-    const r = await apiPost('?page=price-list&id=<?= $listId ?>&action=delete-item', { item_id: id });
+    const r = await apiPost('?page=price-lists&id=<?= $listId ?>&action=delete-item', { item_id: id });
     if (r.ok) location.reload();
   });
 }
@@ -416,7 +416,7 @@ $dealers = dbRows("SELECT id,company_name,first_name,last_name,type,price_list_i
 <div class="page-body">
 <div class="card-header" style="padding:0;margin-bottom:16px">
   <h2 style="font-size:16px"><?= h($list['name']??'') ?> — Bayi Atamaları</h2>
-  <a href="?page=price-list&id=<?= $listId ?>&action=items" class="btn btn-secondary btn-sm">← Fiyatlar</a>
+  <a href="?page=price-lists&id=<?= $listId ?>&action=items" class="btn btn-secondary btn-sm">← Fiyatlar</a>
 </div>
 <div class="card">
   <div class="card-header">
@@ -424,7 +424,7 @@ $dealers = dbRows("SELECT id,company_name,first_name,last_name,type,price_list_i
     <span class="text-muted fs-12">Seçilen bayilere bu fiyat listesi atanır</span>
   </div>
   <div class="card-body">
-    <form method="post" action="?page=price-list&id=<?= $listId ?>&action=assign-dealers">
+    <form method="post" action="?page=price-lists&id=<?= $listId ?>&action=assign-dealers">
       <?= csrfField() ?>
       <div style="max-height:380px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px">
         <?php foreach ($dealers as $d):

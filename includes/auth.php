@@ -146,3 +146,13 @@ function generateResetToken(string $email, string $userType = 'dealer'): ?string
 function clientIp(): string {
     return $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 }
+
+/** Oturumdaki admin ID'sini döndür */
+function adminId(): int {
+    return (int)($_SESSION['admin_id'] ?? 0);
+}
+
+/** Oturumdaki bayi ID'sini döndür */
+function dealerId(): int {
+    return (int)($_SESSION['dealer_id'] ?? 0);
+}

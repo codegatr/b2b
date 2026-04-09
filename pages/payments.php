@@ -11,7 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'new_p
     csrfCheck();
     $orderId  = intval($_POST['order_id'] ?? 0);
     $amount   = floatval($_POST['amount'] ?? 0);
-    $method   = trim($_POST['payment_method'] ?? '');
+    $method   = trim($_POST['type'] ?? '');
     $bankName = trim($_POST['bank_name'] ?? '');
     $ref      = trim($_POST['transaction_ref'] ?? '');
     $note     = trim($_POST['dealer_note'] ?? '');
@@ -82,7 +82,7 @@ $bankAccounts = setting('bank_accounts', '');
       <div class="form-grid-2">
         <div class="form-group">
           <label class="form-label">Ödeme Yöntemi</label>
-          <select name="payment_method" class="form-control" required>
+          <select name="type" class="form-control" required>
             <option value="">Seçiniz</option>
             <option value="havale">Havale / EFT</option>
             <option value="kredi_karti">Kredi Kartı</option>
