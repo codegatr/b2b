@@ -10,6 +10,50 @@ $offset   = ($curPage - 1) * $perPage;
 
 $success = ''; $error = '';
 
+// ── PDF Export ───────────────────────────────────────────────
+if (isset($_GET['export']) && $_GET['export'] === 'pdf' && $dealerId) {
+    $dlr     = dbRow("SELECT * FROM b2b_dealers WHERE id=?", [$dealerId]);
+    $bal     = (float)dbVal("SELECT COALESCE(SUM(CASE WHEN type='borc' THEN amount ELSE -amount END),0) FROM b2b_ledger WHERE dealer_id=? AND is_closed=0", [$dealerId]);
+    $ents    = dbRows("SELECT * FROM b2b_ledger WHERE dealer_id=? ORDER BY created_at DESC", [$dealerId]);
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8">
+    <title>Cari Ekstre — '.htmlspecialchars($dlr['company_name']??'').'</title>
+    <style>
+      body{font-family:Arial,sans-serif;font-size:12px;margin:20px}
+      h2{margin:0 0 4px}
+      .meta{color:#666;margin-bottom:16px}
+      table{width:100%;border-collapse:collapse;margin-top:12px}
+      th{background:#f4f4f4;padding:6px 8px;text-align:left;border:1px solid #ddd;font-size:11px}
+      td{padding:6px 8px;border:1px solid #eee;font-size:11px}
+      .borc{color:#dc2626;font-weight:600}
+      .alacak{color:#16a34a;font-weight:600}
+      .closed{opacity:.5}
+      .total{background:#f9f9f9;font-weight:700}
+      @media print{body{margin:0}}
+    </style></head><body>';
+    echo '<h2>'.htmlspecialchars($dlr['company_name']??'').'</h2>';
+    echo '<div class="meta">Cari Hesap Ekstresi &nbsp;·&nbsp; '.date('d.m.Y H:i').'</div>';
+    echo '<table><tr><th>Tarih</th><th>Açıklama</th><th style="text-align:right">Borç</th><th style="text-align:right">Alacak</th><th>Vade</th><th>Durum</th></tr>';
+    $sub = $alc = 0;
+    foreach ($ents as $e) {
+        $cls = $e['is_closed'] ? ' class="closed"' : '';
+        echo '<tr'.$cls.'>';
+        echo '<td>'.date('d.m.Y', strtotime($e['created_at'])).'</td>';
+        echo '<td>'.htmlspecialchars($e['description']).'</td>';
+        if ($e['type']==='borc') { echo '<td class="borc" style="text-align:right">'.number_format($e['amount'],2,',','.').'</td><td></td>'; $sub+=$e['amount']; }
+        else { echo '<td></td><td class="alacak" style="text-align:right">'.number_format($e['amount'],2,',','.').'</td>'; $alc+=$e['amount']; }
+        echo '<td>'.($e['due_date']?date('d.m.Y',strtotime($e['due_date'])):'—').'</td>';
+        echo '<td>'.($e['is_closed']?'Kapalı':'Açık').'</td>';
+        echo '</tr>';
+    }
+    echo '<tr class="total"><td colspan="2">TOPLAM</td>';
+    echo '<td style="text-align:right;color:#dc2626">'.number_format($sub,2,',','.').'</td>';
+    echo '<td style="text-align:right;color:#16a34a">'.number_format($alc,2,',','.').'</td>';
+    echo '<td colspan="2">Net: '.number_format($bal,2,',','.').' ₺</td></tr>';
+    echo '</table><script>window.print()</script></body></html>';
+    exit;
+}
+
 // ── POST Handler ───────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrfCheck();
@@ -225,8 +269,14 @@ $genelAlacak = array_sum(array_column($cariList, 'toplam_alacak'));
   <div class="card-header">
     <h3 class="card-title">Cari Hareketler</h3>
     <div style="display:flex;gap:8px">
-      <button class="btn btn-sm btn-primary" onclick="openModal('modal-tahsilat')" style="background:#16a34a;border-color:#16a34a">+ Tahsilat</button>
-      <button class="btn btn-sm btn-primary" onclick="openModal('modal-tediye')" style="background:#dc2626;border-color:#dc2626">− Tediye</button>
+      <button onclick="window.print()" class="btn btn-secondary btn-sm" title="Yazdır">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Yazdır
+      </button>
+      <a href="?page=ledger&dealer_id=<?= $dealerId ?>&export=pdf" class="btn btn-secondary btn-sm" title="PDF İndir">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        PDF
+      </a>
     </div>
   </div>
   <div class="table-wrap">

@@ -548,3 +548,13 @@ hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
   padding: 0 24px 20px;
   display: flex; justify-content: flex-end; gap: 8px;
 }
+
+/* ── Print Styles ──────────────────────────────────────────────────────────── */
+@media print {
+  .sidebar, .topbar, .page-header .btn, .modal-overlay,
+  .admin-version, .nav-section, button:not(.print-keep) { display:none !important; }
+  .main-content { margin:0 !important; padding:0 !important; }
+  .card { box-shadow:none !important; border:1px solid #ddd !important; }
+  body { background:#fff !important; }
+  a { color:inherit !important; text-decoration:none !important; }
+}

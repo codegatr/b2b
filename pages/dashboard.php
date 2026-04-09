@@ -33,13 +33,17 @@ $upcomingDue = dbRows(
 // Aktif duyurular
 $announcements = [];
 try {
-    $announcements = dbRows(
-        "SELECT * FROM b2b_announcements WHERE is_active=1
-         AND (starts_at IS NULL OR starts_at <= NOW())
-         AND (ends_at IS NULL OR ends_at >= NOW())
-         ORDER BY created_at DESC LIMIT 5"
-    );
-} catch (Exception $e) { /* Tablo henüz oluşturulmamış olabilir */ }
+    // Tablo var mı kontrol et
+    $tblCheck = db()->query("SHOW TABLES LIKE 'b2b_announcements'")->fetchAll();
+    if (!empty($tblCheck)) {
+        $announcements = dbRows(
+            "SELECT * FROM b2b_announcements WHERE is_active=1
+             AND (starts_at IS NULL OR starts_at <= NOW())
+             AND (ends_at IS NULL OR ends_at >= NOW())
+             ORDER BY created_at DESC LIMIT 5"
+        );
+    }
+} catch (Exception $e) { /* sessizce geç */ }
 ?>
 
 <div class="page-header">
