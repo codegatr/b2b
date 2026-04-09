@@ -84,7 +84,7 @@ try {
         );
         $announceCount = count($announcements);
     }
-} catch (Exception \$e) {}
+} catch (Exception $e) {}
 
 // Dealer adı
 $dealerName = '';
