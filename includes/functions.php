@@ -390,14 +390,15 @@ function sendMail(string $to, string $subject, string $html): bool {
         $fromEmail = 'noreply@' . $host;
     }
     $encSubj = '=?UTF-8?B?' . base64_encode($subject) . '?=';
+    $encFrom = '=?UTF-8?B?' . base64_encode($fromName) . '?=';
     $headers  = implode("\r\n", [
-        "From: $fromName <$fromEmail>",
+        "From: $encFrom <$fromEmail>",
         "Reply-To: $fromEmail",
         "MIME-Version: 1.0",
         "Content-Type: text/html; charset=UTF-8",
         "X-Mailer: PHP/" . phpversion(),
     ]);
-    return @mail($to, $encSubj, $html, $headers);
+    return mail($to, $encSubj, $html, $headers);
 }
 
 /** SMTP ile gönder — cURL tabanlı, blocking yok */

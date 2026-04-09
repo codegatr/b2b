@@ -42,34 +42,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $resetLink = $siteUrl . '/?page=forgot-password&token=' . $tok;
             $from      = setting('smtp_from_email', 'noreply@' . ($_SERVER['HTTP_HOST'] ?? 'localhost'));
 
-            $subject = $siteName . ' — Şifre Sıfırlama';
-            $content = '
-<p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.7">
-  Merhaba,<br><br>
-  Şifre sıfırlama talebinizi aldık. Aşağıdaki butona tıklayarak yeni şifrenizi belirleyebilirsiniz.
-</p>
-<div style="text-align:center;margin:32px 0">
-  <a href="' . $resetLink . '"
-     style="display:inline-block;background:#dc2626;color:#ffffff;text-decoration:none;
-            font-size:15px;font-weight:700;padding:14px 36px;border-radius:8px;
-            letter-spacing:0.3px">
-    Şifremi Sıfırla
-  </a>
-</div>
-<p style="margin:0 0 8px;font-size:13px;color:#6b7280;line-height:1.6">
-  Butona tıklayamıyorsanız aşağıdaki bağlantıyı tarayıcınıza yapıştırın:
-</p>
-<p style="margin:0 0 20px;font-size:12px;word-break:break-all">
-  <a href="' . $resetLink . '" style="color:#2563eb">' . $resetLink . '</a>
-</p>
-<div style="background:#fef9f0;border:1px solid #fde68a;border-radius:8px;padding:14px 18px">
-  <p style="margin:0;font-size:13px;color:#92400e">
-    ⚠️ Bu bağlantı <strong>1 saat</strong> geçerlidir. Eğer bu talebi siz yapmadıysanız bu e-postayı dikkate almayın.
-  </p>
-</div>
-';
-            $html = mailTemplate('Şifre Sıfırlama', $content);
-            sendMail($email, $subject, $html);
+            $subject  = $siteName . ' - Sifre Sifirlama';
+            $logoFile = setting('login_image', '');
+            $logoHtml = $logoFile
+                ? '<img src="' . $siteUrl . '/uploads/logo/' . $logoFile . '" alt="' . htmlspecialchars($siteName) . '" style="height:44px;max-width:180px;object-fit:contain">'
+                : '<span style="font-size:20px;font-weight:800;color:#ffffff">' . htmlspecialchars($siteName) . '</span>';
+
+            $html = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,sans-serif">'
+                . '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:40px 16px"><tr><td align="center">'
+                . '<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">'
+                . '<tr><td style="background:#1e3a5f;border-radius:12px 12px 0 0;padding:28px 40px;text-align:center">' . $logoHtml . '</td></tr>'
+                . '<tr><td style="background:#ffffff;padding:40px 48px">'
+                . '<h2 style="margin:0 0 20px;font-size:20px;font-weight:700;color:#1a1d23">Sifre Sifirlama</h2>'
+                . '<p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.7">Merhaba,<br><br>Sifre sifirlama talebinizi aldik. Asagidaki butona tiklayarak yeni sifrenizi belirleyebilirsiniz.</p>'
+                . '<div style="text-align:center;margin:32px 0">'
+                . '<a href="' . $resetLink . '" style="display:inline-block;background:#dc2626;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:14px 36px;border-radius:8px">Sifremi Sifirla</a>'
+                . '</div>'
+                . '<p style="margin:0 0 8px;font-size:13px;color:#6b7280">Butona tikklayamiyor saniz asagidaki baglantiy tarayiciniza yapistirin:</p>'
+                . '<p style="margin:0 0 20px;font-size:12px;word-break:break-all"><a href="' . $resetLink . '" style="color:#2563eb">' . $resetLink . '</a></p>'
+                . '<div style="background:#fef9f0;border:1px solid #fde68a;border-radius:8px;padding:14px 18px">'
+                . '<p style="margin:0;font-size:13px;color:#92400e">Bu baglanti <strong>1 saat</strong> gecerlidir.</p>'
+                . '</div>'
+                . '<hr style="border:none;border-top:1px solid #e5e7eb;margin:32px 0">'
+                . '<p style="margin:0;font-size:12px;color:#9ca3af">Bu e-posta ' . htmlspecialchars($siteName) . ' B2B Bayi Portali tarafindan gonderilmistir.</p>'
+                . '</td></tr>'
+                . '<tr><td style="background:#f8fafc;border-radius:0 0 12px 12px;padding:20px 40px;text-align:center;border-top:1px solid #e5e7eb">'
+                . '<p style="margin:0;font-size:12px;color:#6b7280">&copy; ' . date('Y') . ' ' . htmlspecialchars($siteName) . '</p>'
+                . '</td></tr>'
+                . '</table></td></tr></table></body></html>';
+
+            $headers = implode("\r\n", [
+                'From: ' . $siteName . ' <' . $from . '>',
+                'MIME-Version: 1.0',
+                'Content-Type: text/html; charset=UTF-8',
+            ]);
+            @mail($email, $subject, $html, $headers);
         }
         $step = 'sent';
     }
