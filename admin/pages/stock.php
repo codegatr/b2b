@@ -53,10 +53,10 @@ $search  = trim($_GET['q'] ?? '');
 
 $where  = ['1=1'];
 $params = [];
+$where[] = 'p.is_active=1';  // her zaman sadece aktif ürünler
 if ($filter === 'ok')   { $where[] = 'p.stock > p.stock_critical'; }
-if ($filter === 'low')  { $where[] = 'p.stock > 0 AND p.stock <= p.stock_critical'; }
-if ($filter === 'none') { $where[] = 'p.stock <= 0'; }
-$where[] = 'p.is_active=1';
+elseif ($filter === 'low')  { $where[] = 'p.stock > 0 AND p.stock <= p.stock_critical'; }
+elseif ($filter === 'none') { $where[] = 'p.stock <= 0'; }
 if ($search) { $where[] = '(p.name LIKE ? OR p.sku LIKE ?)'; $s="%$search%"; $params[]=$s; $params[]=$s; }
 
 $products = dbRows(

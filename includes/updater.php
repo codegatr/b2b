@@ -135,9 +135,6 @@ class B2BUpdater {
         // commit.txt kaydet
         file_put_contents($this->root . '/commit.txt', $commit['sha']);
 
-        // Migration'ları çalıştır
-        $this->runMigrations();
-
         // DB cache'i güncelle — badge anında kapansın
         settingSave('update_latest_sha',  $commit['sha']);
         settingSave('update_last_check',  (string)time());
@@ -158,7 +155,7 @@ class B2BUpdater {
             ]
         );
 
-        $migrations = $this->runMigrations();
+        $migrations = ['run'=>0,'errors'=>[]];
 
         return [
             'ok'        => true,
@@ -226,6 +223,62 @@ class B2BUpdater {
     public function update(string $targetVersion): array {
         return $this->updateFromRelease($targetVersion);
     }
+
+    /**
+     * migrations/ klasöründeki SQL dosyalarını çalıştır.
+     * Her migration bir kez çalışır (b2b_settings'de takip edilir).
+     */
+    public function runMigrations(): array {
+        $migrDir = $this->root . '/migrations';
+        if (!is_dir($migrDir)) return ['run' => 0, 'errors' => []];
+
+        $applied = [];
+        try {
+            $stored = setting('applied_migrations', '[]');
+            $applied = json_decode($stored, true) ?: [];
+        } catch (\Exception $e) {}
+
+        $run = 0; $errors = [];
+        $files = glob($migrDir . '/migration_*.sql');
+        if ($files) sort($files);
+
+        foreach ((array)$files as $file) {
+            $name = basename($file);
+            if (in_array($name, $applied)) continue;
+
+            $sql        = file_get_contents($file);
+            $ok         = true;
+            // Noktalı virgülle böl, yorum satırlarını atla
+            $raw_stmts  = explode(';', $sql);
+            foreach ($raw_stmts as $stmt) {
+                $stmt = trim($stmt);
+                if ($stmt === '' || str_starts_with(ltrim($stmt), '--')) continue;
+                try {
+                    db()->exec($stmt);
+                } catch (\PDOException $e) {
+                    $msg = $e->getMessage();
+                    // Zaten var hataları tolere et
+                    if (str_contains($msg, 'Duplicate column') ||
+                        str_contains($msg, 'already exists') ||
+                        str_contains($msg, 'Multiple primary key')) {
+                        continue;
+                    }
+                    $errors[] = "$name: $msg";
+                    $ok = false;
+                    break;
+                }
+            }
+
+            if ($ok) {
+                $applied[] = $name;
+                settingSave('applied_migrations', json_encode($applied));
+                settingClearCache();
+                $run++;
+            }
+        }
+        return ['run' => $run, 'errors' => $errors];
+    }
+
 
     // Rollback
     public function rollback(string $backupFile): array {
