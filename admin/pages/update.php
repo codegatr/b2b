@@ -42,16 +42,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $result = $updater->updateFromBranch();
             if ($result['success']) {
-                $fc = is_array($result['files'] ?? null) ? count($result['files']) : 0;
+                $fc   = is_array($result['files'] ?? null) ? count($result['files']) : 0;
                 $sha  = $result['commit']['sha_short'] ?? '';
                 $migr = $result['migrations'] ?? ['run'=>0,'errors'=>[]];
-                $success = "Güncelleme tamamlandı! {$fc} dosya güncellendi. Commit: {$sha}";
+                $msg  = "✅ Güncelleme tamamlandı! {$fc} dosya güncellendi. Commit: {$sha}";
                 if (($migr['run'] ?? 0) > 0) {
-                    $success .= " · {$migr['run']} migration çalıştırıldı.";
+                    $msg .= " · {$migr['run']} migration çalıştırıldı.";
                 }
                 if (!empty($migr['errors'])) {
-                    $success .= " ⚠️ Migration hatası: " . implode(', ', $migr['errors']);
+                    $msg .= " ⚠️ Migration hatası: " . implode(', ', $migr['errors']);
                 }
+                // PRG — güncellenen sayfa kendi kendini render etsin
+                $_SESSION['flash_admin'] = ['type'=>'success','msg'=>$msg];
+                header('Location: ?page=update&updated=1');
+                exit;
                 // Güncelleme sonrası bekleyen migration varsa otomatik çalıştır
                 $pending = migrationGetPending();
                 if ($pending) {
@@ -118,6 +122,21 @@ $hasBranchUpdate = $latestCommit && ($latestCommit['sha'] !== $installedSha);
 $migStatus       = migrationStatus();
 $hasPending      = !empty($migStatus['pending']);
 ?>
+
+<?php if ($justUpdated && !empty($_SESSION['flash_admin'])): ?>
+<?php endif; ?>
+<?php if ($justUpdated): ?>
+<div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:2px solid #22c55e;border-radius:12px;padding:20px 24px;margin-bottom:24px;display:flex;align-items:center;gap:16px">
+  <div style="font-size:32px">✅</div>
+  <div>
+    <div style="font-weight:700;font-size:16px;color:#15803d">Güncelleme Başarıyla Tamamlandı!</div>
+    <div style="font-size:13px;color:#166534;margin-top:4px">
+      Yüklü sürüm: <strong>v<?= h($currentVersion) ?></strong>
+      <?php if ($installedSha): ?> · Commit: <code><?= h(substr($installedSha,0,7)) ?></code><?php endif; ?>
+    </div>
+  </div>
+</div>
+<?php endif; ?>
 
 <div class="page-header">
   <div>
@@ -242,13 +261,19 @@ $hasPending      = !empty($migStatus['pending']);
       ✓ Sistem güncel — yüklü: <code><?= h(substr($installedSha,0,7)) ?></code>
     </p>
     <?php endif; ?>
-    <form method="POST">
+    <form method="POST" id="form-branch-update">
       <?= csrfField() ?>
       <input type="hidden" name="form_action" value="update_branch">
-      <button type="submit" class="btn btn-primary"
-        onclick="return confirm('Branch güncellemesi yapılacak. Yedek otomatik alınır. Devam?')">
+      <button type="submit" id="btn-branch-update" class="btn btn-primary" style="min-width:200px"
+              onclick="return startUpdate(this)">
         <?= $hasBranchUpdate ? '⬆️ Güncellemeyi Yükle' : '🔄 Yeniden Yükle (zorla)' ?>
       </button>
+      <div id="update-progress" style="display:none;margin-top:12px">
+        <div style="height:4px;background:var(--border);border-radius:4px;overflow:hidden;width:100%;max-width:320px">
+          <div id="update-bar" style="height:4px;width:0;background:linear-gradient(90deg,#ed2939,#f59e0b);border-radius:4px;transition:width 5s linear"></div>
+        </div>
+        <div id="update-msg" style="font-size:12px;color:var(--text-muted);margin-top:6px">Başlatılıyor...</div>
+      </div>
     </form>
     <?php else: ?>
     <p style="color:var(--text-muted)">GitHub bağlantısı kurulamadı. <a href="?page=settings&tab=github">Token ve repo ayarlarını kontrol edin.</a></p>

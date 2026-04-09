@@ -17,8 +17,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($ord) {
             dbExec("DELETE FROM b2b_order_items WHERE order_id=?", [$oid]);
             dbExec("DELETE FROM b2b_orders WHERE id=?", [$oid]);
+            // Ledger kayıtlarını da sil
+            dbExec("DELETE FROM b2b_ledger WHERE reference_type='order' AND reference_id=?", [$oid]);
             auditLog('order_deleted', 'b2b_orders', $oid, ['order_no' => $ord['order_no']]);
-            $_SESSION['flash_admin'] = ['type' => 'success', 'msg' => "#{$ord['order_no']} siparişi silindi."];
+            $_SESSION['flash_admin'] = ['type' => 'success', 'msg' => "#{$ord['order_no']} siparişi ve cari kaydı silindi."];
         }
         header('Location: ?page=orders');
         exit;
