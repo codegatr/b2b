@@ -39,7 +39,7 @@ class Parasut {
             'grant_type'    => 'password',
             'client_id'     => setting('parasut_client_id'),
             'client_secret' => setting('parasut_client_secret'),
-            'username'      => setting('parasut_username'),
+            'username'      => setting('parasut_email'),
             'password'      => setting('parasut_password'),
             'redirect_uri'  => 'urn:ietf:wg:oauth:2.0:oob',
         ], false);
@@ -229,10 +229,20 @@ class Parasut {
     }
 
     /** Bağlantı testi */
-    public function testConnection(): bool {
-        if (!$this->companyId) return false;
+    public function testConnection(): array {
+        if (empty($this->companyId)) {
+            throw new Exception('Firma ID girilmemiş.');
+        }
         $token = $this->getToken();
-        return $token !== null;
+        if (!$token) {
+            throw new Exception('Token alınamadı. E-posta/şifre/client bilgilerini kontrol edin.');
+        }
+        // Firma bilgisi çek
+        $r = $this->http('GET', $this->endpoint('me'));
+        if (empty($r['data'])) {
+            throw new Exception('Firma bilgisi alınamadı (HTTP hata). Firma ID doğru mu?');
+        }
+        return $r;
     }
 }
 

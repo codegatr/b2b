@@ -86,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Paraşüt
     if ($tab === 'parasut') {
-        foreach (['parasut_email','parasut_company_id','parasut_sales_account','parasut_bank_account'] as $f) {
+        foreach (['parasut_email','parasut_company_id','parasut_sales_account','parasut_bank_account','parasut_client_id','parasut_client_secret'] as $f) {
             settingSave($f, trim($_POST[$f] ?? ''));
         }
         if (!empty($_POST['parasut_password'])) settingSave('parasut_password', $_POST['parasut_password']);
@@ -94,7 +94,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         settingSave('parasut_token_expires', '');
         settingSave('parasut_auto_invoice', isset($_POST['parasut_auto_invoice'])?'1':'0');
         settingClearCache();
-        header('Location: ?page=settings&tab=parasut&saved=1');
+        // Test butonu ile geldiyse → test URL'sine yönlendir
+        if (!empty($_POST['do_test_parasut'])) {
+            header('Location: ?page=settings&tab=parasut&test_parasut=1');
+        } else {
+            header('Location: ?page=settings&tab=parasut&saved=1');
+        }
         exit;
     }
 
@@ -352,6 +357,10 @@ if ($li && !file_exists($liPath)) {
             <input type="email" name="parasut_email" value="<?= htmlspecialchars(setting('parasut_email')) ?>" class="form-control"></div>
         <div class="form-group"><label class="form-label">Şifre</label>
             <input type="password" name="parasut_password" class="form-control" placeholder="Değiştirmek için girin"></div>
+        <div class="form-group"><label class="form-label">Client ID</label>
+            <input type="text" name="parasut_client_id" value="<?= htmlspecialchars(setting('parasut_client_id')) ?>" class="form-control" placeholder="Paraşüt OAuth2 Client ID"></div>
+        <div class="form-group"><label class="form-label">Client Secret</label>
+            <input type="text" name="parasut_client_secret" value="<?= htmlspecialchars(setting('parasut_client_secret')) ?>" class="form-control" placeholder="Paraşüt OAuth2 Client Secret"></div>
         <div class="form-group"><label class="form-label">Firma ID</label>
             <input type="text" name="parasut_company_id" value="<?= htmlspecialchars(setting('parasut_company_id')) ?>" class="form-control"></div>
         <div class="form-group"><label class="form-label">Satış Hesabı</label>
@@ -361,7 +370,7 @@ if ($li && !file_exists($liPath)) {
     </div>
     <div class="form-actions">
         <button type="submit" class="btn btn-primary">Kaydet</button>
-        <button type="button" class="btn btn-secondary" onclick="var f=document.getElementById('parasut-form');f.action='?page=settings&tab=parasut&test_parasut=1';f.submit()">Bağlantıyı Test Et</button>
+        <button type="submit" name="do_test_parasut" value="1" class="btn btn-secondary">Bağlantıyı Test Et</button>
     </div>
 </form>
 
