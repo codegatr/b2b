@@ -123,7 +123,6 @@ $_acounts = [
                     <button class="btn btn-success w-full">✓ Onayla</button>
                 </form>
                 <button class="btn btn-danger w-full" onclick="rejectApp(<?= $a['id'] ?>)">✕ Reddet</button>
-                <?php endif; ?>
             </div>
             <?php endif; ?>
         </div>
