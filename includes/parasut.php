@@ -53,13 +53,21 @@ class Parasut {
         return null;
     }
 
-    /** HTTP isteği */
+    /** HTTP isteği
+     * $auth=false → OAuth token endpoint (form-urlencoded)
+     * $auth=true  → API endpoint (JSON + Bearer token)
+     */
     private function http(string $method, string $url, array $data = [], bool $auth = true): array {
         $ch = curl_init();
-        $headers = ['Content-Type: application/json', 'Accept: application/json'];
+
+        // Token endpoint: application/x-www-form-urlencoded
+        // API endpoint:   application/json
         if ($auth) {
+            $headers = ['Content-Type: application/json', 'Accept: application/json'];
             $token = $this->getToken();
             if ($token) $headers[] = 'Authorization: Bearer ' . $token;
+        } else {
+            $headers = ['Content-Type: application/x-www-form-urlencoded', 'Accept: application/json'];
         }
 
         curl_setopt_array($ch, [
@@ -72,6 +80,7 @@ class Parasut {
 
         if ($method === 'POST') {
             curl_setopt($ch, CURLOPT_POST, true);
+            // Token isteği: form-urlencoded, API isteği: JSON
             curl_setopt($ch, CURLOPT_POSTFIELDS, $auth ? json_encode($data) : http_build_query($data));
         } elseif ($method === 'PATCH') {
             curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
