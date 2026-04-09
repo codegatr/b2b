@@ -1,11 +1,31 @@
 <?php
 // Duyurular sayfası - bayi görünümü
+// Sayfaya girilince: okunmamış duyuruları okundu işaretle
+$did = dealerId();
+try {
+    $unreadAnns = dbRows(
+        "SELECT a.id FROM b2b_announcements a
+         LEFT JOIN b2b_announcement_reads r ON r.announcement_id=a.id AND r.dealer_id=?
+         WHERE a.is_active=1
+           AND (a.starts_at IS NULL OR a.starts_at <= NOW())
+           AND (a.ends_at IS NULL OR a.ends_at >= NOW())
+           AND r.id IS NULL",
+        [$did]
+    );
+    foreach ($unreadAnns as $ua) {
+        dbExec(
+            "INSERT IGNORE INTO b2b_announcement_reads (dealer_id, announcement_id) VALUES (?,?)",
+            [$did, $ua['id']]
+        );
+    }
+} catch (Exception $e) {}
+
 $anns = dbRows(
-    "SELECT * FROM b2b_announcements
-     WHERE is_active=1
-       AND (starts_at IS NULL OR starts_at <= NOW())
-       AND (ends_at   IS NULL OR ends_at   >= NOW())
-     ORDER BY type DESC, created_at DESC"
+    "SELECT a.* FROM b2b_announcements a
+     WHERE a.is_active=1
+       AND (a.starts_at IS NULL OR a.starts_at <= NOW())
+       AND (a.ends_at IS NULL OR a.ends_at >= NOW())
+     ORDER BY a.created_at DESC"
 );
 
 $typeLabel = ['bilgi'=>'Bilgi','uyari'=>'Uyarı','onemli'=>'Önemli'];

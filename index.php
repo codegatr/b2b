@@ -68,6 +68,7 @@ try {
         `id` int(11) NOT NULL AUTO_INCREMENT,
         `title` varchar(255) NOT NULL,
         `content` text NOT NULL,
+        `image` varchar(255) DEFAULT NULL,
         `type` enum('bilgi','uyari','onemli') DEFAULT 'bilgi',
         `is_active` tinyint(1) DEFAULT 1,
         `starts_at` datetime DEFAULT NULL,
@@ -76,14 +77,29 @@ try {
         `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (`id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    db()->exec("CREATE TABLE IF NOT EXISTS `b2b_announcement_reads` (
+        `id` int(11) NOT NULL AUTO_INCREMENT,
+        `dealer_id` int(11) NOT NULL,
+        `announcement_id` int(11) NOT NULL,
+        `read_at` datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (`id`),
+        UNIQUE KEY `uniq_dealer_ann` (`dealer_id`,`announcement_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     if (isDealer()) {
+        $did = dealerId();
         $announcements = dbRows(
-            "SELECT * FROM b2b_announcements WHERE is_active=1
-             AND (starts_at IS NULL OR starts_at <= NOW())
-             AND (ends_at IS NULL OR ends_at >= NOW())
-             ORDER BY created_at DESC LIMIT 10"
+            "SELECT a.*, IF(r.id IS NOT NULL,1,0) AS is_read
+             FROM b2b_announcements a
+             LEFT JOIN b2b_announcement_reads r
+               ON r.announcement_id=a.id AND r.dealer_id=?
+             WHERE a.is_active=1
+               AND (a.starts_at IS NULL OR a.starts_at <= NOW())
+               AND (a.ends_at IS NULL OR a.ends_at >= NOW())
+             ORDER BY a.created_at DESC LIMIT 20",
+            [$did]
         );
-        $announceCount = count($announcements);
+        // Badge: sadece okunmamış sayısı
+        $announceCount = count(array_filter($announcements, fn($a) => !$a['is_read']));
     }
 } catch (Exception $e) {}
 
