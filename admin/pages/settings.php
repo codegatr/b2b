@@ -72,14 +72,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if (!empty($_POST['smtp_pass'])) settingSave('smtp_pass', $_POST['smtp_pass']);
         settingClearCache();
-        $success = 'E-posta ayarları kaydedildi.';
+        header('Location: ?page=settings&tab=smtp&saved=1');
+        exit;
     }
 
     // Banka
     if ($tab === 'bank') {
         settingSave('bank_accounts', trim($_POST['bank_accounts'] ?? ''));
         settingClearCache();
-        $success = 'Banka hesapları kaydedildi.';
+        header('Location: ?page=settings&tab=bank&saved=1');
+        exit;
     }
 
     // Paraşüt
@@ -92,7 +94,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         settingSave('parasut_token_expires', '');
         settingSave('parasut_auto_invoice', isset($_POST['parasut_auto_invoice'])?'1':'0');
         settingClearCache();
-        $success = 'Paraşüt ayarları kaydedildi.';
+        header('Location: ?page=settings&tab=parasut&saved=1');
+        exit;
     }
 
     // Rubikpara
@@ -138,6 +141,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $activeTab = $_GET['tab'] ?? 'general';
+if (!empty($_GET['saved'])) $success = 'Ayarlar kaydedildi.';
 
 // SMS test
 $smsTest = null;
@@ -340,7 +344,7 @@ if ($li && !file_exists($liPath)) {
 <div class="card">
 <div class="card-header"><h3 class="card-title">Paraşüt Entegrasyonu</h3></div>
 <div class="card-body">
-<form method="post">
+<form method="post" id="parasut-form">
     <?= csrfField() ?>
     <input type="hidden" name="tab" value="parasut">
     <div class="form-grid-2">
@@ -357,7 +361,7 @@ if ($li && !file_exists($liPath)) {
     </div>
     <div class="form-actions">
         <button type="submit" class="btn btn-primary">Kaydet</button>
-        <a href="?page=settings&tab=parasut&test_parasut=1" class="btn btn-secondary">Bağlantıyı Test Et</a>
+        <button type="button" class="btn btn-secondary" onclick="var f=document.getElementById('parasut-form');f.action='?page=settings&tab=parasut&test_parasut=1';f.submit()">Bağlantıyı Test Et</button>
     </div>
 </form>
 
