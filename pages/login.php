@@ -13,6 +13,7 @@ if (!empty($_SESSION['flash'])) {
 $error        = '';
 $fpSuccess    = false;
 $fpError      = '';
+$siteName     = setting('site_name', 'Le Monde Du Tacos B2B');
 
 // Şifremi Unuttum — modal POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? '') === 'forgot_password') {
@@ -62,8 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? '') === 'forg
                 . '<p style="margin:0;font-size:12px;color:#6b7280">&copy; ' . date('Y') . ' ' . htmlspecialchars($siteName) . '</p>'
                 . '</td></tr></table></td></tr></table></body></html>';
 
-            $headers = implode("
-", ['From: ' . $siteName . ' <' . $from . '>', 'MIME-Version: 1.0', 'Content-Type: text/html; charset=UTF-8']);
+            $headers = implode("\r\n", ['From: ' . $siteName . ' <' . $from . '>', 'MIME-Version: 1.0', 'Content-Type: text/html; charset=UTF-8']);
             @mail($fpEmail, $subject, $html, $headers);
         }
         $fpSuccess = true; // E-posta bulunsa da bulunmasa da başarı göster (güvenlik)
