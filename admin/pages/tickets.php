@@ -177,7 +177,7 @@ $allDealers = dbRows("SELECT id, company_name, first_name, last_name FROM b2b_de
 <?php endif; ?>
 
 <!-- Modal: Yeni Talep Aç -->
-<div id="modal-new-ticket" class="modal-overlay" style="display:none">
+<div id="modal-new-ticket" class="modal-overlay">
   <div class="modal" style="max-width:520px;width:100%">
     <div class="modal-header">
       <h3>Bayi Adına Destek Talebi Aç</h3>

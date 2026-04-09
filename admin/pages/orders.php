@@ -531,7 +531,7 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
 </div>
 
 <!-- Modal: Onayla -->
-<div id="modal-approve" class="modal-overlay" style="display:none">
+<div id="modal-approve" class="modal-overlay">
 <div class="modal">
     <div class="modal-header"><h3>Siparişi Onayla</h3></div>
     <div class="modal-body">
@@ -551,7 +551,7 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
 </div>
 
 <!-- Modal: İptal -->
-<div id="modal-cancel" class="modal-overlay" style="display:none">
+<div id="modal-cancel" class="modal-overlay">
 <div class="modal">
     <div class="modal-header"><h3>Siparişi İptal Et</h3></div>
     <div class="modal-body">
@@ -573,7 +573,7 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
 </div>
 
 <!-- Modal: Durum Güncelle -->
-<div id="modal-status" class="modal-overlay" style="display:none">
+<div id="modal-status" class="modal-overlay">
 <div class="modal">
     <div class="modal-header"><h3>Durum Güncelle</h3></div>
     <div class="modal-body">
@@ -607,7 +607,7 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
 </div>
 
 <!-- Modal: Yeniden İşleme Al -->
-<div id="modal-reactivate" class="modal-overlay" style="display:none">
+<div id="modal-reactivate" class="modal-overlay">
 <div class="modal">
     <div class="modal-header"><h3>Siparişi Yeniden İşleme Al</h3></div>
     <div class="modal-body">

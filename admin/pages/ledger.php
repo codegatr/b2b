@@ -165,7 +165,7 @@ if ($dealerId) {
 <?php endif; ?>
 
 <!-- Modal: Cari Kayıt Ekle -->
-<div id="modal-entry" class="modal-overlay" style="display:none">
+<div id="modal-entry" class="modal-overlay">
 <div class="modal">
     <div class="modal-header"><h3>Cari Kayıt Ekle</h3></div>
     <div class="modal-body">

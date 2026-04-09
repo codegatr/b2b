@@ -179,7 +179,7 @@ $_tabs = ['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','reddedildi'=>'Reddedi
 <?= $pager ?>
 
 <!-- Modal: Manuel Tahsilat -->
-<div id="modal-manual" class="modal-overlay" style="display:none">
+<div id="modal-manual" class="modal-overlay">
 <div class="modal">
     <div class="modal-header"><h3>Manuel Tahsilat Girişi</h3></div>
     <div class="modal-body">
@@ -227,7 +227,7 @@ $_tabs = ['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','reddedildi'=>'Reddedi
 </div>
 
 <!-- Modal: Reddet -->
-<div id="modal-reject" class="modal-overlay" style="display:none">
+<div id="modal-reject" class="modal-overlay">
 <div class="modal">
     <div class="modal-header"><h3>Ödemeyi Reddet</h3></div>
     <div class="modal-body">

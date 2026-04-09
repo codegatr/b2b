@@ -136,7 +136,7 @@ $_acounts = [
 <?= $pager ?>
 
 <!-- Modal: Reddet -->
-<div id="modal-reject" class="modal-overlay" style="display:none">
+<div id="modal-reject" class="modal-overlay">
 <div class="modal">
     <div class="modal-header"><h3>Başvuruyu Reddet</h3></div>
     <div class="modal-body">
