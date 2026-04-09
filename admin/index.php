@@ -34,18 +34,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_action'])) {
     $earlyActs = ['update_branch', 'update_release', 'rollback'];
     if (in_array($_POST['form_action'], $earlyActs)) {
         // Gerekli includes
-        if (!defined('B2B_ROOT')) define('B2B_ROOT', __DIR__);
-        require __DIR__ . '/config.php';
-        $cfg = require __DIR__ . '/config.php';
-        if (!defined('B2B_URL')) define('B2B_URL', rtrim($cfg['site_url'], '/'));
-        if (!defined('B2B_DEBUG')) define('B2B_DEBUG', $cfg['debug'] ?? false);
-        require __DIR__ . '/includes/db.php';
-        require __DIR__ . '/includes/auth.php';
-        require __DIR__ . '/includes/functions.php';
-        require __DIR__ . '/includes/updater.php';
-        require __DIR__ . '/includes/migrations.php';
-        if (file_exists(__DIR__ . '/includes/sms.php')) require __DIR__ . '/includes/sms.php';
-        b2b_session_start();
+        // Tüm includes zaten admin/index.php başında yüklendi
+        // Sadece eksik olanları yükle
         requireAdmin();
         csrfCheck();
         $act     = $_POST['form_action'];
