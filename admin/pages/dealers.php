@@ -37,6 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'credit_limit'       => floatval($_POST['credit_limit'] ?? 0),
             'payment_term_days'  => intval($_POST['payment_term_days'] ?? 30),
             'order_approval'     => $_POST['order_approval'] ?? 'manual',
+            'payment_methods'    => implode(',', array_filter((array)($_POST['payment_methods'] ?? ['havale']))),
             'notes'              => trim($_POST['notes'] ?? ''),
             'is_active'          => isset($_POST['is_active']) ? 1 : 0,
         ];
@@ -551,6 +552,30 @@ $isActive = ($dealer['is_active'] ?? 1);
                 <option value="auto"   <?= ($dealer['order_approval']??'')==='auto'?'selected':'' ?>>Otomatik Onay</option>
             </select>
         </div>
+    </div>
+
+    <!-- Ödeme Yöntemleri -->
+    <div class="form-group">
+        <label class="form-label" style="margin-bottom:10px;display:block;font-weight:600">Ödeme Yöntemleri</label>
+        <?php
+        $allowedMethods = array_filter(explode(',', $dealer['payment_methods'] ?? 'havale,kredi_karti'));
+        $allMethods = [
+            'havale'      => ['label' => 'Havale / EFT',       'icon' => '🏦'],
+            'kredi_karti' => ['label' => 'Kredi Kartı',        'icon' => '💳'],
+            'nakit'       => ['label' => 'Nakit',              'icon' => '💵'],
+            'cek'         => ['label' => 'Çek',                'icon' => '📄'],
+            'cari'        => ['label' => 'Açık Hesap (Cari)',  'icon' => '📊'],
+        ];
+        ?>
+        <div style="display:flex;flex-wrap:wrap;gap:10px">
+        <?php foreach ($allMethods as $val => $m): ?>
+        <label style="display:flex;align-items:center;gap:8px;padding:10px 16px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:<?= in_array($val,$allowedMethods)?'var(--primary-bg,#eff6ff)':'var(--surface)' ?>;font-size:13px;user-select:none" onclick="this.style.background=this.querySelector('input').checked?'var(--surface)':'var(--primary-bg,#eff6ff)'">
+            <input type="checkbox" name="payment_methods[]" value="<?= $val ?>" <?= in_array($val, $allowedMethods) ? 'checked' : '' ?> style="accent-color:var(--primary)">
+            <span><?= $m['icon'] ?> <?= $m['label'] ?></span>
+        </label>
+        <?php endforeach; ?>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Seçilmeyenler bayinin ödeme formunda görünmez.</div>
     </div>
 
     <div class="form-group">

@@ -52,6 +52,17 @@ $payments = dbRows(
     [$dealer['id']]
 );
 
+// Ödeme yöntemleri — bayi iznine göre filtrele
+$allowedPayMethods = array_filter(explode(',', $dealer['payment_methods'] ?? 'havale,kredi_karti'));
+if (empty($allowedPayMethods)) $allowedPayMethods = ['havale'];
+$allPayMethods = [
+    'havale'      => 'Havale / EFT',
+    'kredi_karti' => 'Kredi Kartı',
+    'nakit'       => 'Nakit',
+    'cek'         => 'Çek',
+    'cari'        => 'Açık Hesap (Cari)',
+];
+
 // Banka hesapları
 $bankAccounts = setting('bank_accounts', '');
 ?>
@@ -82,12 +93,13 @@ $bankAccounts = setting('bank_accounts', '');
       <div class="form-grid-2">
         <div class="form-group">
           <label class="form-label">Ödeme Yöntemi</label>
-          <select name="type" class="form-control" required>
+          <select name="type" class="form-control" required onchange="togglePayFields(this.value)">
             <option value="">Seçiniz</option>
-            <option value="havale">Havale / EFT</option>
-            <option value="kredi_karti">Kredi Kartı</option>
-            <option value="nakit">Nakit</option>
-            <option value="cek">Çek</option>
+            <?php foreach ($allPayMethods as $mv => $ml): ?>
+            <?php if (in_array($mv, $allowedPayMethods)): ?>
+            <option value="<?= $mv ?>"><?= $ml ?></option>
+            <?php endif; ?>
+            <?php endforeach; ?>
           </select>
         </div>
         <div class="form-group">
@@ -103,11 +115,11 @@ $bankAccounts = setting('bank_accounts', '');
             <?php endforeach; ?>
           </select>
         </div>
-        <div class="form-group">
+        <div class="form-group" id="grp-bank">
           <label class="form-label">Banka Adı</label>
           <input type="text" name="bank_name" class="form-control" placeholder="Ziraat, Yapı Kredi...">
         </div>
-        <div class="form-group">
+        <div class="form-group" id="grp-ref">
           <label class="form-label">Dekont / Referans No</label>
           <input type="text" name="transaction_ref" class="form-control" placeholder="İşlem numarası">
         </div>
@@ -123,6 +135,16 @@ $bankAccounts = setting('bank_accounts', '');
     </form>
   </div>
 </div>
+
+<script>
+function togglePayFields(v) {
+    var isCari = (v === 'cari');
+    ['grp-bank','grp-ref'].forEach(function(id){
+        var el = document.getElementById(id);
+        if (el) el.style.display = isCari ? 'none' : '';
+    });
+}
+</script>
 
 <!-- Ödeme Geçmişi -->
 <div class="card">

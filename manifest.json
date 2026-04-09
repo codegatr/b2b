@@ -57,6 +57,7 @@
     "migrations/migration_003.sql",
     "migrations/migration_004.sql",
     "migrations/migration_005.sql",
-    "migrations/migration_006.sql"
+    "migrations/migration_006.sql",
+    "migrations/migration_007.sql"
   ]
 }
