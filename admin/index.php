@@ -28,6 +28,63 @@ if (file_exists(B2B_ROOT . '/includes/rubikpara.php')) require B2B_ROOT . '/incl
 
 b2b_session_start();
 
+// ── Early POST handlers (header() göndermeden önce) ──────────
+// Güncelleme, rollback gibi redirect gerektiren işlemler
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_action'])) {
+    $earlyActs = ['update_branch', 'update_release', 'rollback'];
+    if (in_array($_POST['form_action'], $earlyActs)) {
+        // Gerekli includes
+        if (!defined('B2B_ROOT')) define('B2B_ROOT', __DIR__);
+        require __DIR__ . '/config.php';
+        $cfg = require __DIR__ . '/config.php';
+        if (!defined('B2B_URL')) define('B2B_URL', rtrim($cfg['site_url'], '/'));
+        if (!defined('B2B_DEBUG')) define('B2B_DEBUG', $cfg['debug'] ?? false);
+        require __DIR__ . '/includes/db.php';
+        require __DIR__ . '/includes/auth.php';
+        require __DIR__ . '/includes/functions.php';
+        require __DIR__ . '/includes/updater.php';
+        require __DIR__ . '/includes/migrations.php';
+        if (file_exists(__DIR__ . '/includes/sms.php')) require __DIR__ . '/includes/sms.php';
+        b2b_session_start();
+        requireAdmin();
+        csrfCheck();
+        $act     = $_POST['form_action'];
+        $updater = updater();
+        if ($act === 'update_branch') {
+            try {
+                $result = $updater->updateFromBranch();
+                if ($result['success']) {
+                    $fc   = count($result['files'] ?? []);
+                    $sha  = $result['commit']['sha_short'] ?? '';
+                    $migr = $result['migrations'] ?? ['run'=>0,'errors'=>[]];
+                    $msg  = "✅ Güncelleme tamamlandı! {$fc} dosya güncellendi. Commit: {$sha}";
+                    if ($migr['run'] > 0) $msg .= " · {$migr['run']} migration uygulandı.";
+                    $_SESSION['flash_admin'] = ['type'=>'success','msg'=>$msg];
+                    header('Location: ' . B2B_URL . '/admin/?page=update&done=1'); exit;
+                } else {
+                    $_SESSION['flash_admin'] = ['type'=>'danger','msg'=>$result['message']??'Güncelleme başarısız.'];
+                    header('Location: ' . B2B_URL . '/admin/?page=update'); exit;
+                }
+            } catch (Exception $e) {
+                $_SESSION['flash_admin'] = ['type'=>'danger','msg'=>$e->getMessage()];
+                header('Location: ' . B2B_URL . '/admin/?page=update'); exit;
+            }
+        }
+        if ($act === 'rollback') {
+            $backup = trim($_POST['backup_file'] ?? '');
+            try {
+                $result = $updater->rollback($backup);
+                $msg = $result['success'] ? 'Geri alma başarılı.' : ($result['message']??'Hata.');
+                $type = $result['success'] ? 'success' : 'danger';
+                $_SESSION['flash_admin'] = ['type'=>$type,'msg'=>$msg];
+            } catch (Exception $e) {
+                $_SESSION['flash_admin'] = ['type'=>'danger','msg'=>$e->getMessage()];
+            }
+            header('Location: ' . B2B_URL . '/admin/?page=update'); exit;
+        }
+    }
+}
+
 $page = preg_replace('/[^a-z0-9\-]/', '', strtolower($_GET['page'] ?? 'dashboard'));
 
 // Public: sadece login — artık tek login noktası bayi portalı
@@ -361,7 +418,17 @@ function renderAdminPage(string $page, array $vars = []): void {
     if (!empty($_SESSION['flash_admin'])) {
         $flash = $_SESSION['flash_admin'];
         unset($_SESSION['flash_admin']);
-        echo "<div class='alert alert-{$flash['type']}' data-auto-close style='margin:16px 24px 0'>{$flash['msg']}</div>";
+        $isSuccess = $flash['type'] === 'success';
+        if ($isSuccess) {
+            echo "<div style='margin:16px 24px 0;background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:2px solid #16a34a;border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:14px'>
+                <div style='font-size:28px;line-height:1'>✅</div>
+                <div>
+                  <div style='font-weight:700;font-size:15px;color:#15803d'>{$flash['msg']}</div>
+                </div>
+              </div>";
+        } else {
+            echo "<div class='alert alert-{$flash['type']}' style='margin:16px 24px 0'>{$flash['msg']}</div>";
+        }
     }
 
     renderAdminPage($page, compact('admin', 'cfg', 'hasUpdate'));

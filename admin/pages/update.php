@@ -324,22 +324,50 @@ $justDone        = !empty($_GET['done']);
 <script>
 function doUpdate(btn) {
     if (!confirm('Güncelleme yapılacak. Yedek otomatik alınır. Devam?')) return false;
+
     btn.disabled = true;
-    document.getElementById('update-wrap').style.display = 'block';
-    const bar = document.getElementById('update-bar');
-    const msg = document.getElementById('update-msg');
+    const wrap = document.getElementById('update-wrap');
+    const bar  = document.getElementById('update-bar');
+    const msg  = document.getElementById('update-msg');
+    wrap.style.display = 'block';
+
     const steps = [
-        [0, '🔗 GitHub\'a bağlanılıyor...'],
-        [1000, '📦 Dosyalar indiriliyor...'],
-        [2500, '📂 Dosyalar güncelleniyor...'],
-        [4500, '🗄 Migration\'lar uygulanıyor...'],
-        [5500, '✅ Tamamlanıyor...'],
+        [0,    '🔗 GitHub\'a bağlanılıyor...'],
+        [1200, '📦 Dosyalar indiriliyor...'],
+        [3000, '📂 Sistem güncelleniyor...'],
+        [5000, '🗄 Migrationlar uygulanıyor...'],
     ];
-    setTimeout(() => { bar.style.width = '100%'; }, 50);
-    steps.forEach(([t, m]) => setTimeout(() => {
-        msg.textContent = m;
-        btn.textContent = m;
-    }, t));
-    return true;
+
+    // Progress bar — server cevap verene kadar %80'e kadar git
+    bar.style.transition = 'width 8s cubic-bezier(.1,0,.05,1)';
+    setTimeout(() => { bar.style.width = '80%'; }, 50);
+    steps.forEach(([t, m]) => setTimeout(() => { msg.textContent = m; btn.innerHTML = m; }, t));
+
+    // Form'u fetch ile gönder
+    const form = document.getElementById('form-update');
+    const data = new FormData(form);
+
+    fetch(form.action || window.location.href, { method: 'POST', body: data })
+        .then(res => {
+            // Redirect URL'sini al (fetch redirect: 'manual' değilse son URL gelir)
+            // Server redirect'i takip et
+            const finalUrl = res.url;
+            // %100'e tamamla
+            bar.style.transition = 'width .5s ease';
+            bar.style.width = '100%';
+            bar.style.background = 'linear-gradient(90deg,#16a34a,#22c55e)';
+            msg.innerHTML = '✅ <strong>Güncelleme tamamlandı!</strong> Yönlendiriliyor...';
+            btn.innerHTML = '✅ Tamamlandı!';
+            btn.style.background = '#16a34a';
+            btn.style.borderColor = '#16a34a';
+            // Yönlendir
+            setTimeout(() => { window.location.href = finalUrl + (finalUrl.includes('?') ? '&' : '?') + '_r=' + Date.now(); }, 800);
+        })
+        .catch(() => {
+            // Fallback: normal form submit
+            form.submit();
+        });
+
+    return false; // fetch kullandık, form submit'i engelle
 }
 </script>
