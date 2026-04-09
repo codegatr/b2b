@@ -16,7 +16,7 @@ function migrationGetRan(): array {
  * Tüm migration dosyalarını döndür (sıralı)
  */
 function migrationGetAll(): array {
-    $dir = B2B_ROOT . '/install/migrations';
+    $dir = B2B_ROOT . '/migrations';
     if (!is_dir($dir)) return [];
     $files = glob($dir . '/*.sql');
     if (!$files) return [];

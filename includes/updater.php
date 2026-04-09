@@ -229,54 +229,12 @@ class B2BUpdater {
      * Her migration bir kez çalışır (b2b_settings'de takip edilir).
      */
     public function runMigrations(): array {
-        $migrDir = $this->root . '/migrations';
-        if (!is_dir($migrDir)) return ['run' => 0, 'errors' => []];
-
-        $applied = [];
-        try {
-            $stored = setting('applied_migrations', '[]');
-            $applied = json_decode($stored, true) ?: [];
-        } catch (\Exception $e) {}
-
-        $run = 0; $errors = [];
-        $files = glob($migrDir . '/migration_*.sql');
-        if ($files) sort($files);
-
-        foreach ((array)$files as $file) {
-            $name = basename($file);
-            if (in_array($name, $applied)) continue;
-
-            $sql        = file_get_contents($file);
-            $ok         = true;
-            // Noktalı virgülle böl, yorum satırlarını atla
-            $raw_stmts  = explode(';', $sql);
-            foreach ($raw_stmts as $stmt) {
-                $stmt = trim($stmt);
-                if ($stmt === '' || str_starts_with(ltrim($stmt), '--')) continue;
-                try {
-                    db()->exec($stmt);
-                } catch (\PDOException $e) {
-                    $msg = $e->getMessage();
-                    // Zaten var hataları tolere et
-                    if (str_contains($msg, 'Duplicate column') ||
-                        str_contains($msg, 'already exists') ||
-                        str_contains($msg, 'Multiple primary key')) {
-                        continue;
-                    }
-                    $errors[] = "$name: $msg";
-                    $ok = false;
-                    break;
-                }
-            }
-
-            if ($ok) {
-                $applied[] = $name;
-                settingSave('applied_migrations', json_encode($applied));
-                settingClearCache();
-                $run++;
-            }
-        }
-        return ['run' => $run, 'errors' => $errors];
+        // migrations.php fonksiyonlarını kullan (tek sistem)
+        $results = migrationRunAll();
+        $run     = count(array_filter($results, fn($r) => $r['ok']));
+        $errors  = array_map(fn($r) => $r['name'].': '.$r['error'],
+                             array_filter($results, fn($r) => !$r['ok']));
+        return ['run' => $run, 'errors' => array_values($errors)];
     }
 
 
