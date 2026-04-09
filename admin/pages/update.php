@@ -43,8 +43,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $result = $updater->updateFromBranch();
             if ($result['success']) {
                 $fc = is_array($result['files'] ?? null) ? count($result['files']) : 0;
-                $sha = $result['commit']['sha_short'] ?? '';
+                $sha  = $result['commit']['sha_short'] ?? '';
+                $migr = $result['migrations'] ?? ['run'=>0,'errors'=>[]];
                 $success = "Güncelleme tamamlandı! {$fc} dosya güncellendi. Commit: {$sha}";
+                if (($migr['run'] ?? 0) > 0) {
+                    $success .= " · {$migr['run']} migration çalıştırıldı.";
+                }
+                if (!empty($migr['errors'])) {
+                    $success .= " ⚠️ Migration hatası: " . implode(', ', $migr['errors']);
+                }
                 // Güncelleme sonrası bekleyen migration varsa otomatik çalıştır
                 $pending = migrationGetPending();
                 if ($pending) {

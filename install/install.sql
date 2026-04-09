@@ -400,22 +400,3 @@ CREATE TABLE IF NOT EXISTS `b2b_announcements` (
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ── Sipariş İptal Talebi Kolonları ───────────────────────────
-ALTER TABLE `b2b_orders`
-  ADD COLUMN IF NOT EXISTS `cancel_requested`    tinyint(1) DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS `cancel_reason`       text DEFAULT NULL,
-  ADD COLUMN IF NOT EXISTS `cancel_requested_at` datetime DEFAULT NULL,
-  ADD COLUMN IF NOT EXISTS `cancel_reviewed_by`  int(11) DEFAULT NULL,
-  ADD COLUMN IF NOT EXISTS `cancel_reviewed_at`  datetime DEFAULT NULL;
-
--- ── Ürün Kısa Açıklama ───────────────────────────────────────
-ALTER TABLE `b2b_products`
-  ADD COLUMN IF NOT EXISTS `short_description` varchar(255) DEFAULT NULL
-  AFTER `description`;
-
--- ── Veri Düzeltmesi: İptal edilmiş siparişlerin ledger kayıtlarını kapat ──
-UPDATE b2b_ledger SET is_closed=1
-WHERE reference_type='order'
-  AND reference_id IN (SELECT id FROM b2b_orders WHERE status='iptal')
-  AND is_closed=0;

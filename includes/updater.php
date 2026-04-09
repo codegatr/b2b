@@ -135,6 +135,9 @@ class B2BUpdater {
         // commit.txt kaydet
         file_put_contents($this->root . '/commit.txt', $commit['sha']);
 
+        // Migration'ları çalıştır
+        $this->runMigrations();
+
         // DB cache'i güncelle — badge anında kapansın
         settingSave('update_latest_sha',  $commit['sha']);
         settingSave('update_last_check',  (string)time());
@@ -155,9 +158,12 @@ class B2BUpdater {
             ]
         );
 
+        $migrations = $this->runMigrations();
+
         return [
-            'ok'      => true,
-            'success' => true,
+            'ok'        => true,
+            'success'   => true,
+            'migrations'=> $migrations,
             'message' => 'Guncelleme tamamlandi. ' . count($updated) . ' dosya guncellendi.',
             'commit'  => $commit,
             'files'   => $updated,
