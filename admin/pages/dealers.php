@@ -245,105 +245,216 @@ if ($action === 'list') {
 <!-- ═══════════════════ DETAY ═══════════════════ -->
 <?php
 $orders  = dbRows("SELECT * FROM b2b_orders WHERE dealer_id=? ORDER BY created_at DESC LIMIT 10", [$id]);
-$ledger  = dbRows("SELECT * FROM b2b_ledger WHERE dealer_id=? ORDER BY created_at DESC LIMIT 15", [$id]);
+$ledger  = dbRows("SELECT * FROM b2b_ledger WHERE dealer_id=? AND is_closed=0 ORDER BY created_at DESC LIMIT 15", [$id]);
 $balance = dbVal("SELECT COALESCE(SUM(CASE WHEN type='borc' THEN amount ELSE -amount END),0) FROM b2b_ledger WHERE dealer_id=? AND is_closed=0", [$id]);
-$payments= dbRows("SELECT * FROM b2b_payments WHERE dealer_id=? ORDER BY created_at DESC LIMIT 5", [$id]);
+$totalOrders = dbVal("SELECT COUNT(*) FROM b2b_orders WHERE dealer_id=?", [$id]);
+$totalSpend  = dbVal("SELECT COALESCE(SUM(grand_total),0) FROM b2b_orders WHERE dealer_id=? AND status NOT IN ('iptal','iade')", [$id]);
+$priceListName = dbVal("SELECT name FROM b2b_price_lists WHERE id=?", [$dealer['price_list_id']]) ?: '—';
+$initials = strtoupper(mb_substr($dealer['company_name'], 0, 1));
+$isActive = ($dealer['is_active'] ?? 1);
 ?>
-<div class="page-header">
-    <div>
-        <h1 class="page-title"><?= h($dealer['company_name']) ?></h1>
-        <p class="page-sub"><?= h($dealer['type']??'kurumsal') ?> — <?= h($dealer['city']??'') ?></p>
-    </div>
-    <div class="btn-group">
-        <a href="?page=dealers" class="btn btn-ghost">← Geri</a>
-        <a href="?page=dealers&action=edit&id=<?= $id ?>" class="btn btn-secondary">Düzenle</a>
-    </div>
-</div>
-<?php if (!empty($success)): ?><div class="alert alert-success"><?= h($success) ?></div><?php endif; ?>
-<?php if (!empty($error)):   ?><div class="alert alert-danger"><?= h($error) ?></div><?php endif; ?>
 
-<div class="grid grid-cols-4 gap-4 mb-6">
-    <div class="stat-card"><div class="stat-label">Açık Bakiye</div><div class="stat-value <?= $balance>0?'text-danger':'' ?>"><?= money($balance) ?></div></div>
-    <div class="stat-card"><div class="stat-label">Kredi Limiti</div><div class="stat-value"><?= money($dealer['credit_limit']) ?></div></div>
-    <div class="stat-card"><div class="stat-label">Vade (gün)</div><div class="stat-value"><?= $dealer['payment_term_days'] ?></div></div>
-    <div class="stat-card"><div class="stat-label">Sipariş Onayı</div><div class="stat-value"><?= $dealer['order_approval'] === 'auto' ? 'Otomatik' : 'Manuel' ?></div></div>
+<?php if (!empty($success)): ?><div class="alert alert-success" style="margin-bottom:16px"><?= h($success) ?></div><?php endif; ?>
+<?php if (!empty($error)):   ?><div class="alert alert-danger"  style="margin-bottom:16px"><?= h($error) ?></div><?php endif; ?>
+
+<!-- ── HERO HEADER ── -->
+<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:28px 32px;margin-bottom:20px;display:flex;align-items:center;gap:24px">
+  <!-- Avatar -->
+  <div style="width:72px;height:72px;border-radius:16px;background:linear-gradient(135deg,#1e3a5f,#2d5f9e);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800;color:#fff;flex-shrink:0;letter-spacing:-1px">
+    <?= $initials ?>
+  </div>
+  <!-- İsim + meta -->
+  <div style="flex:1;min-width:0">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <h1 style="font-size:22px;font-weight:700;color:var(--text);margin:0"><?= h($dealer['company_name']) ?></h1>
+      <?php if ($isActive): ?>
+        <span style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:6px;font-size:11px;font-weight:700;padding:2px 10px">● Aktif</span>
+      <?php else: ?>
+        <span style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:6px;font-size:11px;font-weight:700;padding:2px 10px">○ Pasif</span>
+      <?php endif; ?>
+      <span style="background:var(--bg);color:var(--text-muted);border:1px solid var(--border);border-radius:6px;font-size:11px;padding:2px 10px"><?= h(ucfirst($dealer['type'] ?? 'kurumsal')) ?></span>
+    </div>
+    <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:16px">
+      <?php if ($dealer['email']): ?><span style="font-size:13px;color:var(--text-muted)">✉ <?= h($dealer['email']) ?></span><?php endif; ?>
+      <?php if ($dealer['phone']): ?><span style="font-size:13px;color:var(--text-muted)">📞 <?= h($dealer['phone']) ?></span><?php endif; ?>
+      <?php if ($dealer['city']): ?><span style="font-size:13px;color:var(--text-muted)">📍 <?= h($dealer['city']) ?></span><?php endif; ?>
+      <?php if ($dealer['dealer_code']): ?><span style="font-size:13px;color:var(--text-muted);font-family:monospace">Kod: <?= h($dealer['dealer_code']) ?></span><?php endif; ?>
+    </div>
+  </div>
+  <!-- Butonlar -->
+  <div style="display:flex;gap:8px;flex-shrink:0">
+    <a href="?page=dealers" class="btn btn-ghost">← Geri</a>
+    <a href="?page=dealers&action=edit&id=<?= $id ?>" class="btn btn-primary">✏ Düzenle</a>
+  </div>
 </div>
 
-<div class="grid grid-cols-2 gap-6">
-    <!-- Bayi Bilgileri -->
-    <div class="card">
-        <div class="card-header"><h3>Bayi Bilgileri</h3></div>
-        <div class="card-body">
-            <dl class="info-list">
-                <dt>E-posta</dt><dd><?= h($dealer['email']) ?></dd>
-                <dt>Telefon</dt><dd><?= h($dealer['phone']) ?></dd>
-                <dt>İletişim Kişisi</dt><dd><?= h(trim(($dealer['first_name']??'').' '.($dealer['last_name']??''))) ?></dd>
-                <dt>Vergi No</dt><dd><?= h($dealer['tax_number']) ?> / <?= h($dealer['tax_office']) ?></dd>
-                <dt>Adres</dt><dd><?= h($dealer['address']) ?>, <?= h($dealer['city']) ?></dd>
-                <dt>Fiyat Listesi</dt><dd><?= dbVal("SELECT name FROM b2b_price_lists WHERE id=?",[$dealer['price_list_id']]) ?: '—' ?></dd>
-                <dt>Kayıt Tarihi</dt><dd><?= fmtDate($dealer['created_at']) ?></dd>
-            </dl>
-        </div>
+<!-- ── 4 STAT KART ── -->
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px">
+  <!-- Açık Bakiye -->
+  <div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:20px 22px;border-left:4px solid <?= $balance > 0 ? '#dc2626' : '#16a34a' ?>">
+    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:8px">Açık Bakiye</div>
+    <div style="font-size:22px;font-weight:700;color:<?= $balance > 0 ? '#dc2626' : '#16a34a' ?>"><?= money($balance) ?></div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:4px"><?= $balance > 0 ? 'Vadesi gelen borç' : 'Borç yok' ?></div>
+  </div>
+  <!-- Kredi Limiti -->
+  <div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:20px 22px;border-left:4px solid #6366f1">
+    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:8px">Kredi Limiti</div>
+    <div style="font-size:22px;font-weight:700;color:var(--text)"><?= money($dealer['credit_limit']) ?></div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Vade: <?= $dealer['payment_term_days'] ?> gün</div>
+  </div>
+  <!-- Toplam Sipariş -->
+  <div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:20px 22px;border-left:4px solid #0ea5e9">
+    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:8px">Toplam Sipariş</div>
+    <div style="font-size:22px;font-weight:700;color:var(--text)"><?= $totalOrders ?></div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:4px"><?= $dealer['order_approval'] === 'auto' ? '⚡ Otomatik onay' : '👁 Manuel onay' ?></div>
+  </div>
+  <!-- Toplam Ciro -->
+  <div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:20px 22px;border-left:4px solid #f59e0b">
+    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);margin-bottom:8px">Toplam Ciro</div>
+    <div style="font-size:22px;font-weight:700;color:var(--text)"><?= money($totalSpend) ?></div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:4px">İptal hariç</div>
+  </div>
+</div>
+
+<!-- ── 2 KOLON: BİLGİ + İŞLEMLER ── -->
+<div style="display:grid;grid-template-columns:1fr 320px;gap:16px;margin-bottom:20px">
+
+  <!-- Sol: Bayi Bilgileri -->
+  <div style="background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden">
+    <div style="padding:16px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:13px;font-weight:700;color:var(--text)">Bayi Bilgileri</span>
+      <a href="?page=ledger&dealer_id=<?= $id ?>" class="btn btn-ghost btn-sm">Cari Ekstreye Git →</a>
     </div>
+    <div style="padding:4px 0">
+      <?php
+      $rows_info = [
+        ['E-posta',        h($dealer['email'])],
+        ['Telefon',        h($dealer['phone'])],
+        ['İletişim Kişisi', h(trim(($dealer['first_name']??'').' '.($dealer['last_name']??'')))],
+        ['Vergi No / Dairesi', h($dealer['tax_number']).' / '.h($dealer['tax_office'])],
+        ['Adres',          h($dealer['address']).', '.h($dealer['city'])],
+        ['Fiyat Listesi',  h($priceListName)],
+        ['Kayıt Tarihi',   fmtDate($dealer['created_at'])],
+      ];
+      foreach ($rows_info as [$label, $val]): ?>
+      <div style="display:flex;align-items:baseline;gap:12px;padding:11px 22px;border-bottom:1px solid var(--border)">
+        <div style="width:140px;flex-shrink:0;font-size:12px;color:var(--text-muted);font-weight:500"><?= $label ?></div>
+        <div style="font-size:13px;color:var(--text);font-weight:500"><?= $val ?: '—' ?></div>
+      </div>
+      <?php endforeach; ?>
+    </div>
+  </div>
+
+  <!-- Sağ: Hızlı İşlemler -->
+  <div style="display:flex;flex-direction:column;gap:12px">
 
     <!-- Şifre Sıfırla -->
-    <div class="card">
-        <div class="card-header"><h3>Şifre Sıfırla</h3></div>
-        <div class="card-body">
-            <form method="post">
-                <?= csrfField() ?>
-                <input type="hidden" name="form_action" value="reset_password">
-                <input type="hidden" name="dealer_id" value="<?= $id ?>">
-                <div class="form-group">
-                    <label>Yeni Şifre</label>
-                    <input type="password" name="new_password" class="form-control" placeholder="En az 6 karakter">
-                </div>
-                <button type="submit" class="btn btn-secondary">Şifreyi Güncelle</button>
-            </form>
-        </div>
+    <div style="background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden">
+      <div style="padding:14px 18px;border-bottom:1px solid var(--border)">
+        <span style="font-size:13px;font-weight:700;color:var(--text)">🔐 Şifre Sıfırla</span>
+      </div>
+      <div style="padding:16px 18px">
+        <form method="post">
+          <?= csrfField() ?>
+          <input type="hidden" name="form_action" value="reset_password">
+          <input type="hidden" name="dealer_id" value="<?= $id ?>">
+          <input type="password" name="new_password" class="form-control" placeholder="En az 6 karakter" style="margin-bottom:10px">
+          <button type="submit" class="btn btn-secondary" style="width:100%">Şifreyi Güncelle</button>
+        </form>
+      </div>
     </div>
+
+    <!-- Hızlı Linkler -->
+    <div style="background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden">
+      <div style="padding:14px 18px;border-bottom:1px solid var(--border)">
+        <span style="font-size:13px;font-weight:700;color:var(--text)">🔗 Hızlı Erişim</span>
+      </div>
+      <div style="padding:8px 0">
+        <a href="?page=orders&dealer_id=<?= $id ?>" style="display:flex;align-items:center;gap:10px;padding:10px 18px;font-size:13px;color:var(--text);text-decoration:none;transition:background .15s" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
+          <span style="width:28px;height:28px;background:#eff6ff;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px">📦</span>
+          Tüm Siparişler
+          <span style="margin-left:auto;font-size:11px;color:var(--text-muted)"><?= $totalOrders ?></span>
+        </a>
+        <a href="?page=ledger&dealer_id=<?= $id ?>" style="display:flex;align-items:center;gap:10px;padding:10px 18px;font-size:13px;color:var(--text);text-decoration:none;transition:background .15s" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
+          <span style="width:28px;height:28px;background:#fef9f0;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px">📊</span>
+          Cari Hesap
+          <?php if ($balance > 0): ?><span style="margin-left:auto;font-size:11px;background:#fef2f2;color:#dc2626;border-radius:4px;padding:1px 6px;font-weight:600"><?= money($balance) ?></span><?php endif; ?>
+        </a>
+        <a href="?page=payments&dealer_id=<?= $id ?>" style="display:flex;align-items:center;gap:10px;padding:10px 18px;font-size:13px;color:var(--text);text-decoration:none;transition:background .15s" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
+          <span style="width:28px;height:28px;background:#f0fdf4;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px">💳</span>
+          Ödemeler
+        </a>
+      </div>
+    </div>
+
+  </div>
 </div>
 
-<!-- Son Siparişler -->
-<div class="card mt-6">
-    <div class="card-header"><h3>Son Siparişler</h3><a href="?page=orders&dealer_id=<?= $id ?>" class="btn btn-xs btn-ghost">Tümü</a></div>
-    <table class="table">
-        <thead><tr><th>Sipariş No</th><th>Tarih</th><th>Tutar</th><th>Durum</th><th>Ödeme</th></tr></thead>
-        <tbody>
-        <?php foreach ($orders as $o): ?>
-        <tr>
-            <td><a href="?page=orders&action=detail&id=<?= $o['id'] ?>"><?= h($o['order_number']) ?></a></td>
-            <td><?= fmtDate($o['created_at']) ?></td>
-            <td><?= money($o['grand_total']) ?></td>
-            <td><?= orderStatusLabel($o['status']) ?></td>
-            <td><span class="badge badge-<?= $o['payment_status']==='odendi'?'green':($o['payment_status']==='bekliyor'?'yellow':'blue') ?>"><?= h($o['payment_status']) ?></span></td>
-        </tr>
-        <?php endforeach; ?>
-        <?php if (empty($orders)): ?><tr><td colspan="5" class="text-muted text-center">Sipariş yok.</td></tr><?php endif; ?>
-        </tbody>
-    </table>
+<!-- ── SON SİPARİŞLER ── -->
+<div style="background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:20px">
+  <div style="padding:16px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+    <span style="font-size:13px;font-weight:700;color:var(--text)">Son Siparişler</span>
+    <a href="?page=orders&dealer_id=<?= $id ?>" class="btn btn-ghost btn-sm">Tümünü Gör →</a>
+  </div>
+  <table class="table" style="margin:0">
+    <thead>
+      <tr>
+        <th>Sipariş No</th>
+        <th>Tarih</th>
+        <th style="text-align:right">Tutar</th>
+        <th>Durum</th>
+        <th>Ödeme</th>
+      </tr>
+    </thead>
+    <tbody>
+      <?php foreach ($orders as $o): ?>
+      <tr>
+        <td><a href="?page=orders&action=detail&id=<?= $o['id'] ?>" style="font-weight:600;color:var(--primary);font-family:monospace"><?= h($o['order_number']) ?></a></td>
+        <td style="color:var(--text-muted);font-size:12px"><?= fmtDate($o['created_at']) ?></td>
+        <td style="text-align:right;font-weight:600"><?= money($o['grand_total']) ?></td>
+        <td><?= orderStatusLabel($o['status']) ?></td>
+        <td><?= paymentStatusLabel($o['payment_status'] ?? 'odenmedi') ?></td>
+      </tr>
+      <?php endforeach; ?>
+      <?php if (empty($orders)): ?>
+      <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text-muted)">Henüz sipariş yok.</td></tr>
+      <?php endif; ?>
+    </tbody>
+  </table>
 </div>
 
-<!-- Cari Hesap -->
-<div class="card mt-6">
-    <div class="card-header"><h3>Son Cari Hareketler</h3><a href="?page=ledger&dealer_id=<?= $id ?>" class="btn btn-xs btn-ghost">Tümü</a></div>
-    <table class="table">
-        <thead><tr><th>Tarih</th><th>Açıklama</th><th>Borç</th><th>Alacak</th><th>Vade</th></tr></thead>
-        <tbody>
-        <?php foreach ($ledger as $l): ?>
-        <tr>
-            <td><?= fmtDate($l['created_at']) ?></td>
-            <td><?= h($l['description']) ?></td>
-            <td><?= $l['type']==='borc' ? money($l['amount']) : '' ?></td>
-            <td><?= $l['type']==='alacak' ? money($l['amount']) : '' ?></td>
-            <td><?= $l['due_date'] ? fmtDate($l['due_date']) : '—' ?></td>
-        </tr>
-        <?php endforeach; ?>
-        <?php if (empty($ledger)): ?><tr><td colspan="5" class="text-muted text-center">Hareket yok.</td></tr><?php endif; ?>
-        </tbody>
-    </table>
+<!-- ── SON CARİ HAREKETLER ── -->
+<div style="background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden">
+  <div style="padding:16px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+    <span style="font-size:13px;font-weight:700;color:var(--text)">Son Cari Hareketler</span>
+    <a href="?page=ledger&dealer_id=<?= $id ?>" class="btn btn-ghost btn-sm">Tam Ekstre →</a>
+  </div>
+  <table class="table" style="margin:0">
+    <thead>
+      <tr>
+        <th>Tarih</th>
+        <th>Açıklama</th>
+        <th style="text-align:right">Borç</th>
+        <th style="text-align:right">Alacak</th>
+        <th>Vade</th>
+      </tr>
+    </thead>
+    <tbody>
+      <?php foreach ($ledger as $l): ?>
+      <tr>
+        <td style="color:var(--text-muted);font-size:12px"><?= fmtDate($l['created_at']) ?></td>
+        <td style="font-size:13px"><?= h($l['description']) ?></td>
+        <td style="text-align:right;font-weight:600;color:<?= $l['type']==='borc' ? '#dc2626' : 'transparent' ?>"><?= $l['type']==='borc' ? money($l['amount']) : '' ?></td>
+        <td style="text-align:right;font-weight:600;color:<?= $l['type']==='alacak' ? '#16a34a' : 'transparent' ?>"><?= $l['type']==='alacak' ? money($l['amount']) : '' ?></td>
+        <td style="font-size:12px;color:var(--text-muted)"><?= $l['due_date'] ? fmtDate($l['due_date']) : '—' ?></td>
+      </tr>
+      <?php endforeach; ?>
+      <?php if (empty($ledger)): ?>
+      <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text-muted)">Cari hareket yok.</td></tr>
+      <?php endif; ?>
+    </tbody>
+  </table>
 </div>
-
 <?php elseif ($action === 'add' || $action === 'edit'): ?>
 <!-- ═══════════════════ FORM ═══════════════════ -->
 <div class="page-header">
