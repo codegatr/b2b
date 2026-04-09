@@ -43,8 +43,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $from      = setting('smtp_from_email', 'noreply@' . ($_SERVER['HTTP_HOST'] ?? 'localhost'));
 
             $subject = $siteName . ' — Şifre Sıfırlama';
-            $body    = "Merhaba,\n\nŞifrenizi sıfırlamak için:\n\n$resetLink\n\nBu bağlantı 1 saat geçerlidir.\n\n$siteName";
-            @mail($email, $subject, $body, "From: $from\r\nContent-Type: text/plain; charset=UTF-8");
+            $content = '
+<p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.7">
+  Merhaba,<br><br>
+  Şifre sıfırlama talebinizi aldık. Aşağıdaki butona tıklayarak yeni şifrenizi belirleyebilirsiniz.
+</p>
+<div style="text-align:center;margin:32px 0">
+  <a href="' . $resetLink . '"
+     style="display:inline-block;background:#dc2626;color:#ffffff;text-decoration:none;
+            font-size:15px;font-weight:700;padding:14px 36px;border-radius:8px;
+            letter-spacing:0.3px">
+    Şifremi Sıfırla
+  </a>
+</div>
+<p style="margin:0 0 8px;font-size:13px;color:#6b7280;line-height:1.6">
+  Butona tıklayamıyorsanız aşağıdaki bağlantıyı tarayıcınıza yapıştırın:
+</p>
+<p style="margin:0 0 20px;font-size:12px;word-break:break-all">
+  <a href="' . $resetLink . '" style="color:#2563eb">' . $resetLink . '</a>
+</p>
+<div style="background:#fef9f0;border:1px solid #fde68a;border-radius:8px;padding:14px 18px">
+  <p style="margin:0;font-size:13px;color:#92400e">
+    ⚠️ Bu bağlantı <strong>1 saat</strong> geçerlidir. Eğer bu talebi siz yapmadıysanız bu e-postayı dikkate almayın.
+  </p>
+</div>
+';
+            $html = mailTemplate('Şifre Sıfırlama', $content);
+            sendMail($email, $subject, $html);
         }
         $step = 'sent';
     }

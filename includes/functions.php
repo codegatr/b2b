@@ -358,3 +358,178 @@ function parasutPushStockOut(int $orderId): bool {
         return false;
     }
 }
+
+// ── Mail Gönderici ──────────────────────────────────────────────────────────
+/**
+ * HTML e-posta gönder (SMTP ayarları varsa, yoksa PHP mail())
+ * @param string $to      Alıcı e-posta
+ * @param string $subject Konu
+ * @param string $html    HTML body
+ */
+function sendMail(string $to, string $subject, string $html): bool {
+    $siteName  = setting('site_name', 'B2B Portal');
+    $fromEmail = setting('smtp_from_email', 'noreply@' . ($_SERVER['HTTP_HOST'] ?? 'localhost'));
+    $fromName  = setting('smtp_from_name', $siteName);
+
+    $smtpHost = setting('smtp_host');
+    $smtpUser = setting('smtp_user');
+    $smtpPass = setting('smtp_pass');
+    $smtpPort = (int)setting('smtp_port', '587');
+    $smtpSec  = setting('smtp_secure', 'tls');
+
+    // SMTP varsa PHPMailer olmadan elle gönder
+    if ($smtpHost && $smtpUser) {
+        return sendMailSmtp($to, $subject, $html, $fromEmail, $fromName,
+                            $smtpHost, $smtpPort, $smtpUser, $smtpPass, $smtpSec);
+    }
+
+    // Fallback: PHP mail()
+    $boundary = md5(uniqid());
+    $headers  = implode("\r\n", [
+        "From: $fromName <$fromEmail>",
+        "MIME-Version: 1.0",
+        "Content-Type: text/html; charset=UTF-8",
+    ]);
+    return @mail($to, '=?UTF-8?B?' . base64_encode($subject) . '?=', $html, $headers);
+}
+
+/** SMTP ile gönder (socket tabanlı, bağımlılık yok) */
+function sendMailSmtp(string $to, string $subject, string $html,
+                      string $fromEmail, string $fromName,
+                      string $host, int $port, string $user, string $pass,
+                      string $secure): bool {
+    try {
+        $ssl = ($secure === 'ssl') ? "ssl://" : "";
+        $ctx = stream_context_create(['ssl' => ['verify_peer' => false, 'verify_peer_name' => false]]);
+        $fp  = stream_socket_client("{$ssl}{$host}:{$port}", $errno, $errstr, 10, STREAM_CLIENT_CONNECT, $ctx);
+        if (!$fp) return false;
+
+        $read = fn() => fgets($fp, 1024);
+        $send = function(string $cmd) use ($fp, &$read) {
+            fwrite($fp, $cmd . "\r\n");
+            return $read();
+        };
+
+        $read(); // 220 banner
+        $send("EHLO " . ($_SERVER['HTTP_HOST'] ?? 'localhost'));
+        $read(); // multi-line EHLO response — drain
+        while (($line = $read()) && substr($line, 3, 1) === '-') {}
+
+        if ($secure === 'tls') {
+            $send("STARTTLS");
+            $read();
+            stream_socket_enable_crypto($fp, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
+            $send("EHLO " . ($_SERVER['HTTP_HOST'] ?? 'localhost'));
+            while (($line = $read()) && substr($line, 3, 1) === '-') {}
+        }
+
+        $send("AUTH LOGIN");
+        $read();
+        $send(base64_encode($user));
+        $read();
+        $send(base64_encode($pass));
+        $resp = $read();
+        if (strpos($resp, '235') === false) { fclose($fp); return false; }
+
+        $send("MAIL FROM:<$fromEmail>");
+        $read();
+        $send("RCPT TO:<$to>");
+        $read();
+        $send("DATA");
+        $read();
+
+        $msgId   = '<' . md5(uniqid()) . '@' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '>';
+        $encSubj = '=?UTF-8?B?' . base64_encode($subject) . '?=';
+        $encFrom = '=?UTF-8?B?' . base64_encode($fromName) . '?=';
+        $body = implode("\r\n", [
+            "Message-ID: $msgId",
+            "Date: " . date('r'),
+            "From: $encFrom <$fromEmail>",
+            "To: $to",
+            "Subject: $encSubj",
+            "MIME-Version: 1.0",
+            "Content-Type: text/html; charset=UTF-8",
+            "Content-Transfer-Encoding: base64",
+            "",
+            chunk_split(base64_encode($html)),
+            ".",
+        ]);
+        fwrite($fp, $body . "\r\n");
+        $read();
+        $send("QUIT");
+        fclose($fp);
+        return true;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+/**
+ * Kurumsal HTML e-posta şablonu oluştur
+ * @param string $title   E-posta başlığı
+ * @param string $content İçerik HTML'i (buton, paragraf vb.)
+ */
+function mailTemplate(string $title, string $content): string {
+    $siteName = setting('site_name', 'B2B Portal');
+    $siteUrl  = rtrim(setting('site_url', ''), '/');
+    $year     = date('Y');
+
+    // Logo URL — settings'deki login_image varsa kullan
+    $logoFile = setting('login_image', '');
+    $logoHtml = '';
+    if ($logoFile) {
+        $logoUrl  = $siteUrl . '/uploads/logo/' . $logoFile;
+        $logoHtml = "<img src=\"$logoUrl\" alt=\"$siteName\" style=\"height:48px;max-width:200px;object-fit:contain\">";
+    } else {
+        $logoHtml = "<span style=\"font-size:22px;font-weight:800;color:#1e3a5f;letter-spacing:-0.5px\">$siteName</span>";
+    }
+
+    return <<<HTML
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{$title}</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f6f9;font-family:'Segoe UI',Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:40px 0">
+  <tr><td align="center">
+    <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">
+
+      <!-- Logo Header -->
+      <tr>
+        <td style="background:#1e3a5f;border-radius:12px 12px 0 0;padding:28px 40px;text-align:center">
+          {$logoHtml}
+        </td>
+      </tr>
+
+      <!-- İçerik -->
+      <tr>
+        <td style="background:#ffffff;padding:40px 48px">
+          <h2 style="margin:0 0 20px;font-size:20px;font-weight:700;color:#1a1d23">{$title}</h2>
+          {$content}
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:32px 0">
+          <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6">
+            Bu e-posta <strong>{$siteName}</strong> B2B Bayi Portalı tarafından otomatik olarak gönderilmiştir.<br>
+            Herhangi bir sorunuz için satış ekibimizle iletişime geçebilirsiniz.
+          </p>
+        </td>
+      </tr>
+
+      <!-- Footer -->
+      <tr>
+        <td style="background:#f8fafc;border-radius:0 0 12px 12px;padding:20px 40px;text-align:center;border-top:1px solid #e5e7eb">
+          <p style="margin:0;font-size:12px;color:#6b7280">
+            © {$year} {$siteName} · Tüm hakları saklıdır
+          </p>
+        </td>
+      </tr>
+
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>
+HTML;
+}
