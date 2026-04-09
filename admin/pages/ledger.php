@@ -108,7 +108,7 @@ $cariList = dbRows(
     "SELECT d.id, d.dealer_code, d.company_name,
         COALESCE(SUM(CASE WHEN l.type='borc' AND l.is_closed=0 THEN l.amount ELSE 0 END),0)    AS toplam_borc,
         COALESCE(SUM(CASE WHEN l.type='alacak' AND l.is_closed=0 THEN l.amount ELSE 0 END),0)  AS toplam_alacak,
-        COALESCE(SUM(CASE WHEN l.type='borc' THEN l.amount ELSE -l.amount END),0)              AS net_bakiye,
+        COALESCE(SUM(CASE WHEN l.is_closed=0 AND l.type='borc' THEN l.amount WHEN l.is_closed=0 AND l.type='alacak' THEN -l.amount ELSE 0 END),0) AS net_bakiye,
         MAX(CASE WHEN l.type='borc' AND l.is_closed=0 THEN l.due_date ELSE NULL END)           AS son_vade
      FROM b2b_dealers d
      LEFT JOIN b2b_ledger l ON l.dealer_id=d.id
