@@ -65,22 +65,23 @@ $announceCount = 0;
 $announcements = [];
 try {
     db()->exec("CREATE TABLE IF NOT EXISTS `b2b_announcements` (
-        `id` int NOT NULL AUTO_INCREMENT,
+        `id` int(11) NOT NULL AUTO_INCREMENT,
         `title` varchar(255) NOT NULL,
         `content` text NOT NULL,
         `type` enum('bilgi','uyari','onemli') DEFAULT 'bilgi',
         `is_active` tinyint(1) DEFAULT 1,
         `starts_at` datetime DEFAULT NULL,
         `ends_at` datetime DEFAULT NULL,
+        `created_by` int(11) DEFAULT NULL,
         `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (`id`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     if (isDealer()) {
         $announcements = dbRows(
             "SELECT * FROM b2b_announcements WHERE is_active=1
              AND (starts_at IS NULL OR starts_at <= NOW())
              AND (ends_at IS NULL OR ends_at >= NOW())
-             ORDER BY type DESC, created_at DESC LIMIT 10"
+             ORDER BY created_at DESC LIMIT 10"
         );
         $announceCount = count($announcements);
     }
