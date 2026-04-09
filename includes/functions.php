@@ -393,55 +393,17 @@ function sendMail(string $to, string $subject, string $html): bool {
     return @mail($to, '=?UTF-8?B?' . base64_encode($subject) . '?=', $html, $headers);
 }
 
-/** SMTP ile gönder (socket tabanlı, bağımlılık yok) */
+/** SMTP ile gönder — cURL tabanlı, blocking yok */
 function sendMailSmtp(string $to, string $subject, string $html,
                       string $fromEmail, string $fromName,
                       string $host, int $port, string $user, string $pass,
                       string $secure): bool {
+    if (!function_exists('curl_init')) return false;
     try {
-        $ssl = ($secure === 'ssl') ? "ssl://" : "";
-        $ctx = stream_context_create(['ssl' => ['verify_peer' => false, 'verify_peer_name' => false]]);
-        $fp  = stream_socket_client("{$ssl}{$host}:{$port}", $errno, $errstr, 10, STREAM_CLIENT_CONNECT, $ctx);
-        if (!$fp) return false;
-
-        $read = fn() => fgets($fp, 1024);
-        $send = function(string $cmd) use ($fp, &$read) {
-            fwrite($fp, $cmd . "\r\n");
-            return $read();
-        };
-
-        $read(); // 220 banner
-        $send("EHLO " . ($_SERVER['HTTP_HOST'] ?? 'localhost'));
-        $read(); // multi-line EHLO response — drain
-        while (($line = $read()) && substr($line, 3, 1) === '-') {}
-
-        if ($secure === 'tls') {
-            $send("STARTTLS");
-            $read();
-            stream_socket_enable_crypto($fp, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
-            $send("EHLO " . ($_SERVER['HTTP_HOST'] ?? 'localhost'));
-            while (($line = $read()) && substr($line, 3, 1) === '-') {}
-        }
-
-        $send("AUTH LOGIN");
-        $read();
-        $send(base64_encode($user));
-        $read();
-        $send(base64_encode($pass));
-        $resp = $read();
-        if (strpos($resp, '235') === false) { fclose($fp); return false; }
-
-        $send("MAIL FROM:<$fromEmail>");
-        $read();
-        $send("RCPT TO:<$to>");
-        $read();
-        $send("DATA");
-        $read();
-
-        $msgId   = '<' . md5(uniqid()) . '@' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '>';
         $encSubj = '=?UTF-8?B?' . base64_encode($subject) . '?=';
         $encFrom = '=?UTF-8?B?' . base64_encode($fromName) . '?=';
-        $body = implode("\r\n", [
+        $msgId   = '<' . md5(uniqid()) . '@' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '>';
+        $raw = implode("\r\n", [
             "Message-ID: $msgId",
             "Date: " . date('r'),
             "From: $encFrom <$fromEmail>",
@@ -452,13 +414,39 @@ function sendMailSmtp(string $to, string $subject, string $html,
             "Content-Transfer-Encoding: base64",
             "",
             chunk_split(base64_encode($html)),
-            ".",
         ]);
-        fwrite($fp, $body . "\r\n");
-        $read();
-        $send("QUIT");
-        fclose($fp);
-        return true;
+
+        $proto = match($secure) {
+            'ssl'  => "smtps://$host:$port",
+            default => "smtp://$host:$port",
+        };
+
+        // Geçici dosya ile güvenli READFUNCTION
+        $tmpFile = tmpfile();
+        fwrite($tmpFile, $raw);
+        rewind($tmpFile);
+
+        $ch = curl_init($proto);
+        curl_setopt_array($ch, [
+            CURLOPT_MAIL_FROM      => "<$fromEmail>",
+            CURLOPT_MAIL_RCPT      => ["<$to>"],
+            CURLOPT_READDATA       => $tmpFile,
+            CURLOPT_UPLOAD         => true,
+            CURLOPT_INFILESIZE     => strlen($raw),
+            CURLOPT_USERNAME       => $user,
+            CURLOPT_PASSWORD       => $pass,
+            CURLOPT_USE_SSL        => ($secure === 'ssl') ? CURLUSESSL_ALL : CURLUSESSL_TRY,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => 0,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 15,
+        ]);
+
+        $result = curl_exec($ch);
+        $err    = curl_errno($ch);
+        curl_close($ch);
+        fclose($tmpFile);
+        return $err === 0;
     } catch (Throwable $e) {
         return false;
     }
