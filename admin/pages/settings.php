@@ -348,6 +348,12 @@ if ($li && !file_exists($liPath)) {
 <?php elseif ($activeTab === 'parasut'): ?>
 <div class="card">
 <div class="card-header"><h3 class="card-title">Paraşüt Entegrasyonu</h3></div>
+<div style="background:#fffbeb;border-bottom:1px solid #fde68a;padding:12px 20px;font-size:13px;color:#92400e;line-height:1.6">
+  ⚠️ <strong>Client ID ve Client Secret</strong> Paraşüt destek ekibinden temin edilir.<br>
+  <a href="https://destek.parasut.com" target="_blank" style="color:#d97706;font-weight:600">destek.parasut.com</a> üzerinden veya 
+  <strong>0850 532 52 52</strong> numaralı hattan talep edin.<br>
+  <span style="color:#a16207">Firma ID: Paraşüt panelindeki URL'den alınır → uygulama.parasut.com/<strong>123456</strong>/</span>
+</div>
 <div class="card-body">
 <form method="post" id="parasut-form">
     <?= csrfField() ?>
