@@ -7,10 +7,35 @@ $currentVersion = $updater->getCurrentVersion();
 $installedSha   = $updater->getInstalledSha();
 
 $success = $error = '';
+$migrationResults = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrfCheck();
     $act = $_POST['form_action'] ?? '';
+
+    // Migration çalıştır (tek veya hepsi)
+    if ($act === 'run_migrations') {
+        $migrationResults = migrationRunAll();
+        $ok  = count(array_filter($migrationResults, fn($r) => $r['ok']));
+        $fail = count($migrationResults) - $ok;
+        if (empty($migrationResults)) {
+            $success = 'Çalıştırılacak migration yok, sistem güncel.';
+        } elseif ($fail === 0) {
+            $success = "{$ok} migration başarıyla çalıştırıldı.";
+        } else {
+            $error = "{$ok} başarılı, {$fail} başarısız. Detaylar aşağıda.";
+        }
+    }
+
+    if ($act === 'run_single_migration') {
+        $file = B2B_ROOT . '/install/migrations/' . basename($_POST['migration_file'] ?? '');
+        if (file_exists($file)) {
+            $r = migrationRun($file);
+            $migrationResults = [$r];
+            if ($r['ok']) $success = $r['name'] . ' başarıyla çalıştırıldı.';
+            else $error = $r['name'] . ' hatası: ' . $r['error'];
+        }
+    }
 
     // Branch'den guncelle
     if ($act === 'update_branch') {
@@ -20,6 +45,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $fc = is_array($result['files'] ?? null) ? count($result['files']) : 0;
                 $sha = $result['commit']['sha_short'] ?? '';
                 $success = "Güncelleme tamamlandı! {$fc} dosya güncellendi. Commit: {$sha}";
+                // Güncelleme sonrası bekleyen migration varsa otomatik çalıştır
+                $pending = migrationGetPending();
+                if ($pending) {
+                    $migrationResults = migrationRunAll();
+                    $ok = count(array_filter($migrationResults, fn($r) => $r['ok']));
+                    $success .= " — {$ok} migration otomatik çalıştırıldı.";
+                }
             } else {
                 $error = $result['message'] ?? 'Guncelleme basarisiz.';
             }
@@ -35,6 +67,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($result['success']) {
                     $fc = is_array($result['files'] ?? null) ? count($result['files']) : 0;
                     $success = "Release {$version} yuklendi! {$fc} dosya guncellendi.";
+                    $pending = migrationGetPending();
+                    if ($pending) {
+                        $migrationResults = migrationRunAll();
+                        $ok = count(array_filter($migrationResults, fn($r) => $r['ok']));
+                        $success .= " — {$ok} migration otomatik çalıştırıldı.";
+                    }
                 } else {
                     $error = $result['message'] ?? 'Guncelleme basarisiz.';
                 }
@@ -67,90 +105,157 @@ try {
     $releases = $updater->getReleases(5);
 } catch (Exception $e) {}
 
-$backups  = $updater->getBackups();
-$logs     = dbRows("SELECT * FROM b2b_update_log ORDER BY created_at DESC LIMIT 20");
+$backups         = $updater->getBackups();
+$logs            = dbRows("SELECT * FROM b2b_update_log ORDER BY created_at DESC LIMIT 20");
 $hasBranchUpdate = $latestCommit && ($latestCommit['sha'] !== $installedSha);
+$migStatus       = migrationStatus();
+$hasPending      = !empty($migStatus['pending']);
 ?>
 
 <div class="page-header">
   <div>
-    <h1 class="page-title">Guncelleme Merkezi</h1>
-    <p class="page-sub">Mevcut Surum: <strong><?= h($currentVersion) ?></strong>
+    <h1 class="page-title">Güncelleme Merkezi</h1>
+    <p class="page-sub">Mevcut Sürüm: <strong><?= h($currentVersion) ?></strong>
     <?php if ($installedSha): ?> &nbsp;·&nbsp; Commit: <code style="font-size:.8em"><?= h(substr($installedSha,0,7)) ?></code><?php endif; ?>
     </p>
   </div>
 </div>
 
-<?php if ($success): ?><div class="alert alert-success"><?= $success ?></div><?php endif; ?>
+<?php if ($success): ?><div class="alert alert-success"><?= h($success) ?></div><?php endif; ?>
 <?php if ($error):   ?><div class="alert alert-danger"><?= h($error) ?></div><?php endif; ?>
 <?php if ($fetchError): ?><div class="alert alert-warning">GitHub: <?= h($fetchError) ?> — <a href="?page=settings&tab=github">Token Ayarla</a></div><?php endif; ?>
 
-<!-- ── BRANCH GUNCELLEME (ana mod) ── -->
-<div class="card" style="margin-bottom:1.5rem;border-left:3px solid var(--accent)">
+<?php if (!empty($migrationResults)): ?>
+<div class="card" style="margin-bottom:1.5rem">
+  <div class="card-header"><h3 class="card-title">Migration Sonuçları</h3></div>
+  <div class="card-body" style="padding:12px 16px">
+    <?php foreach ($migrationResults as $mr): ?>
+    <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <span style="color:<?= $mr['ok']?'var(--success)':'var(--danger)' ?>"><?= $mr['ok']?'✓':'✗' ?></span>
+      <code style="font-size:.8rem;flex:1"><?= h($mr['name']) ?></code>
+      <?php if (!$mr['ok']): ?>
+      <span style="color:var(--danger);font-size:.78rem"><?= h($mr['error']) ?></span>
+      <?php endif; ?>
+    </div>
+    <?php endforeach; ?>
+  </div>
+</div>
+<?php endif; ?>
+
+<!-- ── MİGRATIONLAR ── -->
+<div class="card" style="margin-bottom:1.5rem;border-left:3px solid <?= $hasPending?'var(--warning)':'var(--success)' ?>">
+  <div class="card-header">
+    <h3 class="card-title" style="flex:1">🗄️ Veritabanı Migrationları</h3>
+    <?php if ($hasPending): ?>
+    <span class="badge badge-warning"><?= count($migStatus['pending']) ?> bekliyor</span>
+    <?php else: ?>
+    <span class="badge badge-success">Güncel</span>
+    <?php endif; ?>
+  </div>
+  <div class="card-body">
+    <?php if ($hasPending): ?>
+    <div class="alert alert-warning" style="margin-bottom:12px">
+      <strong><?= count($migStatus['pending']) ?> migration çalıştırılmayı bekliyor.</strong>
+      Güncelleme sonrası veritabanı değişiklikleri bu migration'larla uygulanır.
+    </div>
+    <div style="margin-bottom:14px">
+      <?php foreach ($migStatus['pending'] as $pName): ?>
+      <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:6px;margin-bottom:6px">
+        <span style="color:var(--warning)">⏳</span>
+        <code style="font-size:.8rem;flex:1;color:var(--warning)"><?= h($pName) ?></code>
+        <form method="POST" style="display:inline">
+          <?= csrfField() ?>
+          <input type="hidden" name="form_action" value="run_single_migration">
+          <input type="hidden" name="migration_file" value="<?= h($pName) ?>">
+          <button type="submit" class="btn btn-sm btn-secondary"
+            onclick="return confirm('<?= h($pName) ?> çalıştırılsın mı?')">Çalıştır</button>
+        </form>
+      </div>
+      <?php endforeach; ?>
+    </div>
+    <form method="POST">
+      <?= csrfField() ?>
+      <input type="hidden" name="form_action" value="run_migrations">
+      <button type="submit" class="btn btn-primary"
+        onclick="return confirm('Tüm bekleyen migrationlar çalıştırılacak. Önce yedek aldığınızdan emin olun. Devam?')">
+        ⚡ Tümünü Çalıştır
+      </button>
+    </form>
+    <?php else: ?>
+    <p style="color:var(--text-muted);font-size:.875rem">
+      Tüm migrationlar uygulanmış (<?= count($migStatus['done']) ?> toplam).
+    </p>
+    <?php endif; ?>
+
+    <?php if (!empty($migStatus['done'])): ?>
+    <details style="margin-top:12px">
+      <summary style="font-size:.8rem;color:var(--text-muted);cursor:pointer">Çalıştırılmış (<?= count($migStatus['done']) ?>)</summary>
+      <div style="margin-top:8px">
+        <?php foreach ($migStatus['done'] as $dName): ?>
+        <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:.8rem">
+          <span style="color:var(--success)">✓</span>
+          <code><?= h($dName) ?></code>
+        </div>
+        <?php endforeach; ?>
+      </div>
+    </details>
+    <?php endif; ?>
+  </div>
+</div>
+
+<!-- ── BRANCH GUNCELLEME ── -->
+<div class="card" style="margin-bottom:1.5rem;border-left:3px solid var(--info)">
   <div class="card-header" style="display:flex;align-items:center;gap:12px">
-    <h3 class="card-title" style="flex:1">&#128640; main Branch'den Guncelle</h3>
+    <h3 class="card-title" style="flex:1">🚀 main Branch'den Güncelle</h3>
     <?php if ($hasBranchUpdate): ?>
-    <span class="badge badge-danger">Guncelleme Mevcut</span>
+    <span class="badge badge-danger">Güncelleme Mevcut</span>
     <?php elseif ($latestCommit): ?>
-    <span class="badge badge-success">Guncel</span>
+    <span class="badge badge-success">Güncel</span>
     <?php endif; ?>
   </div>
   <div class="card-body">
     <?php if ($latestCommit): ?>
-    <div style="background:var(--bg-elevated);border-radius:8px;padding:14px 16px;margin-bottom:16px;font-size:.875rem">
+    <div style="background:var(--bg);border-radius:8px;padding:14px 16px;margin-bottom:16px;font-size:.875rem;border:1px solid var(--border)">
       <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
         <div style="flex:1;min-width:200px">
           <div style="color:var(--text-muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Son Commit</div>
           <div style="font-weight:600;margin-bottom:2px"><?= h(mb_substr($latestCommit['message'], 0, 80)) ?></div>
           <div style="color:var(--text-muted);font-size:.8rem"><?= h($latestCommit['author']) ?> — <?= date('d.m.Y H:i', strtotime($latestCommit['date'])) ?></div>
         </div>
-        <div>
-          <code style="background:var(--bg-base);padding:4px 8px;border-radius:5px;font-size:.8rem;color:var(--accent)"><?= h($latestCommit['sha_short']) ?></code>
-        </div>
+        <code style="background:var(--bg);padding:4px 8px;border-radius:5px;font-size:.8rem;border:1px solid var(--border)"><?= h($latestCommit['sha_short']) ?></code>
       </div>
     </div>
     <?php if ($hasBranchUpdate): ?>
     <div class="alert alert-warning" style="margin-bottom:12px">
-      Yeni commit mevcut — (<code><?= h(substr($installedSha,0,7) ?: 'bilinmiyor') ?></code>) ile GitHub farklı. Guncelleme mevcut.
+      Yeni commit mevcut — yüklü: <code><?= h(substr($installedSha,0,7) ?: 'bilinmiyor') ?></code>.
+      <?php if ($hasPending): ?><br><strong>⚠️ Bekleyen migration var — güncelleme sonrası otomatik çalıştırılır.</strong><?php endif; ?>
     </div>
     <?php else: ?>
-    <div style="color:var(--text-muted);font-size:.875rem;margin-bottom:12px">
-      Sistem güncel.
-      <?php if ($installedSha): ?>
-      <span style="color:var(--success);font-size:.8rem">
-        ✓ Yüklü: <code style="font-size:11px"><?= h(substr($installedSha,0,7)) ?></code>
-        = GitHub: <code style="font-size:11px"><?= h($latestCommit['sha_short'] ?? '?') ?></code>
-      </span>
-      <?php endif; ?>
-    </div>
+    <p style="color:var(--text-muted);font-size:.875rem;margin-bottom:12px">
+      ✓ Sistem güncel — yüklü: <code><?= h(substr($installedSha,0,7)) ?></code>
+    </p>
     <?php endif; ?>
     <form method="POST">
       <?= csrfField() ?>
       <input type="hidden" name="form_action" value="update_branch">
       <button type="submit" class="btn btn-primary"
-        onclick="return confirm('Branch guncellemesi yapilacak. Backup otomatik alinir. Devam edilsin mi?')"
-      >
-        <?= $hasBranchUpdate ? '&#128640; Guncellemeyi Yukle' : '&#128260; Yeniden Yukle (zorla)' ?>
+        onclick="return confirm('Branch güncellemesi yapılacak. Yedek otomatik alınır. Devam?')">
+        <?= $hasBranchUpdate ? '⬆️ Güncellemeyi Yükle' : '🔄 Yeniden Yükle (zorla)' ?>
       </button>
     </form>
     <?php else: ?>
-    <p style="color:var(--text-muted)">GitHub baglantisi kurulamadi. <a href="?page=settings&tab=github">Token ve repo ayarlarini kontrol edin.</a></p>
+    <p style="color:var(--text-muted)">GitHub bağlantısı kurulamadı. <a href="?page=settings&tab=github">Token ve repo ayarlarını kontrol edin.</a></p>
     <?php endif; ?>
   </div>
 </div>
 
-<!-- ── RELEASE GUNCELLEME (opsiyonel) ── -->
+<!-- ── RELEASE GUNCELLEME ── -->
+<?php if (!empty($releases)): ?>
 <div class="card" style="margin-bottom:1.5rem">
-  <div class="card-header"><h3 class="card-title">&#127381; GitHub Release'den Guncelle</h3></div>
+  <div class="card-header"><h3 class="card-title">🏷️ GitHub Release'den Güncelle</h3></div>
   <div class="card-body">
-    <?php if (empty($releases)): ?>
-    <p style="color:var(--text-muted);font-size:.875rem">
-      Henuz release yok. Branch guncelleme (yukaridaki) daha pratik —
-      sadece <code>git push</code> yapmaniz yeterli.
-    </p>
-    <?php else: ?>
     <table class="table">
-      <thead><tr><th>Surum</th><th>Tarih</th><th>Notlar</th><th></th></tr></thead>
+      <thead><tr><th>Sürüm</th><th>Tarih</th><th>Not</th><th></th></tr></thead>
       <tbody>
       <?php foreach ($releases as $r): ?>
       <tr>
@@ -163,23 +268,23 @@ $hasBranchUpdate = $latestCommit && ($latestCommit['sha'] !== $installedSha);
             <input type="hidden" name="form_action" value="update_release">
             <input type="hidden" name="version" value="<?= h(ltrim($r['tag_name'],'v')) ?>">
             <button type="submit" class="btn btn-sm btn-secondary"
-              onclick="return confirm('<?= h($r['tag_name']) ?> yuklenecek. Devam edilsin mi?')">Yukle</button>
+              onclick="return confirm('<?= h($r['tag_name']) ?> yüklenecek. Devam?')">Yükle</button>
           </form>
         </td>
       </tr>
       <?php endforeach; ?>
       </tbody>
     </table>
-    <?php endif; ?>
   </div>
 </div>
+<?php endif; ?>
 
 <!-- ── YEDEKLER ── -->
 <div class="card" style="margin-bottom:1.5rem">
-  <div class="card-header"><h3 class="card-title">&#128190; Yedekler (Rollback)</h3></div>
+  <div class="card-header"><h3 class="card-title">💾 Yedekler (Rollback)</h3></div>
   <div class="card-body">
     <?php if (empty($backups)): ?>
-    <p style="color:var(--text-muted);font-size:.875rem">Yedek bulunamadi. Guncelleme yapildiginda otomatik yedek alinir.</p>
+    <p style="color:var(--text-muted);font-size:.875rem">Yedek bulunamadı. Güncelleme yapıldığında otomatik yedek alınır.</p>
     <?php else: ?>
     <?php foreach ($backups as $b): ?>
     <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
@@ -190,7 +295,7 @@ $hasBranchUpdate = $latestCommit && ($latestCommit['sha'] !== $installedSha);
         <input type="hidden" name="form_action" value="rollback">
         <input type="hidden" name="backup_file" value="<?= h(basename($b)) ?>">
         <button type="submit" class="btn btn-sm btn-danger"
-          onclick="return confirm('Bu yedege donmek istediginize emin misiniz?')">Geri Don</button>
+          onclick="return confirm('Bu yedeğe dönmek istediğinize emin misiniz?')">Geri Dön</button>
       </form>
     </div>
     <?php endforeach; ?>
@@ -198,68 +303,22 @@ $hasBranchUpdate = $latestCommit && ($latestCommit['sha'] !== $installedSha);
   </div>
 </div>
 
-<!-- ── GECMIS ── -->
+<!-- ── GEÇMİŞ ── -->
 <?php if ($logs): ?>
 <div class="card">
-  <div class="card-header"><h3 class="card-title">&#128203; Guncelleme Gecmisi</h3></div>
+  <div class="card-header"><h3 class="card-title">📋 Güncelleme Geçmişi</h3></div>
   <table class="table">
-    <thead><tr><th>Tarih</th><th>Surum/Commit</th><th>Versiyon</th><th>Durum</th><th>Not</th></tr></thead>
+    <thead><tr><th>Tarih</th><th>Commit/Sürüm</th><th>Durum</th><th>Not</th></tr></thead>
     <tbody>
     <?php foreach ($logs as $l): ?>
     <tr>
       <td style="font-size:.82rem;color:var(--text-muted)"><?= date('d.m.Y H:i', strtotime($l['created_at'])) ?></td>
       <td><code style="font-size:.8rem"><?= h($l['to_version']) ?></code></td>
-      <td><?= (int)('—' ?? 0) ?></td>
-      <td><span class="badge badge-<?= $l['status']=='success'?'success':'danger' ?>"><?= h($l['status']) ?></span></td>
-      <td style="font-size:.8rem;color:var(--text-muted)"><?= h(mb_substr($l['note']??''  ,0,60)) ?></td>
+      <td><span class="badge badge-<?= $l['status']==='success'?'success':'danger' ?>"><?= h($l['status']) ?></span></td>
+      <td style="font-size:.8rem;color:var(--text-muted)"><?= h(mb_substr($l['note']??'',0,60)) ?></td>
     </tr>
     <?php endforeach; ?>
     </tbody>
   </table>
 </div>
 <?php endif; ?>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Branch güncelleme formu
-    document.querySelectorAll('form[data-update-form]').forEach(function(form) {
-        form.addEventListener('submit', function(e) {
-            const btn = form.querySelector('button[type=submit]');
-            if (!btn) return;
-            const origText = btn.innerHTML;
-            btn.disabled = true;
-
-            // Aşamalar
-            const stages = [
-                { text: '🔗 GitHub'a bağlanılıyor...', t: 800 },
-                { text: '📦 Dosyalar indiriliyor...', t: 1800 },
-                { text: '📂 Dosyalar çıkarılıyor...', t: 1200 },
-                { text: '✏️  Sistem güncelleniyor...', t: 800 },
-                { text: '✅ Tamamlandı!', t: 400 },
-            ];
-
-            let elapsed = 0;
-            stages.forEach(function(s) {
-                setTimeout(function() { btn.innerHTML = s.text; }, elapsed);
-                elapsed += s.t;
-            });
-
-            // Progress bar
-            const bar = document.createElement('div');
-            bar.style.cssText = 'height:3px;background:linear-gradient(90deg,#ed2939,#f59e0b);border-radius:2px;margin-top:10px;width:0;transition:width 5s linear';
-            btn.parentNode.insertBefore(bar, btn.nextSibling);
-            setTimeout(function() { bar.style.width = '100%'; }, 50);
-        });
-    });
-
-    // Zorla yükleme formu da aynı
-    document.querySelectorAll('form[data-force-form]').forEach(function(form) {
-        form.addEventListener('submit', function(e) {
-            const btn = form.querySelector('button[type=submit]');
-            if (!btn) return;
-            btn.disabled = true;
-            btn.innerHTML = '🔄 Yükleniyor...';
-        });
-    });
-});
-</script>

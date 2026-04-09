@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'tax_office'     => $taxOff,
             'address'        => $address,
             'city'           => $city,
-            'notes'          => $notes,
+            'message'        => $notes,
             'status'         => 'bekliyor',
             'created_at'     => date('Y-m-d H:i:s'),
         ]);
