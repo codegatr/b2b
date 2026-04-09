@@ -45,30 +45,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $subject  = $siteName . ' - Sifre Sifirlama';
             $logoFile = setting('login_image', '');
             $logoHtml = $logoFile
-                ? '<img src="' . $siteUrl . '/uploads/logo/' . $logoFile . '" alt="' . htmlspecialchars($siteName) . '" style="height:44px;max-width:180px;object-fit:contain">'
-                : '<span style="font-size:20px;font-weight:800;color:#ffffff">' . htmlspecialchars($siteName) . '</span>';
+                ? '<img src="' . $siteUrl . '/uploads/logo/' . $logoFile . '" alt="' . htmlspecialchars($siteName) . '" style="height:72px;max-width:220px;object-fit:contain;display:block;margin:0 auto">'
+                : '<span style="font-size:26px;font-weight:800;color:#ffffff;letter-spacing:-0.5px">' . htmlspecialchars($siteName) . '</span>';
 
-            $html = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,sans-serif">'
-                . '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:40px 16px"><tr><td align="center">'
+            $html = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"></head>'
+                . '<body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,sans-serif">'
+                . '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:40px 16px">'
+                . '<tr><td align="center">'
                 . '<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">'
-                . '<tr><td style="background:#1e3a5f;border-radius:12px 12px 0 0;padding:28px 40px;text-align:center">' . $logoHtml . '</td></tr>'
-                . '<tr><td style="background:#ffffff;padding:40px 48px">'
-                . '<h2 style="margin:0 0 20px;font-size:20px;font-weight:700;color:#1a1d23">Sifre Sifirlama</h2>'
-                . '<p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.7">Merhaba,<br><br>Sifre sifirlama talebinizi aldik. Asagidaki butona tiklayarak yeni sifrenizi belirleyebilirsiniz.</p>'
-                . '<div style="text-align:center;margin:32px 0">'
-                . '<a href="' . $resetLink . '" style="display:inline-block;background:#dc2626;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:14px 36px;border-radius:8px">Sifremi Sifirla</a>'
-                . '</div>'
-                . '<p style="margin:0 0 8px;font-size:13px;color:#6b7280">Butona tikklayamiyor saniz asagidaki baglantiy tarayiciniza yapistirin:</p>'
-                . '<p style="margin:0 0 20px;font-size:12px;word-break:break-all"><a href="' . $resetLink . '" style="color:#2563eb">' . $resetLink . '</a></p>'
-                . '<div style="background:#fef9f0;border:1px solid #fde68a;border-radius:8px;padding:14px 18px">'
-                . '<p style="margin:0;font-size:13px;color:#92400e">Bu baglanti <strong>1 saat</strong> gecerlidir.</p>'
-                . '</div>'
-                . '<hr style="border:none;border-top:1px solid #e5e7eb;margin:32px 0">'
-                . '<p style="margin:0;font-size:12px;color:#9ca3af">Bu e-posta ' . htmlspecialchars($siteName) . ' B2B Bayi Portali tarafindan gonderilmistir.</p>'
+
+                /* ── Header ── */
+                . '<tr><td style="background:#1e3a5f;border-radius:12px 12px 0 0;padding:32px 40px;text-align:center;border-bottom:4px solid #dc2626">'
+                . $logoHtml
+                . '<div style="margin-top:14px;font-size:11px;font-weight:600;letter-spacing:2px;color:rgba(255,255,255,.5);text-transform:uppercase">Bayi Portali</div>'
                 . '</td></tr>'
+
+                /* ── Body ── */
+                . '<tr><td style="background:#ffffff;padding:44px 52px">'
+                . '<h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#1a1d23">'
+                . mb_convert_encoding('&#350;ifre S&#305;f&#305;rlama', 'UTF-8', 'HTML-ENTITIES')
+                . '</h2>'
+                . '<div style="width:40px;height:3px;background:#dc2626;border-radius:2px;margin-bottom:24px"></div>'
+                . '<p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.8">'
+                . 'Merhaba,<br><br>'
+                . mb_convert_encoding('&#350;ifre s&#305;f&#305;rlama talebinizi ald&#305;k. A&#351;a&#287;&#305;daki butona t&#305;klayarak yeni &#351;ifrenizi belirleyebilirsiniz.', 'UTF-8', 'HTML-ENTITIES')
+                . '</p>'
+                . '<table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:8px 0 32px">'
+                . '<a href="' . $resetLink . '" style="display:inline-block;background:#dc2626;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:16px 44px;border-radius:8px;letter-spacing:0.3px">'
+                . mb_convert_encoding('&#350;ifremi S&#305;f&#305;rla', 'UTF-8', 'HTML-ENTITIES')
+                . '</a></td></tr></table>'
+                . '<p style="margin:0 0 6px;font-size:13px;color:#6b7280">'
+                . mb_convert_encoding('Butona t&#305;klayam&#305;yorsan&#305;z a&#351;a&#287;&#305;daki ba&#287;lant&#305;y&#305; taray&#305;c&#305;n&#305;za yap&#305;&#351;t&#305;r&#305;n:', 'UTF-8', 'HTML-ENTITIES')
+                . '</p>'
+                . '<p style="margin:0 0 28px;font-size:12px;word-break:break-all"><a href="' . $resetLink . '" style="color:#2563eb">' . $resetLink . '</a></p>'
+                . '<div style="background:#fef9f0;border-left:4px solid #f59e0b;border-radius:0 8px 8px 0;padding:14px 18px">'
+                . '<p style="margin:0;font-size:13px;color:#92400e">'
+                . mb_convert_encoding('&#9888;&#65039; Bu ba&#287;lant&#305; <strong>1 saat</strong> ge&#231;erlidir. Bu talebi siz yapmad&#305;ysan&#305;z bu e-postay&#305; dikkate almay&#305;n.', 'UTF-8', 'HTML-ENTITIES')
+                . '</p></div>'
+                . '<hr style="border:none;border-top:1px solid #e5e7eb;margin:32px 0">'
+                . '<p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6">'
+                . mb_convert_encoding('Bu e-posta <strong>' . htmlspecialchars($siteName) . '</strong> B2B Bayi Portal&#305; taraf&#305;ndan otomatik olarak g&#246;nderilmi&#351;tir.', 'UTF-8', 'HTML-ENTITIES')
+                . '</p>'
+                . '</td></tr>'
+
+                /* ── Footer ── */
                 . '<tr><td style="background:#f8fafc;border-radius:0 0 12px 12px;padding:20px 40px;text-align:center;border-top:1px solid #e5e7eb">'
                 . '<p style="margin:0;font-size:12px;color:#6b7280">&copy; ' . date('Y') . ' ' . htmlspecialchars($siteName) . '</p>'
                 . '</td></tr>'
+
                 . '</table></td></tr></table></body></html>';
 
             $headers = implode("\r\n", [
