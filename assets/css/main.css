@@ -126,6 +126,7 @@ img { max-width: 100%; }
   border-radius: 99px; min-width: 18px; text-align: center; flex-shrink: 0;
 }
 .nav-badge.warn { background: #f59e0b; }
+.nav-item .badge-count.warn { background: #f59e0b; }
 
 /* Sidebar footer */
 .sidebar-footer {

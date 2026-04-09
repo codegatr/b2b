@@ -131,7 +131,9 @@ $pageTitle = match($page) {
     'payment-card' => 'Kart ile Ödeme',
     'profile'      => 'Profilim',
     'notifications'=> 'Bildirimler',
+    'announcements'=> 'Duyurular',
     'tickets'      => 'Destek Talepleri',
+    'announcements'=> 'Duyurular',
     'apply'        => 'Bayilik Başvurusu',
     'login'        => 'Giriş Yap',
     default        => ucfirst($page),
@@ -160,29 +162,7 @@ $pageTitle = match($page) {
     </div>
 
     <nav class="sidebar-nav">
-      <?php if (!empty($announcements)): ?>
-      <div class="nav-section">
-        <div class="nav-section-label" style="display:flex;align-items:center;gap:6px">
-          Duyurular
-          <?php if ($announceCount > 0): ?><span style="background:var(--red);color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:1px 6px"><?= $announceCount ?></span><?php endif; ?>
-        </div>
-        <?php foreach ($announcements as $ann):
-          $aColor = ['bilgi'=>'#2563eb','uyari'=>'#d97706','onemli'=>'#dc2626'][$ann['type']??'bilgi'];
-          $aIcon  = ['bilgi'=>'ℹ','uyari'=>'⚠','onemli'=>'🔴'][$ann['type']??'bilgi'];
-        ?>
-        <div style="margin:3px 0;padding:8px 12px;background:rgba(255,255,255,.05);border-left:3px solid <?= $aColor ?>;border-radius:0 6px 6px 0">
-          <div style="font-size:11px;font-weight:600;color:#fff;line-height:1.3">
-            <?= $aIcon ?> <?= h($ann['title']) ?>
-          </div>
-          <?php if ($ann['content']): ?>
-          <div style="font-size:10px;color:rgba(255,255,255,.55);margin-top:2px;line-height:1.4">
-            <?= h(mb_substr(strip_tags($ann['content']),0,70)) ?>
-          </div>
-          <?php endif; ?>
-        </div>
-        <?php endforeach; ?>
-      </div>
-      <?php endif; ?>
+
       <div class="nav-section">
         <div class="nav-section-label">Ana Menü</div>
         <a href="?page=dashboard" class="nav-item <?= $page==='dashboard'?'active':'' ?>">
@@ -226,6 +206,11 @@ $pageTitle = match($page) {
           <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 16a2 2 0 002-2H6a2 2 0 002 2zm.995-14.901a1 1 0 10-1.99 0A5.002 5.002 0 003 6c0 1.098-.5 6-2 7h14c-1.5-1-2-5.902-2-7 0-2.42-1.72-4.44-4.005-4.901z"/></svg>
           Bildirimler
           <?php if ($unread > 0): ?><span class="badge-count"><?= $unread ?></span><?php endif; ?>
+        </a>
+        <a href="?page=announcements" class="nav-item <?= $page==='announcements'?'active':'' ?>">
+          <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M13.5 2a1.5 1.5 0 00-1.5 1.5v9A1.5 1.5 0 0013.5 14h-11A1.5 1.5 0 001 12.5v-9A1.5 1.5 0 012.5 2h11zm-1 5H3.5v1h9v-1zm0-2H3.5v1h9V5z"/></svg>
+          Duyurular
+          <?php if ($announceCount > 0): ?><span class="badge-count warn"><?= $announceCount ?></span><?php endif; ?>
         </a>
         <a href="?page=profile" class="nav-item <?= $page==='profile'?'active':'' ?>">
           <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 8a3 3 0 100-6 3 3 0 000 6zm2-3a2 2 0 11-4 0 2 2 0 014 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4z"/></svg>
