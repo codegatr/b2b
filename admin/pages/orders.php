@@ -115,6 +115,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $action = 'detail'; $id = $oid;
     }
+
+    // ── İptal edilen siparişi yeniden işleme al ───────────────
+    if ($act === 'reactivate') {
+        $order = dbRow("SELECT * FROM b2b_orders WHERE id=?", [$oid]);
+        if ($order && $order['status'] === 'iptal') {
+            // Stokta yeterlilil kontrolü
+            $items    = dbRows("SELECT * FROM b2b_order_items WHERE order_id=?", [$oid]);
+            $stockOk  = true;
+            $stockMsg = [];
+            foreach ($items as $it) {
+                $avail = (int)dbVal("SELECT stock FROM b2b_products WHERE id=?", [$it['product_id']]);
+                if ($avail < $it['qty']) {
+                    $stockOk = false;
+                    $stockMsg[] = "{$it['product_name']}: mevcut {$avail}, gerekli {$it['qty']}";
+                }
+            }
+            if (!$stockOk) {
+                $error = 'Yetersiz stok: ' . implode('; ', $stockMsg);
+            } else {
+                // Siparişi bekliyor'a al, iptal bilgilerini temizle
+                dbExec("UPDATE b2b_orders SET status='bekliyor', cancel_reason=NULL,
+                        cancel_requested=0, cancel_requested_at=NULL,
+                        cancel_reviewed_by=NULL, cancel_reviewed_at=NULL
+                        WHERE id=?", [$oid]);
+                // Eğer daha önce cari kaydı kapatıldıysa yeniden aç
+                dbExec("UPDATE b2b_ledger SET is_closed=0 WHERE reference_id=? AND reference_type='order'", [$oid]);
+                notifyDealer($order['dealer_id'], 'order', 'Siparişiniz Yeniden İşleme Alındı',
+                    "#{$order['order_no']} numaralı iptal edilmiş siparişiniz yeniden işleme alındı.",
+                    '?page=orders&action=detail&id='.$oid);
+                auditLog('order_reactivated', 'b2b_orders', $oid, ['by'=>adminId()]);
+                $success = 'Sipariş yeniden "Bekliyor" durumuna alındı.';
+            }
+        }
+        $action = 'detail'; $id = $oid;
+    }
 }
 
 // Detay yükle
@@ -242,6 +277,10 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
         <button class="btn btn-danger" onclick="openModal('modal-cancel')">✕ İptal</button>
         <?php elseif (in_array($order['status'], ['hazirlaniyor'])): ?>
         <button class="btn btn-secondary" onclick="openModal('modal-status')">Durumu Güncelle</button>
+        <?php elseif ($order['status'] === 'iptal'): ?>
+        <button class="btn btn-warning" onclick="openModal('modal-reactivate')" style="background:#f59e0b;color:#fff;border-color:#f59e0b">
+          🔄 Yeniden İşleme Al
+        </button>
         <?php endif; ?>
     </div>
 </div>
@@ -443,6 +482,26 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
     <div class="modal-footer">
         <button class="btn btn-ghost" type="button" onclick="closeModal('modal-status')">Vazgeç</button>
         <button class="btn btn-primary" type="submit" form="form-status">Güncelle</button>
+    </div>
+</div>
+</div>
+
+<!-- Modal: Yeniden İşleme Al -->
+<div id="modal-reactivate" class="modal-overlay" style="display:none">
+<div class="modal">
+    <div class="modal-header"><h3>Siparişi Yeniden İşleme Al</h3></div>
+    <div class="modal-body">
+        <p><?= $order['order_no'] ?? '' ?> numaralı iptal edilmiş sipariş <strong>"Bekliyor"</strong> durumuna alınacak.</p>
+        <p style="font-size:13px;color:var(--text-muted);margin-top:8px">Stok yeterliliği kontrol edilecek. Onaylandıktan sonra stok düşülür ve bayi bilgilendirilir.</p>
+    </div>
+    <div class="modal-footer">
+        <form method="post">
+            <?= csrfField() ?>
+            <input type="hidden" name="form_action" value="reactivate">
+            <input type="hidden" name="order_id" value="<?= $id ?>">
+            <button class="btn btn-ghost" type="button" onclick="closeModal('modal-reactivate')">Vazgeç</button>
+            <button class="btn btn-primary" type="submit" style="background:#f59e0b;border-color:#f59e0b">🔄 Yeniden İşleme Al</button>
+        </form>
     </div>
 </div>
 </div>
