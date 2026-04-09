@@ -413,3 +413,9 @@ ALTER TABLE `b2b_orders`
 ALTER TABLE `b2b_products`
   ADD COLUMN IF NOT EXISTS `short_description` varchar(255) DEFAULT NULL
   AFTER `description`;
+
+-- ── Veri Düzeltmesi: İptal edilmiş siparişlerin ledger kayıtlarını kapat ──
+UPDATE b2b_ledger SET is_closed=1
+WHERE reference_type='order'
+  AND reference_id IN (SELECT id FROM b2b_orders WHERE status='iptal')
+  AND is_closed=0;

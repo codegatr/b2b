@@ -29,14 +29,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $oid = intval($_POST['order_id'] ?? 0);
         $ord = dbRow("SELECT * FROM b2b_orders WHERE id=?", [$oid]);
         if ($ord && $ord['cancel_requested']) {
-            // Stok geri yükle
-            $items = dbRows("SELECT * FROM b2b_order_items WHERE order_id=?", [$oid]);
-            foreach ($items as $it) {
-                $qty = (int)$it['qty'];
-                if ($qty > 0) dbExec("UPDATE b2b_products SET stock=stock+? WHERE id=?", [$qty, $it['product_id']]);
-            }
-            // Cari borcu kapat
+            // Cari ledger kapat
             dbExec("UPDATE b2b_ledger SET is_closed=1 WHERE reference_id=? AND reference_type='order'", [$oid]);
+            // Stok geri yükle — sadece onaylanmış siparişlerde stok düşülmüştü
+            $ord2 = dbRow("SELECT status FROM b2b_orders WHERE id=?", [$oid]);
+            if (($ord2['status'] ?? '') === 'onaylandi') {
+                $items = dbRows("SELECT * FROM b2b_order_items WHERE order_id=?", [$oid]);
+                foreach ($items as $it) {
+                    $qty = (int)($it['qty'] ?? 0);
+                    if ($qty > 0) dbExec("UPDATE b2b_products SET stock=stock+? WHERE id=?", [$qty, $it['product_id']]);
+                }
+            }
             // Sipariş güncelle
             dbExec("UPDATE b2b_orders SET status='iptal', cancel_requested=0,
                     cancel_reviewed_by=?, cancel_reviewed_at=NOW() WHERE id=?",
@@ -89,12 +92,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $reason = trim($_POST['cancel_reason'] ?? '');
         if ($order && in_array($order['status'], ['bekliyor','onaylandi'])) {
             dbExec("UPDATE b2b_orders SET status='iptal', cancel_reason=? WHERE id=?", [$reason, $oid]);
-            // Stok iade (onaylandıysa)
+            // Cari ledger — her durumda kapat
+            dbExec("UPDATE b2b_ledger SET is_closed=1 WHERE reference_id=? AND reference_type='order'", [$oid]);
+            // Stok iade sadece onaylı siparişlerde
             if ($order['status'] === 'onaylandi') {
                 $items = dbRows("SELECT * FROM b2b_order_items WHERE order_id=?", [$oid]);
-                foreach ($items as $it) { stockUpdate($it['product_id'], $it['qty'], 'iade', 'order', $oid); }
-                // Cari iptal
-                dbExec("UPDATE b2b_ledger SET is_closed=1 WHERE reference_id=? AND reference_type='order'", [$oid]);
+                foreach ($items as $it) {
+                    $_qty = (int)($it['qty'] ?? 0);
+                    if ($_qty > 0) dbExec("UPDATE b2b_products SET stock=stock+? WHERE id=?", [$_qty, $it['product_id']]);
+                }
             }
             notifyDealer($order['dealer_id'], 'order', 'Sipariş İptal Edildi', "#{$order['order_no']} numaralı siparişiniz iptal edildi." . ($reason ? " Neden: $reason" : ''), '?page=orders&action=detail&id='.$oid);
             $success = 'Sipariş iptal edildi.';
@@ -379,8 +385,9 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
 </table>
 </div>
 <?= $pager ?>
+<?php endif; ?>
 
-<?php elseif ($action === 'detail' && $order): ?>
+<?php if ($action === 'detail' && $order): ?>
 <div class="page-header">
     <div>
         <h1 class="page-title"><?= h($order['order_no']) ?></h1>
@@ -452,8 +459,6 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
     </form>
   </div>
 </div>
-<?php endif; ?>
-
 <div class="grid grid-cols-3 gap-4 mb-6">
     <div class="stat-card"><div class="stat-label">Durum</div><div class="stat-value"><?= orderStatusLabel($order['status']) ?></div></div>
     <div class="stat-card"><div class="stat-label">Toplam</div><div class="stat-value"><?= money($order['grand_total']) ?></div></div>
@@ -638,6 +643,29 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
             <button class="btn btn-primary" type="submit" style="background:#f59e0b;border-color:#f59e0b">🔄 Yeniden İşleme Al</button>
         </form>
     </div>
+</div>
+</div>
+
+</div>
+</div>
+
+<!-- Modal: Sipariş Sil -->
+<div id="modal-delete-order" class="modal-overlay">
+<div class="modal">
+  <div class="modal-header">🗑 Siparişi Sil</div>
+  <div class="modal-body">
+    <p><strong><?= h($order['order_no']) ?></strong> numaralı sipariş kalıcı olarak silinecek.</p>
+    <p style="margin-top:8px;color:var(--danger);font-size:12px">⚠️ Bu işlem geri alınamaz. Sipariş kalemleri de silinir.</p>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="closeModal('modal-delete-order')">Vazgeç</button>
+    <form method="post" style="display:inline">
+      <?= csrfField() ?>
+      <input type="hidden" name="form_action" value="delete_order">
+      <input type="hidden" name="order_id" value="<?= $id ?>">
+      <button type="submit" class="btn btn-danger">Evet, Sil</button>
+    </form>
+  </div>
 </div>
 </div>
 
