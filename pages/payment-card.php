@@ -610,21 +610,57 @@ function fetchInstallments(bin) {
   hint.style.display = 'none';
 
   const body = new URLSearchParams({ csrf: CSRF_TOKEN, bin: bin, order_id: ORDER_ID });
-  fetch('<?= B2B_URL ?>/api/rubikpara-installments.php', {
+  const url  = '<?= B2B_URL ?>/api/rubikpara-installments.php';
+
+  fetch(url, {
     method: 'POST',
     headers: {'Content-Type':'application/x-www-form-urlencoded'},
     body: body.toString(),
+    credentials: 'same-origin', // session cookie zorunlu
   })
-  .then(r => r.json())
-  .then(d => {
+  .then(async r => {
+    const text = await r.text();
+    let data = null, parseErr = null;
+    try { data = JSON.parse(text); } catch (e) { parseErr = e.message; }
+    return { status: r.status, ok: r.ok, text, data, parseErr };
+  })
+  .then(resp => {
     load.style.display = 'none';
-    if (!d.ok || !d.installments || !d.installments.length) {
+
+    // 1) HTTP-level hata
+    if (!resp.ok) {
       hint.style.display = 'block';
-      hint.textContent = d.message || 'Taksit bilgisi alınamadı, sadece tek çekim kullanılabilir.';
       hint.style.color = '#dc2626';
+      hint.textContent = `HTTP ${resp.status}: ` + (resp.text.substring(0, 200) || 'Endpoint hata döndü');
       renderOptions(INITIAL_FALLBACK);
       return;
     }
+    // 2) JSON parse hatası
+    if (resp.parseErr) {
+      hint.style.display = 'block';
+      hint.style.color = '#dc2626';
+      hint.textContent = `Yanıt geçerli JSON değil: ${resp.parseErr} | ` + resp.text.substring(0, 150);
+      renderOptions(INITIAL_FALLBACK);
+      return;
+    }
+    const d = resp.data;
+    // 3) Application-level hata (d.ok=false)
+    if (!d.ok) {
+      hint.style.display = 'block';
+      hint.style.color = '#dc2626';
+      hint.textContent = 'Rubikpara: ' + (d.message || 'Bilinmeyen hata');
+      renderOptions(INITIAL_FALLBACK);
+      return;
+    }
+    // 4) Boş liste — Rubikpara taksit önermedi
+    if (!d.installments || !d.installments.length) {
+      hint.style.display = 'block';
+      hint.style.color = '#dc2626';
+      hint.textContent = 'Bu kart için Rubikpara taksit listesi döndürmedi (test merchant kart-banka kombinasyonu desteklemiyor olabilir). Tek çekim ile devam edebilirsiniz.';
+      renderOptions(INITIAL_FALLBACK);
+      return;
+    }
+    // 5) Başarı
     hint.style.display = 'block';
     hint.style.color = 'var(--text-muted)';
     hint.textContent = `${d.installments.length} seçenek bulundu — komisyonlar bankanın güncel oranlarıdır.`;
