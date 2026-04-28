@@ -249,8 +249,27 @@ $initialList   = function_exists('rubikparaTaksitleriZenginlestir')
     ? rubikparaTaksitleriZenginlestir([], $initialBase)
     : [['installmentCount'=>1, 'totalAmount'=>$initialBase, 'installmentAmount'=>$initialBase, 'commission'=>0, 'commissionRate'=>0]];
 $initialSingle = $initialList[0];
+
+// ── GEÇİCİ DEBUG (admin sonra kaldıracak) ──────────────────────
+$__rk_debug = [
+    'helper_loaded' => function_exists('rubikparaTaksitleriZenginlestir'),
+    'single_rate_setting' => setting('rubikpara_single_rate', 'NULL'),
+    'initial_base' => $initialBase,
+    'initial_total' => $initialSingle['totalAmount'] ?? null,
+    'initial_commission' => $initialSingle['commission'] ?? null,
+    'initial_rate' => $initialSingle['commissionRate'] ?? null,
+];
 ?>
 <div class="page-body">
+
+<!-- GEÇİCİ DEBUG — sorun çözülünce kaldırılacak -->
+<div style="background:#fef3c7;border:2px dashed #f59e0b;padding:12px 16px;margin-bottom:14px;font-family:ui-monospace,monospace;font-size:12px;line-height:1.7">
+<strong>🐛 DEBUG (geçici):</strong><br>
+<?php foreach ($__rk_debug as $k => $v): ?>
+<?= htmlspecialchars($k) ?> = <code><?= htmlspecialchars(is_bool($v) ? ($v?'true':'false') : (string)$v) ?></code><br>
+<?php endforeach; ?>
+</div>
+
 <div class="page-header">
   <div>
     <h1 class="page-title">Kart ile Ödeme</h1>
