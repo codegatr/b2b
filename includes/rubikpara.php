@@ -174,7 +174,7 @@ class Rubikpara {
             'Signature'       => $auth['signature'],
             'ConversationId'  => $auth['conversationId'],
             'MerchantNumber'  => $this->merchantNo,
-        ], 'multipart');
+        ], 'form');
     }
 
     // ─────────────────────────────────────────────────────────────
