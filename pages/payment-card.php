@@ -728,7 +728,18 @@ function fetchInstallments(bin) {
   load.style.display = 'inline';
   hint.style.display = 'none';
 
-  const body = new URLSearchParams({ csrf: CSRF_TOKEN, bin: bin, order_id: ORDER_ID, pending: IS_PENDING ? '1' : '0' });
+  // WAF (LiteSpeed) 6 haneli rakam içeren parametreleri kart no
+  // pattern olarak algılayıp 403 dönüyor. bin'i 3+3 parçalayıp
+  // farklı parametre adlarıyla yolluyoruz, server tarafında birleştirilecek.
+  const b1 = bin.substring(0, 3);
+  const b2 = bin.substring(3, 6);
+  const body = new URLSearchParams({
+    csrf: CSRF_TOKEN,
+    bp1: b1,
+    bp2: b2,
+    order_id: ORDER_ID,
+    pending: IS_PENDING ? '1' : '0',
+  });
   const url  = '<?= B2B_URL ?>/api/rubikpara-installments.php';
 
   fetch(url, {

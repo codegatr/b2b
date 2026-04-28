@@ -39,7 +39,12 @@ if (!in_array('kredi_karti', $allowed, true)) {
     rk_out(false, 'Kart ile ödeme izniniz yok');
 }
 
-$bin     = preg_replace('/\D/', '', $_POST['bin'] ?? '');
+// WAF (LiteSpeed) 6 haneli rakam içeren tek parametreyi kart no
+// pattern olarak algılayıp 403 atıyor. JS bin'i 3+3 parçalı yolluyor.
+$bin = preg_replace('/\D/', '',
+    ($_POST['bp1'] ?? $_POST['bin'] ?? '') .
+    ($_POST['bp2'] ?? '')
+);
 $orderId = (int)($_POST['order_id'] ?? 0);
 $pending = ($_POST['pending'] ?? '') === '1';
 

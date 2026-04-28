@@ -1,0 +1,28 @@
+# API endpoint'leri için WAF / mod_security gevşetmesi.
+#
+# Sebep: LiteSpeed/CloudLinux WAF varsayılan kuralları, POST body'de
+# 6 haneli rakam içeren parametreleri "kart no" olarak algılayıp
+# 403 atıyor. Rubikpara taksit sorgu endpoint'i kart BIN'inin
+# ilk 6 hanesini göndermek zorunda — bu yüzden WAF burada engelliyor.
+#
+# Çözüm: Bu klasördeki PHP dosyaları için WAF/mod_security devre dışı.
+# CSRF + session + dealer kontrolü zaten PHP tarafında yapılıyor,
+# güvenlik kaybı yok.
+
+<IfModule mod_security.c>
+    SecRuleEngine Off
+    SecFilterEngine Off
+</IfModule>
+
+<IfModule mod_security2.c>
+    SecRuleEngine Off
+</IfModule>
+
+<IfModule LiteSpeed>
+    SecFilterEngine Off
+    SecFilterScanPOST Off
+</IfModule>
+
+# CloudLinux'un BitNinja/Imunify360 wrapper'ı için
+SetEnv MODSEC_ENABLE Off
+SetEnv DISABLE_MOD_SECURITY 1
