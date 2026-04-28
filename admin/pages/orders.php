@@ -15,12 +15,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $oid = intval($_POST['order_id'] ?? 0);
         $ord = dbRow("SELECT * FROM b2b_orders WHERE id=?", [$oid]);
         if ($ord) {
+            // Stok iade — sipariş silinmeden önce kalemlerden iade et
+            // (cart.php her sipariş statüsünde stok düşürdüğü için iadeyi
+            // statüye bağlamıyoruz; iptal/iade siparişlerde zaten iade
+            // edilmişse bir daha iade edilmesin diye check ediyoruz).
+            if (!in_array($ord['status'] ?? '', ['iptal', 'iade'], true)) {
+                $items = dbRows("SELECT product_id, qty FROM b2b_order_items WHERE order_id=?", [$oid]);
+                foreach ($items as $it) {
+                    $qty = (int)($it['qty'] ?? 0);
+                    if ($qty > 0 && $it['product_id']) {
+                        dbExec("UPDATE b2b_products SET stock=stock+? WHERE id=?",
+                               [$qty, $it['product_id']]);
+                    }
+                }
+            }
             dbExec("DELETE FROM b2b_order_items WHERE order_id=?", [$oid]);
             dbExec("DELETE FROM b2b_orders WHERE id=?", [$oid]);
             // Ledger kayıtlarını da sil
             dbExec("DELETE FROM b2b_ledger WHERE reference_type='order' AND reference_id=?", [$oid]);
             auditLog('order_deleted', 'b2b_orders', $oid, ['order_no' => $ord['order_no']]);
-            $_SESSION['flash_admin'] = ['type' => 'success', 'msg' => "#{$ord['order_no']} siparişi ve cari kaydı silindi."];
+            $_SESSION['flash_admin'] = ['type' => 'success', 'msg' => "#{$ord['order_no']} siparişi, stoklar geri yüklendi ve cari kaydı silindi."];
         }
         header('Location: ?page=orders');
         exit;
@@ -33,13 +47,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($ord && $ord['cancel_requested']) {
             // Cari ledger kapat
             dbExec("UPDATE b2b_ledger SET is_closed=1 WHERE reference_id=? AND reference_type='order'", [$oid]);
-            // Stok geri yükle — sadece onaylanmış siparişlerde stok düşülmüştü
-            $ord2 = dbRow("SELECT status FROM b2b_orders WHERE id=?", [$oid]);
-            if (($ord2['status'] ?? '') === 'onaylandi') {
-                $items = dbRows("SELECT * FROM b2b_order_items WHERE order_id=?", [$oid]);
+            // Stok geri yükle — cart.php tüm sipariş statülerinde stok
+            // düşürüyor, dolayısıyla iptal'de de her zaman iade etmeliyiz.
+            // Mevcut statü 'iptal' veya 'iade' ise zaten iade edilmiş, atla.
+            if (!in_array($ord['status'] ?? '', ['iptal', 'iade'], true)) {
+                $items = dbRows("SELECT product_id, qty FROM b2b_order_items WHERE order_id=?", [$oid]);
                 foreach ($items as $it) {
                     $qty = (int)($it['qty'] ?? 0);
-                    if ($qty > 0) dbExec("UPDATE b2b_products SET stock=stock+? WHERE id=?", [$qty, $it['product_id']]);
+                    if ($qty > 0 && $it['product_id']) {
+                        dbExec("UPDATE b2b_products SET stock=stock+? WHERE id=?",
+                               [$qty, $it['product_id']]);
+                    }
                 }
             }
             // Sipariş güncelle
@@ -92,20 +110,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($act === 'cancel') {
         $order = dbRow("SELECT * FROM b2b_orders WHERE id=?", [$oid]);
         $reason = trim($_POST['cancel_reason'] ?? '');
-        if ($order && in_array($order['status'], ['bekliyor','onaylandi'])) {
-            dbExec("UPDATE b2b_orders SET status='iptal', cancel_reason=? WHERE id=?", [$reason, $oid]);
+        if ($order && in_array($order['status'], ['bekliyor','onaylandi','hazirlaniyor','kargoda'])) {
             // Cari ledger — her durumda kapat
             dbExec("UPDATE b2b_ledger SET is_closed=1 WHERE reference_id=? AND reference_type='order'", [$oid]);
-            // Stok iade sadece onaylı siparişlerde
-            if ($order['status'] === 'onaylandi') {
-                $items = dbRows("SELECT * FROM b2b_order_items WHERE order_id=?", [$oid]);
+            // Stok iade — cart.php tüm statülerde stok düşürdüğü için her
+            // statüde iade etmeliyiz. Zaten 'iptal'/'iade' olanları hariç tut.
+            if (!in_array($order['status'] ?? '', ['iptal','iade'], true)) {
+                $items = dbRows("SELECT product_id, qty FROM b2b_order_items WHERE order_id=?", [$oid]);
                 foreach ($items as $it) {
                     $_qty = (int)($it['qty'] ?? 0);
-                    if ($_qty > 0) dbExec("UPDATE b2b_products SET stock=stock+? WHERE id=?", [$_qty, $it['product_id']]);
+                    if ($_qty > 0 && $it['product_id']) {
+                        dbExec("UPDATE b2b_products SET stock=stock+? WHERE id=?", [$_qty, $it['product_id']]);
+                    }
                 }
             }
+            dbExec("UPDATE b2b_orders SET status='iptal', cancel_reason=? WHERE id=?", [$reason, $oid]);
             notifyDealer($order['dealer_id'], 'order', 'Sipariş İptal Edildi', "#{$order['order_no']} numaralı siparişiniz iptal edildi." . ($reason ? " Neden: $reason" : ''), '?page=orders&action=detail&id='.$oid);
-            $success = 'Sipariş iptal edildi.';
+            $success = 'Sipariş iptal edildi, stoklar geri yüklendi.';
         }
         $action = 'detail'; $id = $oid;
     }

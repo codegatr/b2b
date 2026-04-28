@@ -178,11 +178,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
         $_SESSION['flash'] = ['type'=>'success','msg'=>"Sipariş #$orderNo oluşturuldu."];
 
         // Kredi kartı seçildiyse direkt ödeme sayfasına, aksi halde sipariş detayına
-        if ($methodChoice === 'kredi_karti') {
-            header('Location: ?page=payment-card&order_id=' . $orderId);
-        } else {
-            header('Location: ?page=orders&action=detail&id=' . $orderId . '&ordered=1');
-        }
+        $redirectUrl = ($methodChoice === 'kredi_karti')
+            ? '?page=payment-card&order_id=' . $orderId
+            : '?page=orders&action=detail&id=' . $orderId . '&ordered=1';
+
+        // index.php layout'u zaten output başlattığı için header() yerine
+        // çift fallback kullan: JS + meta refresh + manuel link.
+        echo '<!DOCTYPE html><html><head><meta charset="utf-8">';
+        echo '<meta http-equiv="refresh" content="0;url=' . htmlspecialchars($redirectUrl) . '">';
+        echo '<script>window.location.replace(' . json_encode($redirectUrl) . ');</script>';
+        echo '</head><body style="font-family:system-ui;padding:40px;text-align:center">';
+        echo '<p>Sipariş #' . htmlspecialchars($orderNo) . ' oluşturuldu, yönlendiriliyorsunuz...</p>';
+        echo '<p><a href="' . htmlspecialchars($redirectUrl) . '">Otomatik yönlendirme olmazsa buraya tıklayın</a></p>';
+        echo '</body></html>';
         exit;
     }
 }
