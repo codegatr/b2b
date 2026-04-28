@@ -41,6 +41,24 @@ $upcomingDue = dbRows(
     "SELECT * FROM b2b_ledger WHERE dealer_id=? AND is_closed=0 AND type='borc' AND due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(),INTERVAL 7 DAY) ORDER BY due_date",
     [$dealer['id']]
 );
+
+// Aktif Duyurular — dışarıdan ($announcements) gelmediyse direkt çek
+// (defansif: index.php'deki blok exception'a düştüyse veya değişken pas geçilmediyse)
+if (empty($announcements)) {
+    try {
+        $announcements = dbRows(
+            "SELECT a.*, IF(r.id IS NOT NULL,1,0) AS is_read
+             FROM b2b_announcements a
+             LEFT JOIN b2b_announcement_reads r
+               ON r.announcement_id=a.id AND r.dealer_id=?
+             WHERE a.is_active=1
+               AND (a.starts_at IS NULL OR a.starts_at <= NOW())
+               AND (a.ends_at IS NULL OR a.ends_at >= NOW())
+             ORDER BY a.created_at DESC LIMIT 5",
+            [$dealer['id']]
+        );
+    } catch (\Throwable $e) { $announcements = []; }
+}
 ?>
 
 <div class="page-header">
@@ -53,19 +71,44 @@ $upcomingDue = dbRows(
 
 <!-- Duyurular -->
 <?php if (!empty($announcements)): ?>
-<div style="margin-bottom:20px">
-  <?php foreach ($announcements as $ann): ?>
-  <?php $ac = ['bilgi'=>'info','uyari'=>'warning','onemli'=>'danger'][$ann['type']??'bilgi']; ?>
-  <div class="alert alert-<?= $ac ?>" style="margin-bottom:8px;display:flex;align-items:flex-start;gap:10px">
-    <div style="flex:1">
-      <strong><?= h($ann['title']) ?></strong>
-      <div style="font-size:12px;margin-top:3px;opacity:.85"><?= nl2br(h($ann['content'])) ?></div>
-    </div>
-    <?php if ($ann['ends_at']): ?>
-    <div style="font-size:11px;opacity:.6;white-space:nowrap"><?= date('d.m.Y', strtotime($ann['ends_at'])) ?>'e kadar</div>
-    <?php endif; ?>
+<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:0;margin-bottom:20px;overflow:hidden">
+  <div style="background:linear-gradient(135deg,#1e3a5f,#2c5282);padding:14px 20px;display:flex;align-items:center;gap:10px;color:#fff">
+    <span style="font-size:18px">📢</span>
+    <strong style="font-size:14px">Duyurular</strong>
+    <span style="background:rgba(255,255,255,.2);color:#fff;font-size:11px;font-weight:700;padding:2px 9px;border-radius:99px;margin-left:6px"><?= count($announcements) ?></span>
+    <a href="?page=announcements" style="margin-left:auto;color:#fff;font-size:12px;font-weight:600;text-decoration:none;opacity:.9">Tümü →</a>
   </div>
-  <?php endforeach; ?>
+  <div>
+    <?php foreach ($announcements as $i => $ann):
+      $type = $ann['type'] ?? 'bilgi';
+      $cfg = match($type) {
+          'onemli' => ['icon'=>'🔴', 'badge'=>'ÖNEMLİ',  'color'=>'#dc2626', 'bg'=>'#fef2f2'],
+          'uyari'  => ['icon'=>'⚠️', 'badge'=>'UYARI',   'color'=>'#d97706', 'bg'=>'#fffbeb'],
+          default  => ['icon'=>'ℹ️', 'badge'=>'BİLGİ',   'color'=>'#0369a1', 'bg'=>'#eff6ff'],
+      };
+      $isUnread = empty($ann['is_read']);
+    ?>
+    <div style="padding:14px 20px;border-top:1px solid var(--border);<?= $isUnread ? 'background:'.$cfg['bg'] : '' ?>;display:flex;gap:14px;align-items:flex-start">
+      <div style="font-size:20px;line-height:1.2;flex:0 0 auto;margin-top:2px"><?= $cfg['icon'] ?></div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
+          <span style="font-size:10px;font-weight:700;color:<?= $cfg['color'] ?>;background:#fff;border:1px solid <?= $cfg['color'] ?>40;padding:2px 7px;border-radius:4px;letter-spacing:.4px"><?= $cfg['badge'] ?></span>
+          <strong style="font-size:13px;color:var(--text)"><?= h($ann['title']) ?></strong>
+          <?php if ($isUnread): ?><span style="width:6px;height:6px;background:<?= $cfg['color'] ?>;border-radius:50%"></span><?php endif; ?>
+        </div>
+        <?php if (!empty($ann['content'])): ?>
+        <div style="font-size:12px;color:var(--text-2);line-height:1.6;margin-bottom:6px"><?= nl2br(h(mb_substr($ann['content'], 0, 200))) ?><?= mb_strlen($ann['content']) > 200 ? '...' : '' ?></div>
+        <?php endif; ?>
+        <div style="font-size:11px;color:var(--text-muted)">
+          <?= fmtDate($ann['created_at']) ?>
+          <?php if (!empty($ann['ends_at'])): ?>
+          · <span style="color:#d97706"><?= date('d.m.Y', strtotime($ann['ends_at'])) ?>'e kadar</span>
+          <?php endif; ?>
+        </div>
+      </div>
+    </div>
+    <?php endforeach; ?>
+  </div>
 </div>
 <?php endif; ?>
 
