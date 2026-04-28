@@ -6,6 +6,12 @@ $dealer = currentDealer();
 $action = $_GET['action'] ?? 'list';
 $id     = intval($_GET['id'] ?? 0);
 
+// Bayi ödeme yöntemi izinleri (admin → Bayiler → Düzenle)
+$allowedPayMethods = array_filter(explode(',', $dealer['payment_methods'] ?? 'havale,kredi_karti'));
+$cardEnabled       = in_array('kredi_karti', $allowedPayMethods, true)
+                  && function_exists('rubikpara')
+                  && rubikpara()->isConfigured();
+
 // İptal talebi POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'cancel_request') {
     csrfCheck();
@@ -96,7 +102,19 @@ if ($action === 'list') {
                 <?= $o['payment_status']==='odendi'?'Ödendi':($o['payment_status']==='kismi'?'Kısmen':'Bekliyor') ?>
             </span>
         </td>
-        <td><a href="?page=orders&action=detail&id=<?= $o['id'] ?>" class="btn btn-xs btn-ghost">Detay →</a></td>
+        <td>
+            <?php
+            $payable = ($o['payment_status'] ?? '') !== 'odendi'
+                    && in_array($o['status'] ?? '', ['onaylandi','hazirlaniyor','kargoda'], true);
+            ?>
+            <?php if ($payable && $cardEnabled): ?>
+            <a href="?page=payment-card&order_id=<?= $o['id'] ?>"
+               class="btn btn-xs"
+               style="background:#16a34a;color:#fff;border:none;margin-right:4px"
+               title="Kredi Kartı ile Öde">💳 Öde</a>
+            <?php endif; ?>
+            <a href="?page=orders&action=detail&id=<?= $o['id'] ?>" class="btn btn-xs btn-ghost">Detay →</a>
+        </td>
     </tr>
     <?php endforeach; ?>
     <?php if (empty($orders)): ?><tr><td colspan="7" class="text-center text-muted py-8">Sipariş bulunamadı.</td></tr><?php endif; ?>
@@ -154,8 +172,19 @@ $isAuto = ($order['status'] === 'onaylandi');
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap">
     <a href="?page=orders" class="btn btn-secondary">← Geri</a>
-    <?php if (($order['payment_status'] ?? '') !== 'odendi' && in_array($order['status'] ?? '', ['onaylandi','hazirlaniyor','kargoda'])): ?>
-    <a href="?page=payments" class="btn btn-primary">💳 Ödeme Bildir</a>
+    <?php
+    $payable = ($order['payment_status'] ?? '') !== 'odendi'
+            && in_array($order['status'] ?? '', ['onaylandi','hazirlaniyor','kargoda'], true);
+    ?>
+    <?php if ($payable && $cardEnabled): ?>
+    <a href="?page=payment-card&order_id=<?= $order['id'] ?>"
+       class="btn"
+       style="background:#16a34a;color:#fff;border:none">
+       💳 Kredi Kartı ile Öde
+    </a>
+    <?php endif; ?>
+    <?php if ($payable): ?>
+    <a href="?page=payments" class="btn btn-primary">🏦 Havale Bildir</a>
     <?php endif; ?>
   </div>
 </div>

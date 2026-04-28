@@ -53,11 +53,15 @@ $payments = dbRows(
 );
 
 // Ödeme yöntemleri — bayi iznine göre filtrele
+// NOT: 'kredi_karti' bildirim formuna eklenmez. Kart ödemesi
+// pages/payment-card.php (Rubikpara 3D Secure) üzerinden otomatik kaydedilir.
 $allowedPayMethods = array_filter(explode(',', $dealer['payment_methods'] ?? 'havale,kredi_karti'));
 if (empty($allowedPayMethods)) $allowedPayMethods = ['havale'];
+$cardEnabled = in_array('kredi_karti', $allowedPayMethods, true)
+            && function_exists('rubikpara')
+            && rubikpara()->isConfigured();
 $allPayMethods = [
     'havale'      => 'Havale / EFT',
-    'kredi_karti' => 'Kredi Kartı',
     'nakit'       => 'Nakit',
     'cek'         => 'Çek',
     'cari'        => 'Açık Hesap (Cari)',
@@ -76,6 +80,15 @@ $bankAccounts = setting('bank_accounts', '');
 
 <?php if ($success): ?><div class="alert alert-success"><?= h($success) ?></div><?php endif; ?>
 <?php if ($error):   ?><div class="alert alert-danger"><?= h($error) ?></div><?php endif; ?>
+
+<?php if ($cardEnabled): ?>
+<div class="alert alert-info" style="margin-bottom:16px">
+  💳 <strong>Kredi Kartı ile ödeme yapacaksanız</strong>,
+  <a href="?page=orders" style="font-weight:600;text-decoration:underline">Siparişlerim</a>
+  sayfasından ilgili siparişin yanındaki <em>"Kredi Kartı ile Öde"</em> butonunu kullanın.
+  Bu sayfa havale/EFT, nakit ve çek bildirimleri içindir.
+</div>
+<?php endif; ?>
 
 <!-- Yeni Ödeme Formu -->
 <div id="newPayForm" class="card hidden" style="margin-bottom:20px">
