@@ -96,7 +96,7 @@ if ($action === 'list') {
 
 <!-- Durum Sekmeleri -->
 <div class="tab-bar mb-4">
-    <?php foreach ([''=> 'Tümü','bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','kargoda'=>'Kargoda','teslim_edildi'=>'Teslim','iptal'=>'İptal'] as $v=>$l): ?>
+    <?php foreach ([''=> 'Tümü','bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','kargoda'=>'Teslimata Hazır','teslim_edildi'=>'Teslim','iptal'=>'İptal'] as $v=>$l): ?>
     <a href="?page=orders&status=<?= $v ?>" class="tab-item <?= $status===$v?'active':'' ?>"><?= $l ?></a>
     <?php endforeach; ?>
 </div>
@@ -229,7 +229,7 @@ if ($payable && ($order['payment_method'] ?? '') === 'havale_eft' && $bankHtml !
 <!-- Durum Adımları -->
 <?php
 $steps  = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi'];
-$labels = ['Sipariş Alındı','Onaylandı','Hazırlanıyor','Kargoya Verildi','Teslim Edildi'];
+$labels = ['Sipariş Alındı','Onaylandı','Hazırlanıyor','Teslimata Hazır','Teslim Edildi'];
 $icons  = ['🕐','✅','📦','🚚','🏠'];
 $curIdx = array_search($order['status'] ?? '', $steps);
 ?>

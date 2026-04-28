@@ -97,8 +97,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ledgerAdd($order['dealer_id'], 'borc', (float)$order['grand_total'], "Sipariş: {$order['order_no']}", 'order', $oid, $dueDate);
             // Paraşüt fatura
             try { parasut()->syncInvoice($oid); } catch (\Throwable $e) {}
-            // Bildirim
+            // Bildirim + e-posta
             notifyDealer($order['dealer_id'], 'order', 'Siparişiniz Onaylandı', "#{$order['order_no']} numaralı siparişiniz onaylandı.", '?page=orders&action=detail&id='.$oid);
+            sendOrderStatusEmail($oid, 'onaylandi');
             auditLog('order_approved', 'b2b_orders', $oid, []);
             $success = 'Sipariş onaylandı.';
         }
@@ -125,6 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             dbExec("UPDATE b2b_orders SET status='iptal', cancel_reason=? WHERE id=?", [$reason, $oid]);
             notifyDealer($order['dealer_id'], 'order', 'Sipariş İptal Edildi', "#{$order['order_no']} numaralı siparişiniz iptal edildi." . ($reason ? " Neden: $reason" : ''), '?page=orders&action=detail&id='.$oid);
+            sendOrderStatusEmail($oid, 'iptal', $reason);
             $success = 'Sipariş iptal edildi, stoklar geri yüklendi.';
         }
         $action = 'detail'; $id = $oid;
@@ -143,6 +145,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $order = dbRow("SELECT * FROM b2b_orders WHERE id=?", [$oid]);
             notifyDealer($order['dealer_id'], 'order', 'Sipariş Durumu Güncellendi', "#{$order['order_no']}: " . orderStatusLabel($status, false), '?page=orders&action=detail&id='.$oid);
+            // Statü değişimine özel mail (kargoda → 'Teslimata Hazır' subject)
+            $extra = '';
+            if ($status === 'kargoda' && ($cargo || $track)) {
+                $extra = ($cargo ? $cargo : '') . ($track ? ' — Takip No: ' . $track : '');
+            }
+            sendOrderStatusEmail($oid, $status, $extra);
             $success = 'Durum güncellendi.';
         }
         $action = 'detail'; $id = $oid;
@@ -309,7 +317,7 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
     <input type="text" name="q" value="<?= h($search ?? '') ?>" class="form-control" placeholder="Sipariş no veya bayi..." style="flex:1;min-width:180px;max-width:280px">
     <select name="status" class="form-control" style="min-width:140px" onchange="this.form.submit()">
       <option value="">Tüm Durumlar</option>
-      <?php foreach (['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','hazirlaniyor'=>'Hazırlanan','kargoda'=>'Kargoda','teslim_edildi'=>'Teslim','iptal'=>'İptal'] as $v=>$l): ?>
+      <?php foreach (['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','hazirlaniyor'=>'Hazırlanan','kargoda'=>'Teslimata Hazır','teslim_edildi'=>'Teslim','iptal'=>'İptal'] as $v=>$l): ?>
       <option value="<?= $v ?>" <?= ($status??'')===$v?'selected':'' ?>><?= $l ?></option>
       <?php endforeach; ?>
     </select>
@@ -586,7 +594,7 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
     <form method="post" id="form-status"><?= csrfField() ?><input type="hidden" name="form_action" value="update_status"><input type="hidden" name="order_id" value="<?= $order['id'] ?>">
       <div class="form-group"><label class="form-label">Yeni Durum</label>
         <select name="new_status" class="form-control">
-          <?php foreach (['hazirlaniyor'=>'Hazırlanıyor','kargoda'=>'Kargoya Verildi','teslim_edildi'=>'Teslim Edildi'] as $v=>$l): ?>
+          <?php foreach (['hazirlaniyor'=>'Hazırlanıyor','kargoda'=>'Teslimata Hazır','teslim_edildi'=>'Teslim Edildi'] as $v=>$l): ?>
           <option value="<?= $v ?>" <?= ($order['status']??'')===$v?'selected':'' ?>><?= $l ?></option>
           <?php endforeach; ?>
         </select>

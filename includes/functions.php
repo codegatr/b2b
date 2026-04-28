@@ -75,7 +75,7 @@ function orderStatusLabel(string $status): string {
         'bekliyor'       => '<span class="badge badge-warning">Bekliyor</span>',
         'onaylandi'      => '<span class="badge badge-info">Onaylandı</span>',
         'hazirlaniyor'   => '<span class="badge badge-info">Hazırlanıyor</span>',
-        'kargoda'        => '<span class="badge badge-primary">Kargoda</span>',
+        'kargoda'        => '<span class="badge badge-primary">Teslimata Hazır</span>',
         'teslim_edildi'  => '<span class="badge badge-success">Teslim Edildi</span>',
         'iptal'          => '<span class="badge badge-danger">İptal</span>',
         'iade'           => '<span class="badge badge-secondary">İade</span>',
@@ -628,4 +628,155 @@ function renderBankAccounts(): string {
     }
     $out .= '</div>';
     return $out;
+}
+
+
+/**
+ * Sipariş statü değişikliği bilgilendirme e-postası gönderir.
+ * Çağrıldığı yer (admin/pages/orders.php update_status, approve vs)
+ * notifyDealer() ile birlikte bunu da çağırır.
+ *
+ * @param int    $orderId   Sipariş ID
+ * @param string $newStatus 'bekliyor' | 'onaylandi' | 'hazirlaniyor' | 'kargoda' | 'teslim_edildi' | 'iptal'
+ * @param string $extra     Opsiyonel ek not (kargo takip no, iptal nedeni)
+ */
+function sendOrderStatusEmail(int $orderId, string $newStatus, string $extra = ''): bool {
+    try {
+        $order = dbRow("SELECT * FROM b2b_orders WHERE id=?", [$orderId]);
+        if (!$order) return false;
+        $dealer = dbRow("SELECT * FROM b2b_dealers WHERE id=?", [$order['dealer_id']]);
+        if (!$dealer || empty($dealer['email'])) return false;
+
+        $siteUrl  = rtrim(setting('site_url', ''), '/');
+        $orderUrl = $siteUrl . '/?page=orders&action=detail&id=' . $orderId;
+        $orderNo  = htmlspecialchars($order['order_no']);
+        $name     = htmlspecialchars(trim(($dealer['first_name'] ?? '') . ' ' . ($dealer['last_name'] ?? '')) ?: ($dealer['company_name'] ?? ''));
+        $company  = htmlspecialchars($dealer['company_name'] ?? '');
+        $total    = number_format((float)$order['grand_total'], 2, ',', '.') . ' ₺';
+        $orderDate = !empty($order['created_at'])
+            ? date('d.m.Y H:i', strtotime($order['created_at']))
+            : date('d.m.Y');
+
+        $cfg = match($newStatus) {
+            'bekliyor' => [
+                'subject' => "Siparişiniz Alındı — #{$order['order_no']}",
+                'title'   => 'Siparişiniz Alındı',
+                'icon'    => '📋',
+                'color'   => '#3b82f6',
+                'badge'   => 'SİPARİŞ ALINDI',
+                'lead'    => "Sayın <strong>$name</strong>,<br><br>Siparişiniz başarıyla sistemimize ulaştı ve <strong>onay için inceleniyor</strong>. Onaylandığında ayrıca bilgilendirileceksiniz.",
+                'cta'     => 'Siparişi Görüntüle',
+                'cta_url' => $orderUrl,
+            ],
+            'onaylandi' => [
+                'subject' => "Siparişiniz Onaylandı — #{$order['order_no']}",
+                'title'   => 'Siparişiniz Onaylandı',
+                'icon'    => '✅',
+                'color'   => '#16a34a',
+                'badge'   => 'ONAYLANDI',
+                'lead'    => "Sayın <strong>$name</strong>,<br><br>Siparişiniz <strong>onaylandı</strong> ve hazırlık sürecine alındı. Hazırlanma aşamasına geçtiğinde sizi tekrar bilgilendireceğiz.",
+                'cta'     => 'Siparişi Görüntüle',
+                'cta_url' => $orderUrl,
+            ],
+            'hazirlaniyor' => [
+                'subject' => "Siparişiniz Hazırlanıyor — #{$order['order_no']}",
+                'title'   => 'Siparişiniz Hazırlanıyor',
+                'icon'    => '📦',
+                'color'   => '#f59e0b',
+                'badge'   => 'HAZIRLANIYOR',
+                'lead'    => "Sayın <strong>$name</strong>,<br><br>Siparişiniz şu anda depomuzda <strong>özenle hazırlanıyor</strong>. Yakında teslimat aşamasına geçecek.",
+                'cta'     => 'Siparişi Görüntüle',
+                'cta_url' => $orderUrl,
+            ],
+            'kargoda' => [
+                'subject' => "Siparişiniz Teslimata Hazır — #{$order['order_no']}",
+                'title'   => 'Siparişiniz Teslimata Hazır',
+                'icon'    => '🚚',
+                'color'   => '#0ea5e9',
+                'badge'   => 'TESLİMATA HAZIR',
+                'lead'    => "Sayın <strong>$name</strong>,<br><br>Siparişiniz hazırlanmış ve <strong>teslimat için yola çıkmıştır</strong>." . ($extra ? "<br><br><strong>Kargo Bilgisi:</strong> " . htmlspecialchars($extra) : ''),
+                'cta'     => 'Siparişi Takip Et',
+                'cta_url' => $orderUrl,
+            ],
+            'teslim_edildi' => [
+                'subject' => "Siparişiniz Teslim Edildi — Teşekkürler! #{$order['order_no']}",
+                'title'   => 'Siparişiniz Teslim Edildi',
+                'icon'    => '🎉',
+                'color'   => '#16a34a',
+                'badge'   => 'TESLİM EDİLDİ',
+                'lead'    => "Sayın <strong>$name</strong>,<br><br>Siparişiniz başarıyla <strong>teslim edilmiştir</strong>. Bizi tercih ettiğiniz için <strong>çok teşekkür ederiz!</strong> 🙏<br><br>Memnuniyetiniz bizim için çok değerli. Bir sonraki siparişinizde de yanınızda olmaktan mutluluk duyacağız.",
+                'cta'     => 'Yeni Sipariş Ver',
+                'cta_url' => $siteUrl . '/?page=products',
+            ],
+            'iptal' => [
+                'subject' => "Siparişiniz İptal Edildi — #{$order['order_no']}",
+                'title'   => 'Siparişiniz İptal Edildi',
+                'icon'    => '⚠️',
+                'color'   => '#dc2626',
+                'badge'   => 'İPTAL EDİLDİ',
+                'lead'    => "Sayın <strong>$name</strong>,<br><br>Siparişiniz iptal edilmiştir." . ($extra ? "<br><br><strong>Neden:</strong> " . htmlspecialchars($extra) : '') . "<br><br>Sorularınız için satış ekibimizle iletişime geçebilirsiniz.",
+                'cta'     => 'Yeni Sipariş Ver',
+                'cta_url' => $siteUrl . '/?page=products',
+            ],
+            default => null,
+        };
+        if (!$cfg) return false;
+
+        // İçerik HTML'i — table-based (mail client uyumlu)
+        $content = '
+<!-- Status Banner -->
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px">
+<tr><td style="background:' . $cfg['color'] . '12;border-left:4px solid ' . $cfg['color'] . ';border-radius:8px;padding:18px 22px">
+  <table width="100%" cellpadding="0" cellspacing="0"><tr>
+    <td width="50" style="font-size:32px;line-height:1;vertical-align:middle">' . $cfg['icon'] . '</td>
+    <td style="vertical-align:middle">
+      <div style="font-size:11px;font-weight:700;color:' . $cfg['color'] . ';text-transform:uppercase;letter-spacing:.6px;margin-bottom:2px">' . $cfg['badge'] . '</div>
+      <div style="font-size:17px;font-weight:700;color:#111827">' . $cfg['title'] . '</div>
+    </td>
+  </tr></table>
+</td></tr>
+</table>
+
+<!-- Greeting -->
+<p style="margin:0 0 24px;font-size:14px;color:#374151;line-height:1.7">' . $cfg['lead'] . '</p>
+
+<!-- Order Info Card -->
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:28px">
+<tr><td style="padding:18px 22px">
+  <table width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td style="padding:6px 0;font-size:12px;color:#6b7280;width:130px">Sipariş No</td>
+      <td style="padding:6px 0;font-size:13px;font-weight:700;color:#111827;font-family:ui-monospace,Consolas,monospace">' . $orderNo . '</td>
+    </tr>
+    <tr>
+      <td style="padding:6px 0;font-size:12px;color:#6b7280">Bayi</td>
+      <td style="padding:6px 0;font-size:13px;color:#374151">' . $company . '</td>
+    </tr>
+    <tr>
+      <td style="padding:6px 0;font-size:12px;color:#6b7280">Tutar</td>
+      <td style="padding:6px 0;font-size:14px;font-weight:700;color:' . $cfg['color'] . '">' . $total . '</td>
+    </tr>
+    <tr>
+      <td style="padding:6px 0;font-size:12px;color:#6b7280">Tarih</td>
+      <td style="padding:6px 0;font-size:13px;color:#374151">' . htmlspecialchars($orderDate) . '</td>
+    </tr>
+  </table>
+</td></tr>
+</table>
+
+<!-- CTA Button -->
+<table cellpadding="0" cellspacing="0" align="center" style="margin:0 auto"><tr><td align="center">
+  <a href="' . htmlspecialchars($cfg['cta_url']) . '"
+     style="display:inline-block;background:' . $cfg['color'] . ';color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:14px 36px;border-radius:8px">
+    ' . $cfg['cta'] . ' →
+  </a>
+</td></tr></table>
+';
+
+        $html = mailTemplate($cfg['title'], $content);
+        return sendMail($dealer['email'], $cfg['subject'], $html);
+    } catch (\Throwable $e) {
+        error_log('sendOrderStatusEmail hatası: ' . $e->getMessage());
+        return false;
+    }
 }

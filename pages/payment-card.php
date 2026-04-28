@@ -203,6 +203,8 @@ if ($step === 'callback' && isset($_POST['ThreeDSessionId'])) {
                         unset($_SESSION['pending_card'][(int)$dealer['id']]);
                         auditLog('order_created', 'b2b_orders', $newOrderId,
                             ['order_no'=>$newOrderNo, 'method'=>'kredi_karti', 'paid_first'=>true]);
+                        // Bayiye onay mailı (kart akışı her zaman auto-onaylı)
+                        sendOrderStatusEmail($newOrderId, 'onaylandi');
                         // orderId'yi yeni order'a yönlendir (sonraki INSERT'lerde kullanılacak)
                         $orderId = $newOrderId;
                     } else {

@@ -216,6 +216,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
         }
 
         auditLog('order_created', 'b2b_orders', $orderId, ['order_no'=>$orderNo, 'method'=>$methodChoice]);
+        // Bayiye sipariş alındı / onaylandı mailı (status'e göre uygun şablon)
+        sendOrderStatusEmail($orderId, $status === 'onaylandi' ? 'onaylandi' : 'bekliyor');
         $_SESSION['flash'] = ['type'=>'success','msg'=>"Sipariş #$orderNo oluşturuldu."];
 
         $redirectUrl = '?page=orders&action=detail&id=' . $orderId . '&ordered=1';
