@@ -3,22 +3,51 @@
 requireDealer();
 $dealerId = $_SESSION['dealer_id'];
 
-// Tümünü okundu işaretle
+// ── POST işlemleri (CSRF korumalı) ────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrfCheck();
+    $act = $_POST['act'] ?? '';
+
+    if ($act === 'mark_all_read') {
+        dbExec("UPDATE b2b_notifications SET is_read=1 WHERE dealer_id=?", [$dealerId]);
+        redirect('?page=notifications');
+    }
+    if ($act === 'delete_all') {
+        dbExec("DELETE FROM b2b_notifications WHERE dealer_id=?", [$dealerId]);
+        redirect('?page=notifications');
+    }
+    if ($act === 'delete_read') {
+        dbExec("DELETE FROM b2b_notifications WHERE dealer_id=? AND is_read=1", [$dealerId]);
+        redirect('?page=notifications');
+    }
+    if ($act === 'delete_one') {
+        $nid = (int)($_POST['nid'] ?? 0);
+        if ($nid > 0) {
+            dbExec("DELETE FROM b2b_notifications WHERE id=? AND dealer_id=?", [$nid, $dealerId]);
+        }
+        redirect('?page=notifications&filter=' . urlencode($_POST['filter'] ?? 'all'));
+    }
+}
+
+// Eski GET tabanlı işlemler (backwards compat)
 if (isset($_GET['mark_all'])) {
     dbExec("UPDATE b2b_notifications SET is_read=1 WHERE dealer_id=?", [$dealerId]);
     redirect('?page=notifications');
 }
-
-// Tekil okundu
 if (isset($_GET['read']) && intval($_GET['read'])) {
     dbExec("UPDATE b2b_notifications SET is_read=1 WHERE id=? AND dealer_id=?",
            [intval($_GET['read']), $dealerId]);
+    $target = dbVal("SELECT url FROM b2b_notifications WHERE id=? AND dealer_id=?",
+                     [intval($_GET['read']), $dealerId]);
+    if ($target) redirect($target);
+    redirect('?page=notifications');
 }
 
 $filter  = $_GET['filter'] ?? 'all';
 $where   = "dealer_id=?";
 $params  = [$dealerId];
 if ($filter === 'unread')       { $where .= " AND is_read=0"; }
+elseif ($filter === 'read')     { $where .= " AND is_read=1"; }
 elseif ($filter !== 'all')      { $where .= " AND type=?"; $params[] = $filter; }
 
 $total       = (int)dbVal("SELECT COUNT(*) FROM b2b_notifications WHERE $where", $params);
@@ -32,22 +61,43 @@ $notifications = dbRows(
 );
 
 $unreadCount = (int)dbVal("SELECT COUNT(*) FROM b2b_notifications WHERE dealer_id=? AND is_read=0", [$dealerId]);
-
-// Okunanları işaretle
-if (!empty($notifications)) {
-    $ids = implode(',', array_map('intval', array_column($notifications, 'id')));
-    dbExec("UPDATE b2b_notifications SET is_read=1 WHERE id IN ($ids) AND dealer_id=?", [$dealerId]);
-}
+$readCount   = (int)dbVal("SELECT COUNT(*) FROM b2b_notifications WHERE dealer_id=? AND is_read=1", [$dealerId]);
 ?>
 <div class="page-body">
 <div class="page-header">
   <div>
     <h1 class="page-title">Bildirimler</h1>
-    <p class="page-sub"><?= $unreadCount ?> okunmamış</p>
+    <p class="page-sub"><?= $unreadCount ?> okunmamış · <?= $readCount ?> okunmuş</p>
   </div>
-  <?php if ($unreadCount > 0): ?>
-  <a href="?page=notifications&mark_all=1" class="btn btn-secondary">Tümünü Okundu İşaretle</a>
-  <?php endif; ?>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <?php if ($unreadCount > 0): ?>
+    <form method="post" style="display:inline">
+      <?= csrfField() ?>
+      <input type="hidden" name="act" value="mark_all_read">
+      <button type="submit" class="btn btn-secondary">✓ Tümünü Okundu İşaretle</button>
+    </form>
+    <?php endif; ?>
+    <?php if ($readCount > 0): ?>
+    <form method="post" style="display:inline" onsubmit="return confirm('<?= $readCount ?> okunmuş bildirim silinecek.')">
+      <?= csrfField() ?>
+      <input type="hidden" name="act" value="delete_read">
+      <button type="submit" class="btn"
+              style="background:#fff;color:#92400e;border:1px solid #fcd34d">
+        🧹 Okunanları Temizle
+      </button>
+    </form>
+    <?php endif; ?>
+    <?php if ($total > 0): ?>
+    <form method="post" style="display:inline" onsubmit="return confirm('Tüm bildirimler silinecek. Devam edilsin mi?')">
+      <?= csrfField() ?>
+      <input type="hidden" name="act" value="delete_all">
+      <button type="submit" class="btn"
+              style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5">
+        🗑 Tümünü Sil
+      </button>
+    </form>
+    <?php endif; ?>
+  </div>
 </div>
 
 <!-- Filtreler -->
@@ -78,15 +128,31 @@ if (!empty($notifications)) {
   $iconBg = match($n['type'] ?? '') { 'order'=>'blue','payment'=>'green','stock'=>'amber',default=>'neutral' };
   $link = $n['url'] ?? '';
   ?>
-  <div class="notif-item" <?= $link?"onclick=\"location='".h($link)."'\"":''; ?> style="<?= $link?'cursor:pointer':'' ?>">
-    <div class="notif-icon stat-icon <?= $iconBg ?>"><?= $icon ?></div>
-    <div class="notif-content">
-      <div class="notif-title"><?= h($n['title']) ?></div>
-      <?php if ($n['body']): ?>
-      <div class="notif-body"><?= h($n['body']) ?></div>
-      <?php endif; ?>
-      <div class="notif-time"><?= fmtDateTime($n['created_at']) ?></div>
-    </div>
+  <div class="notif-item" style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);<?= empty($n['is_read']) ? 'background:#fefce8' : '' ?>">
+    <a href="<?= $link ? h($link) : '?page=notifications&read='.(int)$n['id'] ?>"
+       style="flex:1;display:flex;align-items:center;gap:12px;text-decoration:none;color:inherit;min-width:0">
+      <div class="notif-icon stat-icon <?= $iconBg ?>"><?= $icon ?></div>
+      <div class="notif-content" style="flex:1;min-width:0">
+        <div class="notif-title"><?= h($n['title']) ?></div>
+        <?php if ($n['body']): ?>
+        <div class="notif-body"><?= h($n['body']) ?></div>
+        <?php endif; ?>
+        <div class="notif-time"><?= fmtDateTime($n['created_at']) ?></div>
+      </div>
+    </a>
+    <form method="post" style="flex:0 0 auto"
+          onsubmit="event.stopPropagation(); return confirm('Bu bildirimi silmek istediğinize emin misiniz?')">
+      <?= csrfField() ?>
+      <input type="hidden" name="act" value="delete_one">
+      <input type="hidden" name="nid" value="<?= (int)$n['id'] ?>">
+      <input type="hidden" name="filter" value="<?= h($filter) ?>">
+      <button type="submit" title="Bu bildirimi sil"
+              style="background:transparent;border:none;color:#9ca3af;cursor:pointer;font-size:14px;padding:6px 10px;border-radius:6px;transition:.15s"
+              onmouseover="this.style.background='#fef2f2';this.style.color='#dc2626'"
+              onmouseout="this.style.background='transparent';this.style.color='#9ca3af'">
+        🗑
+      </button>
+    </form>
   </div>
   <?php endforeach; ?>
   </div>

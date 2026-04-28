@@ -142,6 +142,7 @@ $pageTitle = match($page) {
     'reports'      => 'Raporlar',
     'tickets'       => 'Destek Talepleri',
     'announcements' => 'Duyuru Yönetimi',
+    'notifications' => 'Bildirimler',
     'login'        => 'Admin Girişi',
     default        => ucfirst($page),
 };
