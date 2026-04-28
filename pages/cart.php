@@ -212,7 +212,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
 
         // Paraşüt otomatik fatura (onaylandıysa)
         if ($status === 'onaylandi' && function_exists('parasut')) {
-            try { parasut()->syncInvoice($orderId); } catch (Exception $e) {}
+            try { parasut()->syncInvoice($orderId); } catch (\Throwable $e) {}
         }
 
         auditLog('order_created', 'b2b_orders', $orderId, ['order_no'=>$orderNo, 'method'=>$methodChoice]);

@@ -96,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $dueDate = date('Y-m-d', strtotime("+{$dealer['payment_term_days']} days"));
             ledgerAdd($order['dealer_id'], 'borc', (float)$order['grand_total'], "Sipariş: {$order['order_no']}", 'order', $oid, $dueDate);
             // Paraşüt fatura
-            try { parasut()->createInvoice($oid); } catch (Exception $e) {}
+            try { parasut()->syncInvoice($oid); } catch (\Throwable $e) {}
             // Bildirim
             notifyDealer($order['dealer_id'], 'order', 'Siparişiniz Onaylandı', "#{$order['order_no']} numaralı siparişiniz onaylandı.", '?page=orders&action=detail&id='.$oid);
             auditLog('order_approved', 'b2b_orders', $oid, []);

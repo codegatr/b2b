@@ -224,7 +224,7 @@ if ($step === 'callback' && isset($_POST['ThreeDSessionId'])) {
 
                     // Paraşüt fatura (otomatik onaylıysa, her iki mod için)
                     if ($autoApprove && function_exists('parasut')) {
-                        try { parasut()->syncInvoice($orderId); } catch (\Exception $e) {}
+                        try { parasut()->syncInvoice($orderId); } catch (\Throwable $e) {}
                     }
 
                     // Ödeme kaydı (amount = bayinin kartından çekilen toplam)
@@ -296,7 +296,7 @@ if ($step === 'callback' && isset($_POST['ThreeDSessionId'])) {
                     $error .= ' — ' . $mdMessages[$mdStatus];
                 }
             }
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             $error = 'Hata: ' . $e->getMessage();
         }
 
@@ -350,7 +350,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 'card') {
             $options = [];
             try {
                 $options = $rb->taksitSorgula($bin, $baseAmount);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 // BIN sorgusu çökerse boş liste — helper tek çekim'i ekleyecek
                 $options = [];
             }
@@ -425,7 +425,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 'card') {
                 exit;
             }
             throw new Exception('3DS başlatma yanıtı boş.');
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             $error = '[' . ($stage ?? '?') . '] ' . $e->getMessage();
             error_log("payment-card hatası (order $orderId, stage $stage): " . $e->getMessage());
         }

@@ -20,6 +20,26 @@ class Parasut {
         return $this->enabled && !empty($this->companyId);
     }
 
+    /**
+     * Convenience wrapper: sadece order_id ile fatura oluştur.
+     * Order, items ve dealer'ı DB'den çeker, createInvoice() çağırır.
+     * Hata yutar (false döner), çağıran taraf Throwable yakalamak zorunda kalmaz.
+     */
+    public function syncInvoice(int $orderId): ?string {
+        if (!$this->isEnabled()) return null;
+        try {
+            $order = dbRow("SELECT * FROM b2b_orders WHERE id=?", [$orderId]);
+            if (!$order) return null;
+            $items = dbRows("SELECT * FROM b2b_order_items WHERE order_id=?", [$orderId]);
+            $dealer = dbRow("SELECT * FROM b2b_dealers WHERE id=?", [$order['dealer_id']]);
+            if (!$dealer) return null;
+            return $this->createInvoice($order, $items, $dealer);
+        } catch (\Throwable $e) {
+            error_log('Parasut::syncInvoice hatası: ' . $e->getMessage());
+            return null;
+        }
+    }
+
     /** OAuth2 token al (cache'li) */
     private function getToken(): ?string {
         if ($this->token) return $this->token;
