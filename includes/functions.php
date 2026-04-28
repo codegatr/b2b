@@ -543,3 +543,89 @@ function mailTemplate(string $title, string $content): string {
 </html>
 HTML;
 }
+
+/**
+ * Banka hesaplarını yapılandırılmış (kart bazlı) HTML olarak render eder.
+ *
+ * Önce 'bank_accounts_json' (yeni format) okunur. Yoksa 'bank_accounts'
+ * (eski textarea) heuristik olarak parse edilir — boş satır = kayıt ayracı.
+ *
+ * @return string Hazır HTML; bayi havale bildirim sayfası ve sipariş detayında
+ *                kullanılabilir. CSS değişkenleri layout'tan miras alınır.
+ */
+function renderBankAccounts(): string {
+    $json  = setting('bank_accounts_json', '');
+    $banks = $json !== '' ? (json_decode($json, true) ?: []) : [];
+
+    if (empty($banks)) {
+        // Legacy textarea fallback parser
+        $legacy = trim(setting('bank_accounts', ''));
+        if ($legacy === '') return '';
+        $blocks = preg_split('/\n\s*\n/', $legacy);
+        foreach ($blocks as $blk) {
+            $lines = array_values(array_filter(array_map('trim', explode("\n", $blk)), fn($l) => $l !== ''));
+            if (!$lines) continue;
+            $entry = ['name'=>$lines[0],'iban'=>'','holder'=>'','branch'=>'','note'=>''];
+            foreach ($lines as $l) {
+                $clean = strtoupper(preg_replace('/\s+/', '', $l));
+                if (preg_match('/^TR\d{24}$/', $clean)) { $entry['iban'] = $clean; }
+            }
+            $remaining = array_values(array_filter($lines, function($l) use ($entry) {
+                $c = strtoupper(preg_replace('/\s+/', '', $l));
+                return $l !== $entry['name'] && $c !== $entry['iban'];
+            }));
+            if ($remaining) $entry['holder'] = implode(' ', $remaining);
+            $banks[] = $entry;
+        }
+    }
+
+    if (empty($banks)) return '';
+
+    $out = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">';
+    foreach ($banks as $b) {
+        $name   = (string)($b['name']   ?? '');
+        $iban   = (string)($b['iban']   ?? '');
+        $holder = (string)($b['holder'] ?? '');
+        $branch = (string)($b['branch'] ?? '');
+        $note   = (string)($b['note']   ?? '');
+        // IBAN'ı 4'lü gruplar halinde göster
+        $ibanFormatted = $iban !== '' ? trim(chunk_split($iban, 4, ' ')) : '';
+        // Kopyala butonu için raw IBAN
+        $ibanRaw = htmlspecialchars($iban, ENT_QUOTES);
+
+        $out .= '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)">';
+        $out .= '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #f1f5f9">';
+        $out .= '<div style="width:32px;height:32px;background:linear-gradient(135deg,#fef2f2,#fee2e2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px">🏦</div>';
+        $out .= '<div style="flex:1;min-width:0">';
+        $out .= '<div style="font-weight:700;font-size:13px;color:#111827;line-height:1.2">' . htmlspecialchars($name) . '</div>';
+        if ($branch !== '') {
+            $out .= '<div style="font-size:11px;color:#6b7280;margin-top:1px">' . htmlspecialchars($branch) . '</div>';
+        }
+        $out .= '</div></div>';
+
+        if ($holder !== '') {
+            $out .= '<div style="margin-bottom:8px">';
+            $out .= '<div style="font-size:10px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Hesap Sahibi</div>';
+            $out .= '<div style="font-size:12px;color:#374151">' . htmlspecialchars($holder) . '</div>';
+            $out .= '</div>';
+        }
+
+        if ($iban !== '') {
+            $out .= '<div style="margin-bottom:' . ($note ? '8px' : '0') . '">';
+            $out .= '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">';
+            $out .= '<div style="font-size:10px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px">IBAN</div>';
+            $out .= '<button type="button" data-iban="' . $ibanRaw . '" onclick="(function(b){navigator.clipboard.writeText(b.dataset.iban).then(()=>{const t=b.innerHTML;b.innerHTML=\'✓ Kopyalandı\';b.style.color=\'#16a34a\';setTimeout(()=>{b.innerHTML=t;b.style.color=\'\';},1500);}).catch(()=>{alert(\'IBAN: \'+b.dataset.iban);})})(this)" style="background:transparent;border:none;color:#dc2626;font-size:10px;font-weight:600;cursor:pointer;padding:0">📋 Kopyala</button>';
+            $out .= '</div>';
+            $out .= '<div style="font-family:ui-monospace,\'SF Mono\',Consolas,monospace;font-size:12px;color:#111827;font-weight:600;letter-spacing:.3px;background:#f9fafb;padding:8px 10px;border-radius:6px;border:1px solid #f3f4f6">' . htmlspecialchars($ibanFormatted) . '</div>';
+            $out .= '</div>';
+        }
+
+        if ($note !== '') {
+            $out .= '<div style="font-size:11px;color:#6b7280;font-style:italic;border-top:1px dashed #e5e7eb;padding-top:6px;margin-top:6px">' . htmlspecialchars($note) . '</div>';
+        }
+
+        $out .= '</div>';
+    }
+    $out .= '</div>';
+    return $out;
+}

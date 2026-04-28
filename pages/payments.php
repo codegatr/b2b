@@ -94,10 +94,16 @@ $bankAccounts = setting('bank_accounts', '');
 <div id="newPayForm" class="card hidden" style="margin-bottom:20px">
   <div class="card-header"><h3 class="card-title">Ödeme Bildirimi</h3></div>
   <div class="card-body">
-    <?php if ($bankAccounts): ?>
-    <div class="alert alert-info" style="margin-bottom:16px">
-      <strong>Banka Hesapları:</strong><br>
-      <pre style="margin:6px 0 0;font-size:12px;white-space:pre-wrap"><?= h($bankAccounts) ?></pre>
+    <?php
+    $bankHtml = renderBankAccounts();
+    if ($bankHtml !== ''):
+    ?>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-left:3px solid var(--red);border-radius:8px;padding:14px 16px;margin-bottom:18px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <span style="font-size:14px">🏦</span>
+        <strong style="font-size:13px;color:#374151">Banka Hesap Bilgileri</strong>
+      </div>
+      <?= $bankHtml ?>
     </div>
     <?php endif; ?>
     <form method="post">

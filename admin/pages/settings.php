@@ -76,7 +76,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Banka
     if ($tab === 'bank') {
-        settingSave('bank_accounts', trim($_POST['bank_accounts'] ?? ''));
+        // Yapılandırılmış banka kayıtları — admin çoklu IBAN ekleyip kaldırabilir
+        $banks = $_POST['banks'] ?? [];
+        $clean = [];
+        if (is_array($banks)) {
+            foreach ($banks as $b) {
+                $name   = trim($b['name']    ?? '');
+                $iban   = trim($b['iban']    ?? '');
+                $holder = trim($b['holder']  ?? '');
+                $branch = trim($b['branch']  ?? '');
+                $note   = trim($b['note']    ?? '');
+                if ($name === '' && $iban === '') continue; // tamamen boşsa atla
+                // IBAN normalize: boşlukları temizle, büyük harfe çevir
+                $ibanNorm = strtoupper(preg_replace('/\s+/', '', $iban));
+                $clean[] = [
+                    'name'   => $name,
+                    'iban'   => $ibanNorm,
+                    'holder' => $holder,
+                    'branch' => $branch,
+                    'note'   => $note,
+                ];
+            }
+        }
+        settingSave('bank_accounts_json', json_encode($clean, JSON_UNESCAPED_UNICODE));
+        // Bayi panel'in eski textarea bazlı render'ı için legacy text formatına da yaz
+        $legacyLines = [];
+        foreach ($clean as $i => $b) {
+            $line = $b['name'];
+            if ($b['branch'] !== '') $line .= ' — ' . $b['branch'];
+            if ($line !== '') $legacyLines[] = $line;
+            if ($b['iban']   !== '') $legacyLines[] = $b['iban'];
+            if ($b['holder'] !== '') $legacyLines[] = $b['holder'];
+            if ($b['note']   !== '') $legacyLines[] = $b['note'];
+            if ($i < count($clean) - 1) $legacyLines[] = ''; // kayıtlar arası boş satır
+        }
+        settingSave('bank_accounts', implode("\n", $legacyLines));
         settingClearCache();
         redirect('?page=settings&tab=bank&saved=1');
     }
@@ -346,20 +380,160 @@ if ($li && !file_exists($liPath)) {
 </div></div>
 
 <?php elseif ($activeTab === 'bank'): ?>
+<?php
+// JSON varsa onu kullan, yoksa eski text formatından parse et (geriye dönük migration)
+$banksJson = setting('bank_accounts_json', '');
+$banks     = $banksJson !== '' ? (json_decode($banksJson, true) ?: []) : [];
+if (empty($banks)) {
+    // Eski 'bank_accounts' text alanını parse etmeye çalış (boş satır = kayıt ayracı)
+    $legacy = trim(setting('bank_accounts', ''));
+    if ($legacy !== '') {
+        $blocks = preg_split('/\n\s*\n/', $legacy);
+        foreach ($blocks as $blk) {
+            $lines = array_values(array_filter(array_map('trim', explode("\n", $blk)), fn($l) => $l !== ''));
+            if (!$lines) continue;
+            // Heuristik: ilk satır banka adı, IBAN'a benzeyen satırı yakala, hesap sahibi en son metin
+            $entry = ['name'=>'','iban'=>'','holder'=>'','branch'=>'','note'=>''];
+            $entry['name'] = $lines[0];
+            foreach ($lines as $l) {
+                $clean = strtoupper(preg_replace('/\s+/', '', $l));
+                if (preg_match('/^TR\d{24}$/', $clean)) { $entry['iban'] = $clean; }
+            }
+            $remaining = array_values(array_filter($lines, function($l) use ($entry) {
+                $clean = strtoupper(preg_replace('/\s+/', '', $l));
+                return $l !== $entry['name'] && $clean !== $entry['iban'];
+            }));
+            if (!empty($remaining)) $entry['holder'] = implode(' ', $remaining);
+            $banks[] = $entry;
+        }
+    }
+}
+if (empty($banks)) $banks = [['name'=>'','iban'=>'','holder'=>'','branch'=>'','note'=>'']]; // boş şablon
+?>
 <div class="card">
-<div class="card-header"><h3 class="card-title">Banka Hesapları</h3></div>
+<div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+  <h3 class="card-title">Banka Hesapları</h3>
+  <span style="font-size:12px;color:var(--text-muted)">Bayilerin havale bildirim sayfasında görünür</span>
+</div>
 <div class="card-body">
-<form method="post">
+<form method="post" id="bankForm">
     <?= csrfField() ?>
     <input type="hidden" name="tab" value="bank">
-    <div class="form-group">
-        <label class="form-label">Banka Hesap Bilgileri (her satır bir hesap)</label>
-        <textarea name="bank_accounts" class="form-control" rows="8"><?= htmlspecialchars(setting('bank_accounts')) ?></textarea>
-        <p style="font-size:12px;color:var(--text-muted);margin-top:4px">Örnek: Ziraat Bankası — TR00 0000 0000 0000 0000 00</p>
+
+    <div id="bankList">
+      <?php foreach ($banks as $i => $b): ?>
+      <div class="bank-row" style="position:relative;background:#fafbfc;border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="background:var(--red);color:#fff;font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px">
+              HESAP <span class="bank-num"><?= $i + 1 ?></span>
+            </span>
+            <strong class="bank-preview-name" style="font-size:13px;color:var(--text)"><?= h($b['name'] ?: 'Yeni hesap') ?></strong>
+          </div>
+          <button type="button" class="btn-bank-remove" style="background:transparent;border:none;color:#dc2626;cursor:pointer;font-size:13px;padding:4px 8px"
+                  onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='transparent'">
+            🗑 Kaldır
+          </button>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label" style="font-size:12px">Banka Adı *</label>
+            <input type="text" name="banks[<?= $i ?>][name]" class="form-control bank-input-name"
+                   value="<?= h($b['name'] ?? '') ?>" placeholder="Yapı Kredi Bankası" required>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label" style="font-size:12px">Şube (Opsiyonel)</label>
+            <input type="text" name="banks[<?= $i ?>][branch]" class="form-control"
+                   value="<?= h($b['branch'] ?? '') ?>" placeholder="Konya Merkez">
+          </div>
+          <div class="form-group" style="margin-bottom:0;grid-column:span 2">
+            <label class="form-label" style="font-size:12px">IBAN *</label>
+            <input type="text" name="banks[<?= $i ?>][iban]" class="form-control bank-iban"
+                   value="<?= h($b['iban'] ?? '') ?>"
+                   placeholder="TR00 0000 0000 0000 0000 0000 00"
+                   style="font-family:ui-monospace,'SF Mono',Consolas,monospace;letter-spacing:.5px"
+                   pattern="^[Tt][Rr][\s\d]{24,32}$"
+                   title="IBAN 'TR' ile başlamalı ve 24 hane içermelidir.">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label" style="font-size:12px">Hesap Sahibi *</label>
+            <input type="text" name="banks[<?= $i ?>][holder]" class="form-control"
+                   value="<?= h($b['holder'] ?? '') ?>" placeholder="Le Monde Du Tacos Ltd. Şti." required>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label" style="font-size:12px">Açıklama (Opsiyonel)</label>
+            <input type="text" name="banks[<?= $i ?>][note]" class="form-control"
+                   value="<?= h($b['note'] ?? '') ?>" placeholder="TL hesabı / EUR hesabı / vs.">
+          </div>
+        </div>
+      </div>
+      <?php endforeach; ?>
     </div>
-    <div class="form-actions"><button type="submit" class="btn btn-primary">Kaydet</button></div>
+
+    <div style="display:flex;gap:10px;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+      <button type="button" id="bankAddBtn" class="btn btn-secondary"
+              style="background:#fff;border:1.5px dashed var(--border-2);color:var(--text-2)">
+        ➕ Yeni Banka Hesabı Ekle
+      </button>
+      <button type="submit" class="btn btn-primary" style="margin-left:auto">💾 Kaydet</button>
+    </div>
 </form>
 </div></div>
+
+<script>
+(function(){
+  const list = document.getElementById('bankList');
+  const addBtn = document.getElementById('bankAddBtn');
+
+  function renumber() {
+    list.querySelectorAll('.bank-row').forEach((row, i) => {
+      row.querySelector('.bank-num').textContent = i + 1;
+      row.querySelectorAll('input').forEach(inp => {
+        inp.name = inp.name.replace(/banks\[\d+\]/, 'banks[' + i + ']');
+      });
+    });
+  }
+
+  function attachHandlers(row) {
+    row.querySelector('.btn-bank-remove').addEventListener('click', () => {
+      if (list.children.length === 1) {
+        alert('En az bir banka hesabı kalmalı. Boş kalmaması için Kaldır yerine alanları temizleyebilirsiniz.');
+        return;
+      }
+      if (confirm('Bu banka hesabını silmek istediğinize emin misiniz?')) {
+        row.remove();
+        renumber();
+      }
+    });
+    const nameInp = row.querySelector('.bank-input-name');
+    const preview = row.querySelector('.bank-preview-name');
+    nameInp.addEventListener('input', () => {
+      preview.textContent = nameInp.value || 'Yeni hesap';
+    });
+    // IBAN auto-format: 4'lü gruplar halinde boşluk
+    const iban = row.querySelector('.bank-iban');
+    iban.addEventListener('input', e => {
+      let v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 26);
+      e.target.value = v.replace(/(.{4})/g, '$1 ').trim();
+    });
+  }
+
+  // Mevcut satırlar için handler
+  list.querySelectorAll('.bank-row').forEach(attachHandlers);
+
+  // Yeni satır ekleme
+  addBtn.addEventListener('click', () => {
+    const tpl = list.children[0].cloneNode(true);
+    tpl.querySelectorAll('input').forEach(i => i.value = '');
+    tpl.querySelector('.bank-preview-name').textContent = 'Yeni hesap';
+    list.appendChild(tpl);
+    renumber();
+    attachHandlers(tpl);
+    tpl.querySelector('.bank-input-name').focus();
+  });
+})();
+</script>
 
 <?php elseif ($activeTab === 'parasut'): ?>
 <div class="card">
