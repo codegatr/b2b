@@ -31,14 +31,34 @@ AddDefaultCharset UTF-8
 </IfModule>
 
 # Cache
+# Not: CSS/JS dosyaları PHP'de ?v=<hash> ile çağrılıyor (dosya değişince
+# hash değişir, tarayıcı yeni dosyayı çeker). Bu yüzden uzun cache
+# süresi güvenli — query string farklı olduğunda yeni dosya zaten alınır.
 <IfModule mod_expires.c>
     ExpiresActive On
-    ExpiresByType text/css "access plus 7 days"
-    ExpiresByType application/javascript "access plus 7 days"
-    ExpiresByType image/png "access plus 30 days"
-    ExpiresByType image/jpeg "access plus 30 days"
-    ExpiresByType image/gif "access plus 30 days"
-    ExpiresByType image/webp "access plus 30 days"
+    # CSS/JS — query string ile cache busted; 1 yıl agresif cache
+    ExpiresByType text/css            "access plus 1 year"
+    ExpiresByType application/javascript "access plus 1 year"
+    # Resimler statik, uzun cache
+    ExpiresByType image/png           "access plus 30 days"
+    ExpiresByType image/jpeg          "access plus 30 days"
+    ExpiresByType image/gif           "access plus 30 days"
+    ExpiresByType image/webp          "access plus 30 days"
+    ExpiresByType image/svg+xml       "access plus 30 days"
+    # Font'lar değişmez
+    ExpiresByType font/woff2          "access plus 1 year"
+    ExpiresByType font/woff           "access plus 1 year"
+    # HTML cache'lenmesin — her istek dinamik
+    ExpiresByType text/html           "access plus 0 seconds"
+</IfModule>
+
+# HTML için Cache-Control: no-cache (proxy/CDN'lerin tutmaması için)
+<IfModule mod_headers.c>
+    <FilesMatch "\.(html|htm|php)$">
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+        Header set Pragma "no-cache"
+        Header set Expires "0"
+    </FilesMatch>
 </IfModule>
 
 # XSS / Clickjacking koruması

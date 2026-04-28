@@ -163,7 +163,7 @@ function renderAdminPage(string $page, array $vars = []): void {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="csrf" content="<?= csrfToken() ?>">
 <title><?= h($pageTitle) ?> — Admin | <?= h($siteName) ?></title>
-<link rel="stylesheet" href="<?= B2B_URL ?>/assets/css/main.css?v=<?= $cfg['version'] ?>">
+<link rel="stylesheet" href="<?= B2B_URL ?>/assets/css/main.css?v=<?= assetVersion('assets/css/main.css') ?>">
 <style>
 /* ── Admin Inline Styles (CSS dosyası güncellenmeden önce fallback) ── */
 :root{
@@ -433,6 +433,6 @@ function renderAdminPage(string $page, array $vars = []): void {
   </div>
 </div>
 
-<script src="<?= B2B_URL ?>/assets/js/main.js?v=<?= $cfg['version'] ?>"></script>
+<script src="<?= B2B_URL ?>/assets/js/main.js?v=<?= assetVersion('assets/js/main.js') ?>"></script>
 </body>
 </html>

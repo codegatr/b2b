@@ -118,3 +118,31 @@ function settingSave(string $key, string $val): void {
     $cache = &_settingCache();
     $cache[$key] = $val;
 }
+
+/**
+ * Asset cache busting için sürüm string'i.
+ *
+ * Mantık:
+ * - version.txt + dosyanın mtime'ı (varsa) → md5 ilk 10 hane
+ * - version.txt update sistem tarafından güncelleniyor (her release'te yeni)
+ * - Mtime ile aynı versiyon içinde dosya değişirse de URL değişir
+ * - Sonuç: tarayıcı her gerçek değişiklikten sonra yeni dosyayı çeker,
+ *   değişiklik yoksa cache'i kullanmaya devam eder.
+ *
+ * Kullanım:
+ *   <link href="...main.css?v=<?= assetVersion('assets/css/main.css') ?>">
+ *   <script src="...main.js?v=<?= assetVersion('assets/js/main.js') ?>"></script>
+ */
+function assetVersion(string $relativePath = ''): string {
+    static $appVersion = null;
+    if ($appVersion === null) {
+        $vFile = defined('B2B_ROOT') ? B2B_ROOT . '/version.txt' : __DIR__ . '/../version.txt';
+        $appVersion = is_file($vFile) ? trim((string) @file_get_contents($vFile)) : '1.0.0';
+        if ($appVersion === '') $appVersion = '1.0.0';
+    }
+    if ($relativePath === '') return $appVersion;
+
+    $absPath = (defined('B2B_ROOT') ? B2B_ROOT : __DIR__ . '/..') . '/' . ltrim($relativePath, '/');
+    $mtime   = is_file($absPath) ? @filemtime($absPath) : 0;
+    return substr(md5($appVersion . '|' . $mtime), 0, 10);
+}
