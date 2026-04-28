@@ -697,11 +697,28 @@ function renderBankAccounts(): string {
  * @param string $extra     Opsiyonel ek not (kargo takip no, iptal nedeni)
  */
 function sendOrderStatusEmail(int $orderId, string $newStatus, string $extra = ''): bool {
+    // Erken return'leri ve diagnostic'leri b2b_mail_log'a yazan helper
+    $logSkip = function(string $reason) use ($orderId, $newStatus) {
+        try {
+            dbExec(
+                "INSERT INTO b2b_mail_log (recipient, subject, smtp_host, success, note, created_at)
+                 VALUES (?, ?, ?, 0, ?, NOW())",
+                [
+                    "(order #$orderId)",
+                    "Statü maili: $newStatus",
+                    '(skip)',
+                    "Atlandı: $reason"
+                ]
+            );
+        } catch (\Throwable $e) { error_log('sendOrderStatusEmail log: ' . $e->getMessage()); }
+    };
+
     try {
         $order = dbRow("SELECT * FROM b2b_orders WHERE id=?", [$orderId]);
-        if (!$order) return false;
+        if (!$order) { $logSkip("Sipariş bulunamadı (id=$orderId)"); return false; }
         $dealer = dbRow("SELECT * FROM b2b_dealers WHERE id=?", [$order['dealer_id']]);
-        if (!$dealer || empty($dealer['email'])) return false;
+        if (!$dealer) { $logSkip("Bayi bulunamadı (dealer_id={$order['dealer_id']})"); return false; }
+        if (empty($dealer['email'])) { $logSkip("Bayinin e-posta adresi yok (dealer #{$dealer['id']})"); return false; }
 
         $siteUrl  = rtrim(setting('site_url', ''), '/');
         $orderUrl = $siteUrl . '/?page=orders&action=detail&id=' . $orderId;
@@ -776,7 +793,7 @@ function sendOrderStatusEmail(int $orderId, string $newStatus, string $extra = '
             ],
             default => null,
         };
-        if (!$cfg) return false;
+        if (!$cfg) { $logSkip("Bilinmeyen statü: '$newStatus'"); return false; }
 
         // İçerik HTML'i — table-based (mail client uyumlu)
         $content = '
@@ -833,6 +850,7 @@ function sendOrderStatusEmail(int $orderId, string $newStatus, string $extra = '
         return sendMail($dealer['email'], $cfg['subject'], $html);
     } catch (\Throwable $e) {
         error_log('sendOrderStatusEmail hatası: ' . $e->getMessage());
+        $logSkip('Exception: ' . $e->getMessage());
         return false;
     }
 }
