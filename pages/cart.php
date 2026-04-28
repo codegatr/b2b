@@ -90,6 +90,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
     }
 
     if (!$error) {
+        // ── KART AKIŞI: order DB'ye yazılmaz, sepet snapshot session'a ──
+        // Bayi 3DS başarılı olunca callback'te order oluşturulur. Vazgeçer
+        // veya 3DS fail olursa hiçbir kayıt kalmaz, stok düşmez, sepet dolu.
+        if ($methodChoice === 'kredi_karti') {
+            $cartSnap = [];
+            foreach ($cartItems as $ci) {
+                $dp = dealerPrice($ci['product_id'], (int)$dealer['price_list_id']);
+                $cartSnap[] = [
+                    'product_id'        => (int)$ci['product_id'],
+                    'product_name'      => $ci['product_name'],
+                    'product_sku'       => $ci['product_sku'],
+                    'qty'               => (int)$ci['qty'],
+                    'unit_price'        => (float)$dp['price'],
+                    'vat_rate'          => (float)$ci['vat_rate'],
+                    'discount_percent'  => (float)$dp['discount'],
+                    'line_total'        => $dp['price'] * $ci['qty'] * (1 + $ci['vat_rate']/100),
+                ];
+            }
+            $_SESSION['pending_card'][(int)$dealer['id']] = [
+                'items'         => $cartSnap,
+                'subtotal'      => $subtotal,
+                'vat_total'     => $vatTotal,
+                'grand_total'   => $grand,
+                'notes'         => $notes,
+                'price_list_id' => $dealer['price_list_id'],
+                'created_at'    => time(),
+            ];
+
+            // Sepet temizleme YOK, stok düşürme YOK — bayi vazgeçerse hiçbir şey değişmemiş olsun
+            $redirectUrl = '?page=payment-card&pending=1';
+            echo '<!DOCTYPE html><html><head><meta charset="utf-8">';
+            echo '<meta http-equiv="refresh" content="0;url=' . htmlspecialchars($redirectUrl) . '">';
+            echo '<script>window.location.replace(' . json_encode($redirectUrl) . ');</script>';
+            echo '</head><body style="font-family:system-ui;padding:40px;text-align:center">';
+            echo '<p>Ödeme sayfasına yönlendiriliyorsunuz...</p>';
+            echo '<p><a href="' . htmlspecialchars($redirectUrl) . '">Otomatik yönlendirme olmazsa buraya tıklayın</a></p>';
+            echo '</body></html>';
+            exit;
+        }
+
+        // ── HAVALE / DİĞER: mevcut akış (order DB'ye yazılır) ──
         // Otomatik onay mı?
         $autoLimit = (float)setting('order_auto_approve_limit', '0');
         $status    = ($dealer['order_approval'] === 'auto' || ($autoLimit > 0 && $grand <= $autoLimit))
@@ -156,40 +197,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
                 'discount_percent'=> $dp['discount'],
                 'line_total'      => $dp['price'] * $ci['qty'] * (1 + $ci['vat_rate']/100),
             ]);
-            // Stok düş — KART akışında 3DS başarılı olunca callback'te düşürülecek
-            // (ödenmemiş kart siparişi 3DS fail olunca silinecek, stok da düşmemiş olacak).
-            if ($methodChoice !== 'kredi_karti') {
-                dbExec("UPDATE b2b_products SET stock=stock-? WHERE id=?", [$ci['qty'], $ci['product_id']]);
-            }
+            // Stok düş
+            dbExec("UPDATE b2b_products SET stock=stock-? WHERE id=?", [$ci['qty'], $ci['product_id']]);
         }
 
-        // Cari borç — sadece otomatik onaylı + KART OLMAYAN siparişlerde
-        // (kart için: ödeme tamamlanınca payments kaydı düşer, borç oluşmaz)
-        if ($status === 'onaylandi' && $methodChoice !== 'kredi_karti') {
+        // Cari borç — sadece otomatik onaylı siparişlerde
+        if ($status === 'onaylandi') {
             $dueDate = date('Y-m-d', strtotime('+' . (int)($dealer['payment_term_days'] ?? 30) . ' days'));
             ledgerAdd($dealer['id'], 'borc', $grand, "Sipariş: $orderNo", 'order', $orderId, $dueDate);
         }
 
-        // Sepet temizle — KART akışında sepet 3DS başarılı olunca silinir
-        // (3DS fail olursa bayi sepete dönüp tekrar deneyebilir).
-        if ($methodChoice !== 'kredi_karti') {
-            dbExec("DELETE FROM b2b_cart WHERE dealer_id=?", [$dealer['id']]);
-        }
+        // Sepet temizle
+        dbExec("DELETE FROM b2b_cart WHERE dealer_id=?", [$dealer['id']]);
 
-        // Paraşüt otomatik fatura (onaylandıysa + kart olmayan)
-        if ($status === 'onaylandi' && $methodChoice !== 'kredi_karti' && function_exists('parasut')) {
+        // Paraşüt otomatik fatura (onaylandıysa)
+        if ($status === 'onaylandi' && function_exists('parasut')) {
             try { parasut()->syncInvoice($orderId); } catch (Exception $e) {}
         }
 
         auditLog('order_created', 'b2b_orders', $orderId, ['order_no'=>$orderNo, 'method'=>$methodChoice]);
-        if ($methodChoice !== 'kredi_karti') {
-            $_SESSION['flash'] = ['type'=>'success','msg'=>"Sipariş #$orderNo oluşturuldu."];
-        }
+        $_SESSION['flash'] = ['type'=>'success','msg'=>"Sipariş #$orderNo oluşturuldu."];
 
-        // Kredi kartı seçildiyse direkt ödeme sayfasına, aksi halde sipariş detayına
-        $redirectUrl = ($methodChoice === 'kredi_karti')
-            ? '?page=payment-card&order_id=' . $orderId
-            : '?page=orders&action=detail&id=' . $orderId . '&ordered=1';
+        $redirectUrl = '?page=orders&action=detail&id=' . $orderId . '&ordered=1';
 
         // index.php layout'u zaten output başlattığı için header() yerine
         // çift fallback kullan: JS + meta refresh + manuel link.

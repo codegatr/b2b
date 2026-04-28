@@ -57,16 +57,46 @@ if ($step === 'callback'
 requireDealer();
 $dealer = currentDealer();
 
-$order = $orderId ? dbRow(
-    "SELECT o.*, d.company_name, d.first_name, d.last_name
-     FROM b2b_orders o JOIN b2b_dealers d ON d.id=o.dealer_id
-     WHERE o.id=? AND o.dealer_id=?",
-    [$orderId, $dealer['id']]
-) : null;
+// ── PENDING MODE: ?pending=1 → order DB'de yok, sepet snapshot session'da
+$pending = isset($_GET['pending']) && $_GET['pending'] === '1';
+$pendingSnap = null;
+if ($pending) {
+    $pendingSnap = $_SESSION['pending_card'][(int)$dealer['id']] ?? null;
+    // Süre kontrolü (1 saat) ve geçerlilik
+    if (!$pendingSnap || (time() - ($pendingSnap['created_at'] ?? 0)) > 3600) {
+        unset($_SESSION['pending_card'][(int)$dealer['id']]);
+        echo '<script>location.replace("?page=cart");</script>';
+        echo '<noscript><meta http-equiv="refresh" content="0;url=?page=cart"></noscript>';
+        echo '<p>Ödeme oturumunuz süresi doldu. <a href="?page=cart">Sepete dön</a></p>';
+        exit;
+    }
+    // Yapay $order — DB'de henüz yok, sayfa render için sahte alanlar
+    $order = [
+        'id'             => 0,
+        'order_no'       => '— (ödeme sonrası oluşturulacak)',
+        'dealer_id'      => $dealer['id'],
+        'subtotal'       => $pendingSnap['subtotal'],
+        'vat_total'      => $pendingSnap['vat_total'],
+        'discount_total' => 0,
+        'grand_total'    => $pendingSnap['grand_total'],
+        'payment_status' => 'odenmedi',
+        'status'         => 'bekliyor',
+        'company_name'   => $dealer['company_name']     ?? '',
+        'first_name'     => $dealer['first_name']       ?? '',
+        'last_name'      => $dealer['last_name']        ?? '',
+    ];
+} else {
+    $order = $orderId ? dbRow(
+        "SELECT o.*, d.company_name, d.first_name, d.last_name
+         FROM b2b_orders o JOIN b2b_dealers d ON d.id=o.dealer_id
+         WHERE o.id=? AND o.dealer_id=?",
+        [$orderId, $dealer['id']]
+    ) : null;
 
-if (!$order) {
-    header('Location: ?page=orders');
-    exit;
+    if (!$order) {
+        header('Location: ?page=orders');
+        exit;
+    }
 }
 
 $rb    = rubikpara();
@@ -76,6 +106,7 @@ $error = '';
 if ($step === 'callback' && isset($_POST['ThreeDSessionId'])) {
     $sessionId = $_POST['ThreeDSessionId'];
     // Form POST aşamasında session'a (veya DB-fallback'ten) yüklenen tutar bilgisi
+    // Pending mode: orderId=0, normal mode: orderId>0
     $payInfo = $_SESSION['rk_pay'][$orderId] ?? null;
     if (!$payInfo || ($payInfo['sessionId'] ?? '') !== $sessionId) {
         $error = 'Ödeme oturumu bulunamadı veya geçersiz. Lütfen tekrar deneyin.';
@@ -109,27 +140,90 @@ if ($step === 'callback' && isset($_POST['ThreeDSessionId'])) {
                         $note = sprintf('Tek çekim — %s', money($finalAmount));
                     }
 
-                    // ── Kart ödemesi başarılı: cart.php'de atlanan adımları şimdi yap ──
-                    // 1. Stok düş (her order_items satırı için)
-                    $orderItems = dbRows("SELECT product_id, qty FROM b2b_order_items WHERE order_id=?", [$orderId]);
-                    foreach ($orderItems as $oi) {
-                        $oqty = (int)($oi['qty'] ?? 0);
-                        if ($oqty > 0 && $oi['product_id']) {
-                            dbExec("UPDATE b2b_products SET stock=stock-? WHERE id=?",
-                                   [$oqty, $oi['product_id']]);
-                        }
-                    }
-                    // 2. Sepet temizle
-                    dbExec("DELETE FROM b2b_cart WHERE dealer_id=?", [$dealer['id']]);
-                    // 3. Sipariş otomatik onayı kontrol et (cart.php mantığı)
+                    // ── Kart ödemesi başarılı: ORDER ŞİMDİ OLUŞTURULUYOR ──
                     $autoApprove = ($dealer['order_approval'] ?? '') === 'auto'
                         || ((float)setting('order_auto_approve_limit', '0') > 0
                             && $baseAmount <= (float)setting('order_auto_approve_limit', '0'));
-                    if ($autoApprove) {
-                        dbExec("UPDATE b2b_orders SET status='onaylandi' WHERE id=? AND status='bekliyor'",
-                               [$orderId]);
+
+                    if ($pending && $pendingSnap) {
+                        // PENDING: cart.php'de DB'ye yazmadık, şimdi yazıyoruz
+                        $orderPrefix = setting('order_prefix', 'SIP') . date('ymd');
+                        $maxSuffix   = (int)dbVal(
+                            "SELECT COALESCE(MAX(CAST(SUBSTRING(order_no, ?) AS UNSIGNED)), 0)
+                             FROM b2b_orders WHERE order_no LIKE CONCAT(?, '%')",
+                            [strlen($orderPrefix) + 1, $orderPrefix]
+                        );
+                        $newOrderId = null;
+                        $newOrderNo = '';
+                        for ($try = 0; $try < 10; $try++) {
+                            $newOrderNo = $orderPrefix . str_pad($maxSuffix + 1 + $try, 3, '0', STR_PAD_LEFT);
+                            try {
+                                $newOrderId = dbInsertRow('b2b_orders', [
+                                    'dealer_id'      => $dealer['id'],
+                                    'order_no'       => $newOrderNo,
+                                    'status'         => $autoApprove ? 'onaylandi' : 'bekliyor',
+                                    'payment_status' => 'odendi',  // ödeme zaten yapıldı
+                                    'payment_method' => 'kredi_karti',
+                                    'subtotal'       => $pendingSnap['subtotal'],
+                                    'vat_total'      => $pendingSnap['vat_total'],
+                                    'discount_total' => 0,
+                                    'grand_total'    => $pendingSnap['grand_total'],
+                                    'notes'          => $pendingSnap['notes'] ?? '',
+                                    'price_list_id'  => $pendingSnap['price_list_id'],
+                                    'created_at'     => date('Y-m-d H:i:s'),
+                                ]);
+                                break;
+                            } catch (\PDOException $e) {
+                                if (strpos($e->getMessage(), 'Duplicate') !== false) continue;
+                                throw $e;
+                            }
+                        }
+                        if (!$newOrderId) {
+                            throw new \RuntimeException('Sipariş kaydedilemedi (numara üretimi başarısız).');
+                        }
+                        // order_items + stok
+                        foreach ($pendingSnap['items'] as $it) {
+                            dbInsertRow('b2b_order_items', [
+                                'order_id'         => $newOrderId,
+                                'product_id'       => $it['product_id'],
+                                'product_name'     => $it['product_name'],
+                                'product_sku'      => $it['product_sku'],
+                                'qty'              => $it['qty'],
+                                'unit_price'       => $it['unit_price'],
+                                'vat_rate'         => $it['vat_rate'],
+                                'discount_percent' => $it['discount_percent'],
+                                'line_total'       => $it['line_total'],
+                            ]);
+                            if ($it['qty'] > 0 && $it['product_id']) {
+                                dbExec("UPDATE b2b_products SET stock=stock-? WHERE id=?",
+                                       [$it['qty'], $it['product_id']]);
+                            }
+                        }
+                        // Sepet temizle
+                        dbExec("DELETE FROM b2b_cart WHERE dealer_id=?", [$dealer['id']]);
+                        unset($_SESSION['pending_card'][(int)$dealer['id']]);
+                        auditLog('order_created', 'b2b_orders', $newOrderId,
+                            ['order_no'=>$newOrderNo, 'method'=>'kredi_karti', 'paid_first'=>true]);
+                        // orderId'yi yeni order'a yönlendir (sonraki INSERT'lerde kullanılacak)
+                        $orderId = $newOrderId;
+                    } else {
+                        // NORMAL (eski) MODE: order zaten DB'de var, stok düş + sepet temizle
+                        $orderItems = dbRows("SELECT product_id, qty FROM b2b_order_items WHERE order_id=?", [$orderId]);
+                        foreach ($orderItems as $oi) {
+                            $oqty = (int)($oi['qty'] ?? 0);
+                            if ($oqty > 0 && $oi['product_id']) {
+                                dbExec("UPDATE b2b_products SET stock=stock-? WHERE id=?",
+                                       [$oqty, $oi['product_id']]);
+                            }
+                        }
+                        dbExec("DELETE FROM b2b_cart WHERE dealer_id=?", [$dealer['id']]);
+                        if ($autoApprove) {
+                            dbExec("UPDATE b2b_orders SET status='onaylandi' WHERE id=? AND status='bekliyor'",
+                                   [$orderId]);
+                        }
                     }
-                    // 4. Paraşüt fatura (otomatik onaylıysa)
+
+                    // Paraşüt fatura (otomatik onaylıysa, her iki mod için)
                     if ($autoApprove && function_exists('parasut')) {
                         try { parasut()->syncInvoice($orderId); } catch (\Exception $e) {}
                     }
@@ -170,8 +264,16 @@ if ($step === 'callback' && isset($_POST['ThreeDSessionId'])) {
                     } catch (\Throwable $e) {
                         error_log('payment-card DB-fallback cleanup hatası: ' . $e->getMessage());
                     }
-                    $_SESSION['flash'] = ['type'=>'success','msg'=>'Ödeme başarıyla tamamlandı!'];
-                    header('Location: ?page=orders&action=detail&id=' . $orderId);
+                    $_SESSION['flash'] = ['type'=>'success','msg'=>'Ödeme başarıyla tamamlandı! Sipariş oluşturuldu.'];
+                    $successUrl = '?page=orders&action=detail&id=' . $orderId;
+                    echo '<!DOCTYPE html><html><head><meta charset="utf-8">';
+                    echo '<meta http-equiv="refresh" content="0;url=' . htmlspecialchars($successUrl) . '">';
+                    echo '<script>window.location.replace(' . json_encode($successUrl) . ');</script>';
+                    echo '</head><body style="font-family:system-ui;padding:40px;text-align:center">';
+                    echo '<h2 style="color:#16a34a">✓ Ödeme Başarılı</h2>';
+                    echo '<p>Siparişiniz oluşturuldu, yönlendiriliyorsunuz...</p>';
+                    echo '<p><a href="' . htmlspecialchars($successUrl) . '">Otomatik gitmezse buraya tıklayın</a></p>';
+                    echo '</body></html>';
                     exit;
                 }
                 $error = '3DS doğrulandı ancak provizyon başarısız.';
@@ -197,16 +299,21 @@ if ($step === 'callback' && isset($_POST['ThreeDSessionId'])) {
             $error = 'Hata: ' . $e->getMessage();
         }
 
-        // ── Ödeme başarısız: ödenmemiş kart siparişini SİL ────────
-        // (Kart akışında stok düşürülmedi, sepet temizlenmedi — sadece order ve
-        // order_items oluşturuldu. Şimdi onları temizleyelim ki kirli kayıt
-        // kalmasın, bayi sepete dönüp tekrar deneyebilsin.)
-        if ($error !== '' && isset($order) && ($order['payment_status'] ?? '') !== 'odendi') {
+        // ── Ödeme başarısız: temizlik ──
+        // PENDING mode: order DB'de yok, sadece session'dan pending_card sil
+        // NORMAL mode: ödenmemiş kart siparişini DB'den sil
+        if ($error !== '') {
             try {
-                dbExec("DELETE FROM b2b_order_items WHERE order_id=?", [$orderId]);
-                dbExec("DELETE FROM b2b_orders WHERE id=? AND payment_status!='odendi'", [$orderId]);
-                dbExec("DELETE FROM b2b_payment_sessions WHERE order_id=?", [$orderId]);
-                unset($_SESSION['rk_pay'][$orderId]);
+                if ($pending) {
+                    unset($_SESSION['pending_card'][(int)$dealer['id']]);
+                    unset($_SESSION['rk_pay'][$orderId]);
+                    dbExec("DELETE FROM b2b_payment_sessions WHERE threeds_session_id=?", [$sessionId]);
+                } elseif (isset($order) && ($order['payment_status'] ?? '') !== 'odendi' && $orderId > 0) {
+                    dbExec("DELETE FROM b2b_order_items WHERE order_id=?", [$orderId]);
+                    dbExec("DELETE FROM b2b_orders WHERE id=? AND payment_status!='odendi'", [$orderId]);
+                    dbExec("DELETE FROM b2b_payment_sessions WHERE order_id=?", [$orderId]);
+                    unset($_SESSION['rk_pay'][$orderId]);
+                }
                 $error .= '<br><br><strong>Sepetinize geri dönüp tekrar deneyebilirsiniz.</strong> ' .
                     '<a href="?page=cart" style="color:#fff;text-decoration:underline">Sepete Dön</a>';
             } catch (\Throwable $e) {
@@ -305,7 +412,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 'card') {
 
             // 3DS başlat
             $stage       = '3ds-baslat';
-            $callbackUrl = B2B_URL . '/?page=payment-card&order_id=' . $orderId . '&step=callback';
+            $callbackUrl = B2B_URL . '/?page=payment-card'
+                . ($pending ? '&pending=1' : '&order_id=' . $orderId)
+                . '&step=callback';
             $clientIp    = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
             $initRes     = $rb->threeDSBaslat($sessionId, $callbackUrl, $holderName, $clientIp);
             $htmlContent = $initRes['htmlContent'] ?? '';
@@ -336,9 +445,16 @@ $initialSingle = $initialList[0];
 <div class="page-header">
   <div>
     <h1 class="page-title">Kart ile Ödeme</h1>
+    <?php if ($pending): ?>
+    <p class="page-sub">
+      <span style="background:#fef3c7;border:1px solid #f59e0b;color:#92400e;padding:3px 8px;border-radius:4px;font-size:12px;font-weight:700">⏳ ÖDEME ONAYI BEKLENİYOR</span>
+      — Tutar: <strong><?= money((float)$order['grand_total']) ?></strong> — Ödeme onaylandıktan sonra siparişiniz oluşturulacak.
+    </p>
+    <?php else: ?>
     <p class="page-sub">Sipariş: <strong><?= h($order['order_no']) ?></strong> — Tutar: <strong><?= money((float)$order['grand_total']) ?></strong></p>
+    <?php endif; ?>
   </div>
-  <a href="?page=orders&action=detail&id=<?= $orderId ?>" class="btn btn-secondary">← Geri</a>
+  <a href="<?= $pending ? '?page=cart' : '?page=orders&action=detail&id='.$orderId ?>" class="btn btn-secondary">← Geri</a>
 </div>
 
 <?php if ($error): ?>
@@ -355,7 +471,7 @@ $initialSingle = $initialList[0];
 <div class="card">
   <div class="card-header"><h3 class="card-title">Kart Bilgileri</h3></div>
   <div class="card-body">
-    <form method="POST" action="?page=payment-card&order_id=<?= $orderId ?>&step=card" id="cardForm">
+    <form method="POST" action="?page=payment-card<?= $pending ? '&pending=1' : '&order_id='.$orderId ?>&step=card" id="cardForm">
       <?= csrfField() ?>
 
       <!-- Kart görsel önizleme -->
@@ -454,9 +570,11 @@ $initialSingle = $initialList[0];
   <div class="card-header"><h3 class="card-title">Sipariş Özeti</h3></div>
   <div class="card-body">
     <div style="font-size:13px;color:var(--text-2)">
+      <?php if (!$pending): ?>
       <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
         <span>Sipariş No</span><strong><?= h($order['order_no']) ?></strong>
       </div>
+      <?php endif; ?>
       <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
         <span>Ara Toplam</span><span><?= money((float)($order['subtotal'] ?? $order['grand_total'])) ?></span>
       </div>
@@ -524,6 +642,7 @@ expY?.addEventListener('change', updateExpiry);
 
 // ── Dinamik Taksit Sorgulama (Rubikpara /v1/Installment) ────────
 const ORDER_ID    = <?= (int)$orderId ?>;
+const IS_PENDING  = <?= $pending ? 'true' : 'false' ?>;
 const BASE_AMOUNT = <?= json_encode((float)$order['grand_total']) ?>;
 const CSRF_TOKEN  = <?= json_encode(csrfToken()) ?>;
 // Admin'in belirlediği tek çekim komisyon oranıyla hesaplanmış başlangıç seçeneği
@@ -609,7 +728,7 @@ function fetchInstallments(bin) {
   load.style.display = 'inline';
   hint.style.display = 'none';
 
-  const body = new URLSearchParams({ csrf: CSRF_TOKEN, bin: bin, order_id: ORDER_ID });
+  const body = new URLSearchParams({ csrf: CSRF_TOKEN, bin: bin, order_id: ORDER_ID, pending: IS_PENDING ? '1' : '0' });
   const url  = '<?= B2B_URL ?>/api/rubikpara-installments.php';
 
   fetch(url, {

@@ -41,20 +41,29 @@ if (!in_array('kredi_karti', $allowed, true)) {
 
 $bin     = preg_replace('/\D/', '', $_POST['bin'] ?? '');
 $orderId = (int)($_POST['order_id'] ?? 0);
+$pending = ($_POST['pending'] ?? '') === '1';
 
-if (strlen($bin) < 6)            rk_out(false, 'BIN en az 6 hane olmalı');
-if ($orderId < 1)                rk_out(false, 'Sipariş ID geçersiz');
+if (strlen($bin) < 6) rk_out(false, 'BIN en az 6 hane olmalı');
 
-$order = dbRow(
-    "SELECT id, grand_total, payment_status, status
-     FROM b2b_orders WHERE id=? AND dealer_id=?",
-    [$orderId, $dealerId]
-);
-if (!$order)                                                      rk_out(false, 'Sipariş bulunamadı');
-if ($order['payment_status'] === 'odendi')                        rk_out(false, 'Sipariş zaten ödenmiş');
-if (in_array($order['status'], ['iptal','iade'], true))           rk_out(false, 'İptal/iade siparişe ödeme yapılamaz');
-
-$amount = (float)$order['grand_total'];
+if ($pending) {
+    // PENDING MODE: order yok, session'dan grand_total al
+    $snap = $_SESSION['pending_card'][$dealerId] ?? null;
+    if (!$snap || (time() - ($snap['created_at'] ?? 0)) > 3600) {
+        rk_out(false, 'Pending sepet bulunamadı veya süresi geçti, sepete dönüp tekrar deneyin');
+    }
+    $amount = (float)$snap['grand_total'];
+} else {
+    if ($orderId < 1) rk_out(false, 'Sipariş ID geçersiz');
+    $order = dbRow(
+        "SELECT id, grand_total, payment_status, status
+         FROM b2b_orders WHERE id=? AND dealer_id=?",
+        [$orderId, $dealerId]
+    );
+    if (!$order)                                                rk_out(false, 'Sipariş bulunamadı');
+    if ($order['payment_status'] === 'odendi')                  rk_out(false, 'Sipariş zaten ödenmiş');
+    if (in_array($order['status'], ['iptal','iade'], true))     rk_out(false, 'İptal/iade siparişe ödeme yapılamaz');
+    $amount = (float)$order['grand_total'];
+}
 
 try {
     $installments = rubikpara()->taksitSorgula(substr($bin, 0, 6), $amount);
