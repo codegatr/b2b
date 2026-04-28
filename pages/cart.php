@@ -311,7 +311,13 @@ $grand = $subtotal + $vatTotal;
         </td>
         <td class="fw-600"><?= money($it['line_total']) ?></td>
         <td>
-          <button onclick="removeItem(<?= $it['product_id'] ?>)" class="btn btn-ghost btn-sm" style="color:var(--danger)">×</button>
+          <button type="button" onclick="removeItem(<?= $it['product_id'] ?>)"
+                  title="Bu ürünü sepetten kaldır"
+                  style="display:inline-flex;align-items:center;gap:6px;padding:7px 12px;background:#fff;border:1px solid #fecaca;color:#dc2626;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;transition:.15s"
+                  onmouseover="this.style.background='#fef2f2';this.style.borderColor='#dc2626'"
+                  onmouseout="this.style.background='#fff';this.style.borderColor='#fecaca'">
+            🗑 Sil
+          </button>
         </td>
       </tr>
       <?php endforeach; ?>
