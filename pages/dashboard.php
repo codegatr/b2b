@@ -4,11 +4,11 @@ requireDealer();
 $dealer = currentDealer();
 
 // İstatistikler
-$totalOrders   = dbVal("SELECT COUNT(*) FROM b2b_orders WHERE dealer_id=?", [$dealer['id']]);
-$pendingOrders = dbVal("SELECT COUNT(*) FROM b2b_orders WHERE dealer_id=? AND status='bekliyor'", [$dealer['id']]);
-$openBalance   = dbVal("SELECT COALESCE(SUM(CASE WHEN type='borc' THEN amount ELSE -amount END),0) FROM b2b_ledger WHERE dealer_id=? AND is_closed=0", [$dealer['id']]);
-$overdueAmount = dbVal("SELECT COALESCE(SUM(CASE WHEN type='borc' THEN amount ELSE -amount END),0) FROM b2b_ledger WHERE dealer_id=? AND is_closed=0 AND due_date < CURDATE()", [$dealer['id']]);
-$cartCount     = dbVal("SELECT COALESCE(SUM(qty),0) FROM b2b_cart WHERE dealer_id=?", [$dealer['id']]);
+$totalOrders   = (int)dbVal("SELECT COUNT(*) FROM b2b_orders WHERE dealer_id=?", [$dealer['id']]);
+$pendingOrders = (int)dbVal("SELECT COUNT(*) FROM b2b_orders WHERE dealer_id=? AND status='bekliyor'", [$dealer['id']]);
+$openBalance   = (float)dbVal("SELECT COALESCE(SUM(CASE WHEN type='borc' THEN amount ELSE -amount END),0) FROM b2b_ledger WHERE dealer_id=? AND is_closed=0", [$dealer['id']]);
+$overdueAmount = (float)dbVal("SELECT COALESCE(SUM(CASE WHEN type='borc' THEN amount ELSE -amount END),0) FROM b2b_ledger WHERE dealer_id=? AND is_closed=0 AND due_date < CURDATE()", [$dealer['id']]);
+$cartCount     = (int)dbVal("SELECT COALESCE(SUM(qty),0) FROM b2b_cart WHERE dealer_id=?", [$dealer['id']]);
 
 // Son siparişler
 $recentOrders = dbRows(
@@ -16,12 +16,23 @@ $recentOrders = dbRows(
     [$dealer['id']]
 );
 
-// Okunmamış bildirimler
-$notifications = dbRows(
-    "SELECT * FROM b2b_notifications WHERE dealer_id=? ORDER BY created_at DESC LIMIT 6",
+// Bildirimler — DEDUPE: aynı sipariş için sadece son durum güncellemesi gösterilir
+// (5 kez statü değişikliği olmuşsa 5 ayrı bildirim yerine sadece sonuncu)
+$rawNotifs = dbRows(
+    "SELECT * FROM b2b_notifications WHERE dealer_id=? ORDER BY created_at DESC LIMIT 20",
     [$dealer['id']]
 );
-$unreadCount = dbVal("SELECT COUNT(*) FROM b2b_notifications WHERE dealer_id=? AND is_read=0", [$dealer['id']]);
+$seenUrls = [];
+$notifications = [];
+foreach ($rawNotifs as $n) {
+    $key = $n['url'] ?: ('id_' . $n['id']);
+    if (isset($seenUrls[$key])) continue;
+    $seenUrls[$key] = true;
+    $notifications[] = $n;
+    if (count($notifications) >= 5) break;
+}
+
+$unreadCount = (int)dbVal("SELECT COUNT(*) FROM b2b_notifications WHERE dealer_id=? AND is_read=0", [$dealer['id']]);
 // Okundu işaretle
 dbExec("UPDATE b2b_notifications SET is_read=1 WHERE dealer_id=?", [$dealer['id']]);
 
@@ -30,7 +41,6 @@ $upcomingDue = dbRows(
     "SELECT * FROM b2b_ledger WHERE dealer_id=? AND is_closed=0 AND type='borc' AND due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(),INTERVAL 7 DAY) ORDER BY due_date",
     [$dealer['id']]
 );
-// Duyurular index.php'den geliyor (\$announcements)
 ?>
 
 <div class="page-header">
@@ -41,8 +51,7 @@ $upcomingDue = dbRows(
     <a href="?page=products" class="btn btn-primary">🛒 Sipariş Ver</a>
 </div>
 
-<!-- Stat Kartları -->
-
+<!-- Duyurular -->
 <?php if (!empty($announcements)): ?>
 <div style="margin-bottom:20px">
   <?php foreach ($announcements as $ann): ?>
@@ -59,95 +68,160 @@ $upcomingDue = dbRows(
   <?php endforeach; ?>
 </div>
 <?php endif; ?>
-<div class="grid grid-cols-4 gap-4 mb-6">
-    <a href="?page=orders" class="stat-card" style="text-decoration:none">
-        <div class="stat-label">Toplam Sipariş</div>
-        <div class="stat-value"><?= $totalOrders ?></div>
-        <?php if ($pendingOrders): ?><div class="stat-sub text-warning"><?= $pendingOrders ?> bekliyor</div><?php endif; ?>
+
+<!-- Stat Kartları — modern, ikonlu, kompakt -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:20px">
+    <a href="?page=orders" style="text-decoration:none;color:inherit">
+      <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:18px;transition:.15s;height:100%" onmouseover="this.style.borderColor='var(--red)';this.style.boxShadow='0 2px 8px rgba(237,41,57,.08)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow=''">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">Toplam Sipariş</div>
+          <div style="width:32px;height:32px;background:#dbeafe;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px">📦</div>
+        </div>
+        <div style="font-size:24px;font-weight:700;color:#111827;line-height:1.1"><?= $totalOrders ?></div>
+        <?php if ($pendingOrders): ?>
+        <div style="font-size:11px;color:#d97706;font-weight:600;margin-top:4px"><?= $pendingOrders ?> tanesi onay bekliyor</div>
+        <?php else: ?>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px"><?= $totalOrders > 0 ? 'Tümü işlemde ✓' : 'Henüz sipariş yok' ?></div>
+        <?php endif; ?>
+      </div>
     </a>
-    <div class="stat-card <?= $openBalance>0?'stat-card--danger':'' ?>">
-        <div class="stat-label">Açık Bakiye</div>
-        <div class="stat-value"><?= money($openBalance) ?></div>
-        <div class="stat-sub"><?= $openBalance>0?'Borcunuz var':'Temiz hesap' ?></div>
+
+    <a href="?page=account" style="text-decoration:none;color:inherit">
+      <div style="background:#fff;border:1px solid <?= $openBalance>0?'#fecaca':'var(--border)' ?>;border-radius:12px;padding:18px;transition:.15s;height:100%" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.08)'" onmouseout="this.style.boxShadow=''">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">Açık Bakiye</div>
+          <div style="width:32px;height:32px;background:<?= $openBalance>0?'#fee2e2':'#d1fae5' ?>;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px"><?= $openBalance>0?'⚠️':'✓' ?></div>
+        </div>
+        <div style="font-size:24px;font-weight:700;color:<?= $openBalance>0?'#dc2626':'#16a34a' ?>;line-height:1.1"><?= money($openBalance) ?></div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px"><?= $openBalance>0 ? ($overdueAmount>0 ? money($overdueAmount).' vadesi geçti' : 'Borçlu hesap') : 'Hesap temiz' ?></div>
+      </div>
+    </a>
+
+    <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:18px;height:100%">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">Kredi Limiti</div>
+        <div style="width:32px;height:32px;background:#fef3c7;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px">💳</div>
+      </div>
+      <div style="font-size:24px;font-weight:700;color:#111827;line-height:1.1"><?= money($dealer['credit_limit'] ?? 0) ?></div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Vade: <?= (int)($dealer['payment_term_days'] ?? 0) ?> gün</div>
     </div>
-    <?php if ($overdueAmount > 0): ?>
-    <div class="stat-card stat-card--danger">
-        <div class="stat-label">Vadesi Geçen</div>
-        <div class="stat-value"><?= money($overdueAmount) ?></div>
-        <div class="stat-sub"><a href="?page=account" style="color:inherit">Ekstre →</a></div>
-    </div>
-    <?php else: ?>
-    <div class="stat-card">
-        <div class="stat-label">Kredi Limiti</div>
-        <div class="stat-value"><?= money($dealer['credit_limit']) ?></div>
-        <div class="stat-sub">Vade: <?= $dealer['payment_term_days'] ?> gün</div>
-    </div>
-    <?php endif; ?>
-    <a href="?page=cart" class="stat-card" style="text-decoration:none">
-        <div class="stat-label">Sepet</div>
-        <div class="stat-value"><?= $cartCount ?> ürün</div>
-        <?php if ($cartCount): ?><div class="stat-sub text-primary">Siparişi tamamla →</div><?php endif; ?>
+
+    <a href="?page=cart" style="text-decoration:none;color:inherit">
+      <div style="background:#fff;border:1px solid <?= $cartCount>0?'rgba(237,41,57,.3)':'var(--border)' ?>;border-radius:12px;padding:18px;transition:.15s;height:100%" onmouseover="this.style.borderColor='var(--red)';this.style.boxShadow='0 2px 8px rgba(237,41,57,.08)'" onmouseout="this.style.borderColor='<?= $cartCount>0?'rgba(237,41,57,.3)':'var(--border)' ?>';this.style.boxShadow=''">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">Sepet</div>
+          <div style="width:32px;height:32px;background:#fce7f3;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px">🛒</div>
+        </div>
+        <div style="font-size:24px;font-weight:700;color:#111827;line-height:1.1"><?= $cartCount ?> <span style="font-size:14px;font-weight:500;color:var(--text-muted)">ürün</span></div>
+        <?php if ($cartCount): ?>
+        <div style="font-size:11px;color:var(--red);font-weight:600;margin-top:4px">Siparişi tamamla →</div>
+        <?php else: ?>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Sepetiniz boş</div>
+        <?php endif; ?>
+      </div>
     </a>
 </div>
 
 <!-- Vade Uyarısı -->
 <?php if ($upcomingDue): ?>
-<div class="alert alert-warning mb-6">
-    <strong>⚠ Yaklaşan Vade Tarihleri:</strong>
+<div style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1px solid #fcd34d;border-radius:10px;padding:14px 18px;margin-bottom:20px">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+    <span style="font-size:18px">⏰</span>
+    <strong style="color:#92400e;font-size:14px">Yaklaşan Vade Tarihleri</strong>
+    <a href="?page=account" style="margin-left:auto;color:#92400e;font-size:12px;font-weight:600;text-decoration:none">Ekstre →</a>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:8px">
     <?php foreach ($upcomingDue as $u): ?>
-    <span style="margin-left:12px"><?= h($u['description']) ?> — <?= money($u['amount']) ?> — <?= fmtDate($u['due_date']) ?></span>
+    <div style="background:#fff;border:1px solid #fde68a;border-radius:6px;padding:6px 10px;font-size:12px">
+      <span style="color:#78350f"><?= h(mb_substr($u['description'] ?? '', 0, 40)) ?></span>
+      <strong style="color:#92400e"> <?= money($u['amount']) ?></strong>
+      <span style="color:#a16207">· <?= fmtDate($u['due_date']) ?></span>
+    </div>
     <?php endforeach; ?>
-    <a href="?page=account" style="margin-left:12px">Ekstre →</a>
+  </div>
 </div>
 <?php endif; ?>
 
-<div class="grid grid-cols-2 gap-6">
-    <!-- Son Siparişler -->
-    <div class="card">
-        <div class="card-header">
-            <h3>Son Siparişler</h3>
-            <a href="?page=orders" class="btn btn-xs btn-ghost">Tümü →</a>
-        </div>
-        <table class="table">
-            <thead><tr><th>Sipariş No</th><th>Tarih</th><th>Tutar</th><th>Durum</th></tr></thead>
-            <tbody>
-            <?php foreach ($recentOrders as $o): ?>
-            <tr>
-                <td><a href="?page=orders&action=detail&id=<?= $o['id'] ?>"><?= h($o['order_number']) ?></a></td>
-                <td class="text-sm"><?= fmtDate($o['created_at']) ?></td>
-                <td><?= money($o['grand_total']) ?></td>
-                <td><?= orderStatusLabel($o['status']) ?></td>
-            </tr>
-            <?php endforeach; ?>
-            <?php if (empty($recentOrders)): ?>
-            <tr><td colspan="4" class="text-muted text-center py-6">Henüz sipariş yok. <a href="?page=products">Ürünleri inceleyin →</a></td></tr>
-            <?php endif; ?>
-            </tbody>
-        </table>
-    </div>
+<!-- Son Siparişler + Bildirimler — 2 sütun -->
+<div style="display:grid;grid-template-columns:1.3fr 1fr;gap:18px">
 
-    <!-- Bildirimler -->
-    <div class="card">
-        <div class="card-header">
-            <h3>Bildirimler <?php if ($unreadCount): ?><span class="badge badge-blue"><?= $unreadCount ?></span><?php endif; ?></h3>
-            <a href="?page=notifications" class="btn btn-xs btn-ghost">Tümü →</a>
-        </div>
-        <div style="padding:0">
-        <?php foreach ($notifications as $n): ?>
-        <div class="notification-item <?= !$n['is_read']?'unread':'' ?>">
-            <div class="notification-icon">
-                <?= $n['type']==='order'?'📦':($n['type']==='payment'?'💰':($n['type']==='stock'?'📊':'🔔')) ?>
-            </div>
-            <div>
-                <div class="notification-title"><?= h($n['title']) ?></div>
-                <div class="notification-body text-sm text-muted"><?= h($n['message']) ?></div>
-                <div class="notification-time"><?= fmtDate($n['created_at']) ?></div>
-            </div>
-        </div>
-        <?php endforeach; ?>
-        <?php if (empty($notifications)): ?>
-        <div class="p-6 text-center text-muted">Bildirim yok.</div>
-        <?php endif; ?>
-        </div>
+  <!-- Son Siparişler -->
+  <div style="background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden">
+    <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <h3 style="margin:0;font-size:14px;font-weight:700;color:var(--text)">Son Siparişler</h3>
+      <a href="?page=orders" style="font-size:12px;color:var(--red);text-decoration:none;font-weight:600">Tümü →</a>
     </div>
+    <?php if (empty($recentOrders)): ?>
+      <div style="padding:32px 18px;text-align:center;color:var(--text-muted)">
+        <div style="font-size:32px;margin-bottom:6px;opacity:.4">📦</div>
+        <p style="margin:0;font-size:13px">Henüz sipariş yok.</p>
+        <a href="?page=products" style="display:inline-block;margin-top:8px;font-size:12px;color:var(--red);font-weight:600;text-decoration:none">Ürünleri incele →</a>
+      </div>
+    <?php else: ?>
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:#f9fafb">
+            <th style="padding:9px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.5px">SİPARİŞ NO</th>
+            <th style="padding:9px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.5px">TARİH</th>
+            <th style="padding:9px 14px;text-align:right;font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.5px">TUTAR</th>
+            <th style="padding:9px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.5px">DURUM</th>
+          </tr>
+        </thead>
+        <tbody>
+        <?php foreach ($recentOrders as $o): ?>
+          <tr style="border-top:1px solid var(--border)">
+            <td style="padding:11px 14px">
+              <a href="?page=orders&action=detail&id=<?= (int)$o['id'] ?>" style="color:var(--red);text-decoration:none;font-weight:600;font-size:12px;font-family:ui-monospace,monospace"><?= h($o['order_no']) ?></a>
+            </td>
+            <td style="padding:11px 14px;font-size:12px;color:var(--text-2)"><?= fmtDate($o['created_at']) ?></td>
+            <td style="padding:11px 14px;text-align:right;font-size:12px;font-weight:700;color:var(--text)"><?= money($o['grand_total']) ?></td>
+            <td style="padding:11px 14px"><?= orderStatusLabel($o['status']) ?></td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+    <?php endif; ?>
+  </div>
+
+  <!-- Bildirimler -->
+  <div style="background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden">
+    <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <h3 style="margin:0;font-size:14px;font-weight:700;color:var(--text)">
+        Bildirimler
+        <?php if ($unreadCount > 0): ?><span style="background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px;margin-left:4px"><?= $unreadCount ?></span><?php endif; ?>
+      </h3>
+      <a href="?page=notifications" style="font-size:12px;color:var(--red);text-decoration:none;font-weight:600">Tümü →</a>
+    </div>
+    <?php if (empty($notifications)): ?>
+      <div style="padding:32px 18px;text-align:center;color:var(--text-muted)">
+        <div style="font-size:32px;margin-bottom:6px;opacity:.4">🔔</div>
+        <p style="margin:0;font-size:13px">Bildirim yok.</p>
+      </div>
+    <?php else: ?>
+      <div>
+      <?php foreach ($notifications as $n): ?>
+        <?php
+        $type   = $n['type'] ?? 'system';
+        $icons  = ['order'=>'📦','payment'=>'💰','stock'=>'📊','dealer'=>'🏢','ticket'=>'🎫','application'=>'📝','system'=>'⚙️'];
+        $icon   = $icons[$type] ?? '🔔';
+        $title  = (string)($n['title'] ?? '');
+        $body   = (string)($n['body']  ?? '');
+        $url    = $n['url'] ?: '?page=notifications';
+        $isUnread = empty($n['is_read']);
+        ?>
+        <a href="<?= h($url) ?>" style="display:flex;gap:10px;padding:12px 18px;border-top:1px solid var(--border);text-decoration:none;color:inherit;<?= $isUnread ? 'background:#fefce8' : '' ?>">
+          <div style="font-size:18px;line-height:1.2;flex:0 0 auto"><?= $icon ?></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:600;color:var(--text);line-height:1.3;margin-bottom:2px"><?= h($title) ?></div>
+            <?php if ($body !== ''): ?>
+            <div style="font-size:11px;color:var(--text-2);line-height:1.4;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical"><?= h($body) ?></div>
+            <?php endif; ?>
+            <div style="font-size:10px;color:var(--text-muted)"><?= fmtDateTime($n['created_at']) ?></div>
+          </div>
+        </a>
+      <?php endforeach; ?>
+      </div>
+    <?php endif; ?>
+  </div>
+
 </div>
