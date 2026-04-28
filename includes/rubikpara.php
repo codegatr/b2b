@@ -347,6 +347,17 @@ class Rubikpara {
     // HTTP yardımcıları
     // ─────────────────────────────────────────────────────────────
 
+    // Rubikpara API'si bazen Latin-1 (Windows-1254) encoding ile yanıt veriyor.
+    // JSON spec UTF-8 zorunlu olsa da bazı .NET tabanlı sunucular bu kuralı
+    // ihlal ediyor. Bayinin ekranında 'ba�ar�s�z' yerine 'başarısız' görmek
+    // için body'i UTF-8'e zorla normalize ediyoruz.
+    private function normalizeUtf8(string $body): string {
+        if ($body === '' || mb_check_encoding($body, 'UTF-8')) return $body;
+        // Önce Windows-1254 (Türkçe Windows), sonra ISO-8859-9 dene
+        $converted = @mb_convert_encoding($body, 'UTF-8', 'Windows-1254, ISO-8859-9, UTF-8');
+        return $converted !== false ? $converted : $body;
+    }
+
     private function get(string $endpoint, array $auth): array {
         if (!function_exists('curl_init')) {
             throw new \Exception('cURL PHP eklentisi yüklü değil.');
@@ -377,6 +388,7 @@ class Rubikpara {
             throw new \Exception('cURL hatası: ' . $curlErr);
         }
 
+        $body = $this->normalizeUtf8($body);
         $parsed = json_decode($body, true);
         if ($parsed === null) {
             $snippet = substr(trim((string)$body), 0, 500);
@@ -447,6 +459,7 @@ class Rubikpara {
             throw new \Exception('cURL hatası: ' . $curlErr);
         }
 
+        $body = $this->normalizeUtf8($body);
         $parsed = json_decode($body, true);
         if ($parsed === null) {
             $snippet = substr(trim((string)$body), 0, 500);
