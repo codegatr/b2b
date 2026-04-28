@@ -59,17 +59,9 @@ $amount = (float)$order['grand_total'];
 try {
     $installments = rubikpara()->taksitSorgula(substr($bin, 0, 6), $amount);
 
-    // Hiç sonuç dönmediyse en azından tek çekim göster (komisyonsuz)
-    if (empty($installments)) {
-        $installments = [[
-            'installmentCount'  => 1,
-            'totalAmount'       => $amount,
-            'installmentAmount' => $amount,
-            'commission'        => 0.0,
-            'commissionRate'    => 0.0,
-            'cardFamily'        => '',
-        ]];
-    }
+    // Hiç sonuç dönmediyse boş liste — helper tek çekim option'u ekleyecek
+    // (admin'in 'rubikpara_single_rate' oranı varsa o yansır)
+    $installments = rubikparaTaksitleriZenginlestir($installments, $amount);
 
     rk_out(true, '', [
         'installments' => $installments,

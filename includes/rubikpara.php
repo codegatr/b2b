@@ -470,3 +470,53 @@ function rubikpara(): Rubikpara {
     if ($r === null) $r = new Rubikpara();
     return $r;
 }
+
+/**
+ * Rubikpara'dan dönen taksit seçeneklerini admin'in belirlediği oranlarla
+ * zenginleştirir. Şu an sadece tek çekim için manuel oran (settings:
+ * rubikpara_single_rate) destekleniyor.
+ *
+ * - Liste boşsa veya tek çekim option'u yoksa, baseAmount + admin% ile ekler
+ * - Tek çekim option'u varsa ve admin oranı > 0 ise mevcut komisyonu override eder
+ * - Diğer taksitler dokunulmaz (API'den geldiği gibi kalır)
+ *
+ * @param array $options taksitSorgula() çıktısı
+ * @param float $baseAmount sipariş tutarı (komisyonsuz)
+ * @return array zenginleştirilmiş seçenekler, installmentCount'a göre sıralı
+ */
+function rubikparaTaksitleriZenginlestir(array $options, float $baseAmount): array {
+    $singleRate = (float) setting('rubikpara_single_rate', '0');
+
+    $hasSingle = false;
+    foreach ($options as &$o) {
+        if ((int)$o['installmentCount'] === 1) {
+            $hasSingle = true;
+            if ($singleRate > 0) {
+                $commission = round($baseAmount * $singleRate / 100, 2);
+                $total      = round($baseAmount + $commission, 2);
+                $o['totalAmount']       = $total;
+                $o['installmentAmount'] = $total;
+                $o['commission']        = $commission;
+                $o['commissionRate']    = $singleRate;
+            }
+            break;
+        }
+    }
+    unset($o);
+
+    if (!$hasSingle) {
+        $commission = $singleRate > 0 ? round($baseAmount * $singleRate / 100, 2) : 0.0;
+        $total      = round($baseAmount + $commission, 2);
+        $options[]  = [
+            'installmentCount'  => 1,
+            'totalAmount'       => $total,
+            'installmentAmount' => $total,
+            'commission'        => $commission,
+            'commissionRate'    => $singleRate,
+            'cardFamily'        => '',
+        ];
+    }
+
+    usort($options, fn($a, $b) => $a['installmentCount'] <=> $b['installmentCount']);
+    return $options;
+}

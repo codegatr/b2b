@@ -111,6 +111,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!empty($_POST['rubikpara_secret_key'])) {
             settingSave('rubikpara_secret_key', trim($_POST['rubikpara_secret_key']));
         }
+        // Tek çekim komisyon oranı (admin tarafından bayiye yansıtılır)
+        $singleRate = (float) str_replace(',', '.', $_POST['rubikpara_single_rate'] ?? '0');
+        $singleRate = max(0, min(100, $singleRate)); // 0-100 arası
+        settingSave('rubikpara_single_rate', (string)$singleRate);
         settingClearCache();
         $success = 'Rubikpara ayarları kaydedildi.';
     }
@@ -466,6 +470,24 @@ Saygılarımla</div>
                 <option value="1" <?= setting('rubikpara_test_mode','1')==='1'?'selected':'' ?>>Test (testpfapi.rubikpara.com)</option>
                 <option value="0" <?= setting('rubikpara_test_mode','1')==='0'?'selected':'' ?>>Canlı (pfapi.rubikpara.com)</option>
             </select></div>
+    </div>
+
+    <hr style="margin:20px 0;border:none;border-top:1px solid var(--border)">
+
+    <div class="form-grid-2">
+        <div class="form-group">
+            <label class="form-label">Tek Çekim Komisyon Oranı (%)</label>
+            <input type="number" step="0.01" min="0" max="100"
+                   name="rubikpara_single_rate"
+                   value="<?= htmlspecialchars(setting('rubikpara_single_rate', '0')) ?>"
+                   class="form-control" placeholder="0.00">
+            <p style="font-size:12px;color:var(--text-muted);margin-top:4px">
+                Bayi tek çekim seçtiğinde bu oran sipariş tutarına eklenir ve karttan tahsil edilir.
+                Örn: <strong>2.00</strong> girersen 100 TL siparişten 102 TL çekilir, 2 TL bayinin sırtında kalır.
+                Taksitli ödemelerde Rubikpara'nın bankadan döndürdüğü oran kullanılır (bu alan tek çekim için).
+                <strong>0</strong> = komisyon yok.
+            </p>
+        </div>
     </div>
     <div class="form-actions">
         <button type="submit" class="btn btn-primary">Kaydet</button>

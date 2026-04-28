@@ -44,10 +44,15 @@ if ($step === 'callback' && isset($_POST['ThreeDSessionId'])) {
 
                 $prov = $rb->odeme($sessionId, $finalAmount, $installment);
                 if ($prov['isSucceed'] ?? false) {
-                    $note = $installment > 1
-                        ? sprintf('%d taksit — Sipariş %s + Komisyon %s (%%%s)',
-                            $installment, money($baseAmount), money($commission), $rate)
-                        : sprintf('Tek çekim — %s', money($finalAmount));
+                    if ($installment > 1) {
+                        $note = sprintf('%d taksit — Sipariş %s + Komisyon %s (%%%s)',
+                            $installment, money($baseAmount), money($commission), $rate);
+                    } elseif ($commission > 0) {
+                        $note = sprintf('Tek çekim — Sipariş %s + Komisyon %s (%%%s)',
+                            money($baseAmount), money($commission), $rate);
+                    } else {
+                        $note = sprintf('Tek çekim — %s', money($finalAmount));
+                    }
 
                     // Ödeme kaydı (amount = bayinin kartından çekilen toplam)
                     dbExec(
@@ -110,25 +115,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 'card') {
             $baseAmount = (float)$order['grand_total'];
             $stage      = 'taksit';   // log için: hangi aşamada hata oluştu
 
-            // Server-side taksit doğrulama (manipülasyon koruması)
-            // — Kullanıcı 12 taksit seçti diye 100₺ çekemesin, gerçek tutarı API söyler.
-            $finalAmount = $baseAmount;
-            $commission  = 0.0;
-            $rate        = 0.0;
-            if ($installment > 1) {
-                $bin     = substr(preg_replace('/\D/','',$cardNo), 0, 6);
+            // Server-side taksit doğrulama (manipülasyon koruması) +
+            // admin'in belirlediği tek çekim komisyonunun da uygulanması.
+            // Tek çekim ve taksitli akışları aynı yoldan geçiriyoruz ki
+            // bayinin JS dropdown'unda gördüğü tutar ile karttan gerçek
+            // çekilen tutar her durumda tutarlı olsun.
+            $bin     = substr(preg_replace('/\D/','',$cardNo), 0, 6);
+            $options = [];
+            try {
                 $options = $rb->taksitSorgula($bin, $baseAmount);
-                $match   = null;
-                foreach ($options as $o) {
-                    if ((int)$o['installmentCount'] === $installment) { $match = $o; break; }
-                }
-                if (!$match) {
-                    throw new Exception('Seçilen taksit bu kartta desteklenmiyor.');
-                }
-                $finalAmount = (float)$match['totalAmount'];
-                $commission  = (float)$match['commission'];
-                $rate        = (float)$match['commissionRate'];
+            } catch (\Exception $e) {
+                // BIN sorgusu çökerse boş liste — helper tek çekim'i ekleyecek
+                $options = [];
             }
+            $options = rubikparaTaksitleriZenginlestir($options, $baseAmount);
+
+            $match = null;
+            foreach ($options as $o) {
+                if ((int)$o['installmentCount'] === $installment) { $match = $o; break; }
+            }
+            if (!$match) {
+                throw new Exception('Seçilen taksit bu kartta desteklenmiyor.');
+            }
+            $finalAmount = (float)$match['totalAmount'];
+            $commission  = (float)$match['commission'];
+            $rate        = (float)$match['commissionRate'];
 
             // Tokenize
             $stage    = 'tokenize';
@@ -171,6 +182,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 'card') {
         }
     }
 }
+
+// Sayfa ilk yüklendiğinde (kart no girilmeden) gösterilen tek çekim seçeneğini
+// admin'in belirlediği oranla hazırla — JS BIN sorgusu yapana kadar bayi
+// doğru tutarı görsün.
+$initialBase   = (float)$order['grand_total'];
+$initialList   = function_exists('rubikparaTaksitleriZenginlestir')
+    ? rubikparaTaksitleriZenginlestir([], $initialBase)
+    : [['installmentCount'=>1, 'totalAmount'=>$initialBase, 'installmentAmount'=>$initialBase, 'commission'=>0, 'commissionRate'=>0]];
+$initialSingle = $initialList[0];
 ?>
 <div class="page-body">
 <div class="page-header">
@@ -252,7 +272,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 'card') {
           <span id="instLoading" style="display:none;font-size:11px;color:var(--text-muted);font-weight:400">— sorgulanıyor…</span>
         </label>
         <select name="installment" id="installment" class="form-control" disabled>
-          <option value="1">Tek çekim — <?= money((float)$order['grand_total']) ?></option>
+          <option value="1">Tek çekim — <?= money((float)$initialSingle['totalAmount']) ?></option>
         </select>
         <div id="instHint" style="font-size:11px;color:var(--text-muted);margin-top:6px">
           Kart numarasını girince taksit seçenekleri ve banka komisyonları otomatik gelir.
@@ -280,7 +300,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 'card') {
       </div>
 
       <button type="submit" class="btn btn-primary" id="payBtn" style="width:100%;height:44px;font-size:14px">
-        🔒 3D Secure ile Öde — <span id="payBtnAmount"><?= money((float)$order['grand_total']) ?></span>
+        🔒 3D Secure ile Öde — <span id="payBtnAmount"><?= money((float)$initialSingle['totalAmount']) ?></span>
       </button>
       <p style="text-align:center;font-size:11px;color:var(--text-muted);margin-top:10px">
         Ödemeniz PF Gateway (Rubikpara) altyapısı üzerinden 3D Secure korumalı olarak işlenir.
@@ -349,6 +369,14 @@ expY?.addEventListener('change', updateExpiry);
 const ORDER_ID    = <?= (int)$orderId ?>;
 const BASE_AMOUNT = <?= json_encode((float)$order['grand_total']) ?>;
 const CSRF_TOKEN  = <?= json_encode(csrfToken()) ?>;
+// Admin'in belirlediği tek çekim komisyon oranıyla hesaplanmış başlangıç seçeneği
+const INITIAL_FALLBACK = <?= json_encode([[
+    'installmentCount'  => (int)$initialSingle['installmentCount'],
+    'totalAmount'       => (float)$initialSingle['totalAmount'],
+    'installmentAmount' => (float)$initialSingle['installmentAmount'],
+    'commission'        => (float)$initialSingle['commission'],
+    'commissionRate'    => (float)$initialSingle['commissionRate'],
+]]) ?>;
 const fmtTL = n => new Intl.NumberFormat('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2}).format(n) + ' ₺';
 
 const sel  = document.getElementById('installment');
@@ -358,7 +386,7 @@ const box  = document.getElementById('commissionBox');
 const btnAmt = document.getElementById('payBtnAmount');
 
 let lastBin = '';
-let currentOptions = [{ installmentCount:1, totalAmount:BASE_AMOUNT, installmentAmount:BASE_AMOUNT, commission:0, commissionRate:0 }];
+let currentOptions = INITIAL_FALLBACK;
 let debounceTimer = null;
 
 function renderOptions(list) {
@@ -380,12 +408,19 @@ function updateCommissionBox() {
   const sel_count = parseInt(sel.value, 10);
   const o = currentOptions.find(x => x.installmentCount === sel_count) || currentOptions[0];
   btnAmt.textContent = fmtTL(o.totalAmount);
-  if (o.installmentCount > 1 && o.commission > 0) {
+
+  // Tek çekim veya taksit fark etmeksizin, komisyon > 0 ise kutuyu göster
+  if (o.commission > 0) {
     box.style.display = 'block';
     document.getElementById('cbBase').textContent = fmtTL(BASE_AMOUNT);
     document.getElementById('cbCommission').textContent = fmtTL(o.commission);
-    document.getElementById('cbRate').textContent = '%' + o.commissionRate.toFixed(2);
-    document.getElementById('cbPerInstall').textContent = fmtTL(o.installmentAmount);
+    document.getElementById('cbRate').textContent = '%' + Number(o.commissionRate).toFixed(2);
+    if (o.installmentCount > 1) {
+      document.getElementById('cbPerInstallRow').style.display = 'flex';
+      document.getElementById('cbPerInstall').textContent = fmtTL(o.installmentAmount);
+    } else {
+      document.getElementById('cbPerInstallRow').style.display = 'none';
+    }
     document.getElementById('cbTotal').textContent = fmtTL(o.totalAmount);
   } else {
     box.style.display = 'none';
@@ -411,7 +446,7 @@ function fetchInstallments(bin) {
       hint.style.display = 'block';
       hint.textContent = d.message || 'Taksit bilgisi alınamadı, sadece tek çekim kullanılabilir.';
       hint.style.color = '#dc2626';
-      renderOptions([{ installmentCount:1, totalAmount:BASE_AMOUNT, installmentAmount:BASE_AMOUNT, commission:0, commissionRate:0 }]);
+      renderOptions(INITIAL_FALLBACK);
       return;
     }
     hint.style.display = 'block';
@@ -424,7 +459,7 @@ function fetchInstallments(bin) {
     hint.style.display = 'block';
     hint.style.color = '#dc2626';
     hint.textContent = 'Bağlantı hatası: ' + err.message;
-    renderOptions([{ installmentCount:1, totalAmount:BASE_AMOUNT, installmentAmount:BASE_AMOUNT, commission:0, commissionRate:0 }]);
+    renderOptions(INITIAL_FALLBACK);
   });
 }
 
