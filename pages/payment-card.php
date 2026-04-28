@@ -140,9 +140,9 @@ if ($step === 'callback' && isset($_POST['ThreeDSessionId'])) {
                     }
 
                     // ── Kart ödemesi başarılı: ORDER ŞİMDİ OLUŞTURULUYOR ──
-                    $autoApprove = ($dealer['order_approval'] ?? '') === 'auto'
-                        || ((float)setting('order_auto_approve_limit', '0') > 0
-                            && $baseAmount <= (float)setting('order_auto_approve_limit', '0'));
+                    // Kart ödemesi tahsil edildiği için sipariş otomatik onaylı
+                    // (havale/açık hesapta admin onayı gerekiyor, kartta gerek yok).
+                    $autoApprove = true;
 
                     if ($pending && $pendingSnap) {
                         // PENDING: cart.php'de DB'ye yazmadık, şimdi yazıyoruz

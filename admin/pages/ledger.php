@@ -92,12 +92,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $success = 'Kayıt kapatıldı.';
     }
 
-    if ($dealerId) {
-        header("Location: ?page=ledger&dealer_id=$dealerId");
-    } else {
-        header("Location: ?page=ledger");
+    // Cari kodu inline güncelleme
+    if ($act === 'update_dealer_code') {
+        $did  = intval($_POST['dealer_id']);
+        $code = trim($_POST['dealer_code'] ?? '');
+        // Boş bırakılmasına izin ver (NULL set edilir), yoksa max 50 char
+        $code = $code === '' ? null : mb_substr($code, 0, 50);
+        if ($did) {
+            // Aynı kodu başka bayide kullanılmasın
+            if ($code !== null) {
+                $exists = dbVal("SELECT id FROM b2b_dealers WHERE dealer_code=? AND id<>?",
+                    [$code, $did]);
+                if ($exists) { $error = "Bu cari kodu zaten kullanılıyor (Bayi #$exists)."; }
+            }
+            if (!$error) {
+                dbExec("UPDATE b2b_dealers SET dealer_code=? WHERE id=?", [$code, $did]);
+                auditLog('dealer_code_updated', 'b2b_dealers', $did, ['code'=>$code]);
+                $success = 'Cari kodu güncellendi.';
+            }
+        }
     }
-    exit;
+
+    if ($error)        $_SESSION['flash_admin'] = ['type'=>'danger','msg'=>$error];
+    elseif ($success)  $_SESSION['flash_admin'] = ['type'=>'success','msg'=>$success];
+
+    if ($dealerId) {
+        redirect("?page=ledger&dealer_id=$dealerId");
+    } else {
+        redirect("?page=ledger");
+    }
 }
 
 // ── Veri ──────────────────────────────────────────────────────
@@ -200,7 +223,7 @@ $genelAlacak = array_sum(array_column($cariList, 'toplam_alacak'));
     <th style="width:130px;text-align:right;font-size:11px;letter-spacing:.4px">BAKİYE</th>
     <th style="width:60px;text-align:center;font-size:11px;letter-spacing:.4px">B/A/S</th>
     <th style="width:110px;text-align:center;font-size:11px;letter-spacing:.4px">SON VADE</th>
-    <th style="width:40px"></th>
+    <th style="width:155px;text-align:right;font-size:11px;letter-spacing:.4px;padding-right:14px">İŞLEM</th>
   </tr>
 </thead>
 <tbody>
@@ -217,18 +240,47 @@ $genelAlacak = array_sum(array_column($cariList, 'toplam_alacak'));
     $vadeStr = $row['son_vade'] ? date('d.m.Y', strtotime($row['son_vade'])) : '—';
     $vadeColor = ($row['son_vade'] && $row['son_vade'] < date('Y-m-d') && $bas==='Borç') ? '#dc2626' : 'var(--text-2)';
 ?>
-<tr style="background:<?= $rowBg ?>;border-bottom:1px solid #e4e6ea" onclick="location='?page=ledger&dealer_id=<?= $row['id'] ?>'" class="hover-row">
-  <td style="font-family:monospace;font-size:12px;color:var(--text-2);padding:9px 12px"><?= h($row['dealer_code'] ?? '—') ?></td>
-  <td style="font-weight:500;font-size:13px;padding:9px 12px">
+<tr style="background:<?= $rowBg ?>;border-bottom:1px solid #e4e6ea" class="hover-row">
+  <td style="padding:6px 12px">
+    <!-- Inline cari kodu düzenleme -->
+    <form method="post" style="margin:0;display:inline-flex;align-items:center;gap:4px" onclick="event.stopPropagation()">
+      <?= csrfField() ?>
+      <input type="hidden" name="form_action" value="update_dealer_code">
+      <input type="hidden" name="dealer_id" value="<?= (int)$row['id'] ?>">
+      <input type="text" name="dealer_code"
+             value="<?= h($row['dealer_code'] ?? '') ?>"
+             placeholder="Kod yok"
+             maxlength="50"
+             onfocus="this.dataset.orig=this.value"
+             onblur="if(this.value!==this.dataset.orig)this.form.submit()"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}else if(event.key==='Escape'){this.value=this.dataset.orig||''}"
+             style="width:90px;padding:5px 8px;font-family:ui-monospace,monospace;font-size:12px;border:1px solid transparent;background:transparent;color:var(--text-2);border-radius:4px"
+             onmouseover="this.style.background='#fff';this.style.borderColor='#e4e6ea'"
+             onmouseout="if(document.activeElement!==this){this.style.background='transparent';this.style.borderColor='transparent'}"
+             onfocus="this.style.background='#fff';this.style.borderColor='var(--red)'">
+    </form>
+  </td>
+  <td style="font-weight:500;font-size:13px;padding:9px 12px;cursor:pointer" onclick="location='?page=ledger&dealer_id=<?= $row['id'] ?>'">
     <a href="?page=ledger&dealer_id=<?= $row['id'] ?>" style="color:var(--text);text-decoration:none"><?= h($row['company_name']) ?></a>
   </td>
-  <td style="text-align:right;font-weight:700;font-size:13px;color:<?= $valCol ?>;padding:9px 12px"><?= number_format(abs($net),4,',','.') ?></td>
-  <td style="text-align:center;padding:9px 8px">
+  <td style="text-align:right;font-weight:700;font-size:13px;color:<?= $valCol ?>;padding:9px 12px;cursor:pointer" onclick="location='?page=ledger&dealer_id=<?= $row['id'] ?>'"><?= number_format(abs($net),4,',','.') ?></td>
+  <td style="text-align:center;padding:9px 8px;cursor:pointer" onclick="location='?page=ledger&dealer_id=<?= $row['id'] ?>'">
     <span style="<?= $badgeSt ?>;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700"><?= $bas ?></span>
   </td>
-  <td style="text-align:center;font-size:12px;color:<?= $vadeColor ?>;font-weight:<?= $vadeColor==='#dc2626'?'700':'400' ?>;padding:9px 8px"><?= $vadeStr ?></td>
-  <td style="padding:9px 8px">
-    <a href="?page=ledger&dealer_id=<?= $row['id'] ?>" style="color:var(--text-muted);font-size:18px;text-decoration:none">›</a>
+  <td style="text-align:center;font-size:12px;color:<?= $vadeColor ?>;font-weight:<?= $vadeColor==='#dc2626'?'700':'400' ?>;padding:9px 8px;cursor:pointer" onclick="location='?page=ledger&dealer_id=<?= $row['id'] ?>'"><?= $vadeStr ?></td>
+  <td style="padding:9px 8px;text-align:right;white-space:nowrap">
+    <a href="?page=dealers&action=detail&id=<?= $row['id'] ?>"
+       title="Bayi düzenle"
+       style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;background:#f4f5f7;border:1px solid #e4e6ea;border-radius:6px;color:var(--text-2);text-decoration:none;font-size:11px;font-weight:600"
+       onmouseover="this.style.background='#fff';this.style.borderColor='var(--red)';this.style.color='var(--red)'"
+       onmouseout="this.style.background='#f4f5f7';this.style.borderColor='#e4e6ea';this.style.color='var(--text-2)'">
+      ✏️ Düzenle
+    </a>
+    <a href="?page=ledger&dealer_id=<?= $row['id'] ?>"
+       title="Cari detay"
+       style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;background:#f4f5f7;border:1px solid #e4e6ea;border-radius:6px;color:var(--text-2);text-decoration:none;font-size:14px;margin-left:4px"
+       onmouseover="this.style.background='#fff';this.style.borderColor='var(--red)';this.style.color='var(--red)'"
+       onmouseout="this.style.background='#f4f5f7';this.style.borderColor='#e4e6ea';this.style.color='var(--text-2)'">›</a>
   </td>
 </tr>
 <?php endforeach; ?>
