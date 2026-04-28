@@ -43,7 +43,9 @@
     "admin/pages/reports.php",
     "api/cart.php",
     "api/notifications.php",
+    "api/rubikpara-installments.php",
     "pages/announcements.php",
+    "pages/payment-card.php",
     "includes/migrations.php",
     "includes/rubikpara.php",
     "includes/sms.php",
@@ -58,6 +60,7 @@
     "migrations/migration_004.sql",
     "migrations/migration_005.sql",
     "migrations/migration_006.sql",
-    "migrations/migration_007.sql"
+    "migrations/migration_007.sql",
+    "migrations/migration_008.sql"
   ]
 }

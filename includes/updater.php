@@ -105,12 +105,14 @@ class B2BUpdater {
             }
         }
 
-        // manifest.json var mi?
+        // manifest.json sadece bilgi amaçlı (versiyon, migration listesi)
+        // Branch çekiminde 'files' whitelist'i KULLANMIYORUZ — yeni eklenen
+        // dosyaların manifest'e eklenmesi unutulursa update yarım yansıyor.
+        // Skip list (config.php, .git/, uploads/, commit.txt) zaten koruyucu.
         $manifestJson = $zip->getFromName($prefix . 'manifest.json');
         $manifest     = $manifestJson ? json_decode($manifestJson, true) : null;
-        $targetFiles  = $manifest['files'] ?? null;
 
-        $skip    = ['config.php', '.git/', 'uploads/', 'commit.txt'];
+        $skip    = ['config.php', '.git/', 'uploads/', 'commit.txt', 'storage/backups/'];
         $updated = [];
 
         for ($i = 0; $i < $zip->numFiles; $i++) {
@@ -119,7 +121,6 @@ class B2BUpdater {
             $relPath = $prefix ? substr($zipPath, strlen($prefix)) : $zipPath;
             if (!$relPath || str_ends_with($relPath, '/')) continue;
             if ($this->shouldSkip($relPath, $skip)) continue;
-            if ($targetFiles !== null && !in_array($relPath, $targetFiles)) continue;
 
             $destPath = $this->root . '/' . $relPath;
             $destDir  = dirname($destPath);
