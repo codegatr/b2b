@@ -264,26 +264,8 @@ $initialList   = function_exists('rubikparaTaksitleriZenginlestir')
     ? rubikparaTaksitleriZenginlestir([], $initialBase)
     : [['installmentCount'=>1, 'totalAmount'=>$initialBase, 'installmentAmount'=>$initialBase, 'commission'=>0, 'commissionRate'=>0]];
 $initialSingle = $initialList[0];
-
-// ── GEÇİCİ DEBUG (admin sonra kaldıracak) ──────────────────────
-$__rk_debug = [
-    'helper_loaded' => function_exists('rubikparaTaksitleriZenginlestir'),
-    'single_rate_setting' => setting('rubikpara_single_rate', 'NULL'),
-    'initial_base' => $initialBase,
-    'initial_total' => $initialSingle['totalAmount'] ?? null,
-    'initial_commission' => $initialSingle['commission'] ?? null,
-    'initial_rate' => $initialSingle['commissionRate'] ?? null,
-];
 ?>
 <div class="page-body">
-
-<!-- GEÇİCİ DEBUG — sorun çözülünce kaldırılacak -->
-<div style="background:#fef3c7;border:2px dashed #f59e0b;padding:12px 16px;margin-bottom:14px;font-family:ui-monospace,monospace;font-size:12px;line-height:1.7">
-<strong>🐛 DEBUG (geçici):</strong><br>
-<?php foreach ($__rk_debug as $k => $v): ?>
-<?= htmlspecialchars($k) ?> = <code><?= htmlspecialchars(is_bool($v) ? ($v?'true':'false') : (string)$v) ?></code><br>
-<?php endforeach; ?>
-</div>
 
 <div class="page-header">
   <div>
@@ -417,8 +399,25 @@ $__rk_debug = [
         <span>KDV</span><span><?= money((float)$order['vat_total']) ?></span>
       </div>
       <?php endif; ?>
-      <div style="display:flex;justify-content:space-between;padding:10px 0;font-size:16px;font-weight:800;color:var(--text)">
-        <span>Toplam</span><span style="color:var(--red)"><?= money((float)$order['grand_total']) ?></span>
+      <div style="display:flex;justify-content:space-between;padding:10px 0;font-size:15px;font-weight:700;color:var(--text);border-bottom:1px solid var(--border)">
+        <span>Sipariş Toplamı</span><span><?= money((float)$order['grand_total']) ?></span>
+      </div>
+
+      <!-- Komisyon satırı — JS taksit seçimine göre güncelliyor -->
+      <div id="summaryCommissionRow" style="display:<?= ($initialSingle['commission'] ?? 0) > 0 ? 'flex' : 'none' ?>;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;color:var(--text-2)">
+        <span>+ Komisyon (<span id="summaryRate"><?= number_format((float)($initialSingle['commissionRate'] ?? 0), 2) ?></span>%)</span>
+        <span id="summaryCommission"><?= money((float)($initialSingle['commission'] ?? 0)) ?></span>
+      </div>
+
+      <!-- Aylık taksit (sadece taksitlide görünür) -->
+      <div id="summaryPerInstallRow" style="display:none;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;color:var(--text-2)">
+        <span><span id="summaryInstallCount">0</span> taksit, aylık</span>
+        <span id="summaryPerInstall"></span>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;padding:12px 0 4px;font-size:16px;font-weight:800;color:var(--text)">
+        <span>Karttan Çekilecek</span>
+        <span style="color:var(--red)" id="summaryGrandTotal"><?= money((float)$initialSingle['totalAmount']) ?></span>
       </div>
     </div>
     <div style="margin-top:12px;padding:10px;background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--radius);font-size:12px;color:var(--success)">
@@ -501,7 +500,7 @@ function updateCommissionBox() {
   const o = currentOptions.find(x => x.installmentCount === sel_count) || currentOptions[0];
   btnAmt.textContent = fmtTL(o.totalAmount);
 
-  // Tek çekim veya taksit fark etmeksizin, komisyon > 0 ise kutuyu göster
+  // Sol taraf (form altındaki gri kutu)
   if (o.commission > 0) {
     box.style.display = 'block';
     document.getElementById('cbBase').textContent = fmtTL(BASE_AMOUNT);
@@ -516,6 +515,25 @@ function updateCommissionBox() {
     document.getElementById('cbTotal').textContent = fmtTL(o.totalAmount);
   } else {
     box.style.display = 'none';
+  }
+
+  // Sağ taraf (Sipariş Özeti kartı)
+  const sumCommissionRow = document.getElementById('summaryCommissionRow');
+  const sumPerInstallRow = document.getElementById('summaryPerInstallRow');
+  document.getElementById('summaryGrandTotal').textContent = fmtTL(o.totalAmount);
+  if (o.commission > 0) {
+    sumCommissionRow.style.display = 'flex';
+    document.getElementById('summaryCommission').textContent = fmtTL(o.commission);
+    document.getElementById('summaryRate').textContent = Number(o.commissionRate).toFixed(2);
+  } else {
+    sumCommissionRow.style.display = 'none';
+  }
+  if (o.installmentCount > 1) {
+    sumPerInstallRow.style.display = 'flex';
+    document.getElementById('summaryInstallCount').textContent = o.installmentCount;
+    document.getElementById('summaryPerInstall').textContent = fmtTL(o.installmentAmount);
+  } else {
+    sumPerInstallRow.style.display = 'none';
   }
 }
 
