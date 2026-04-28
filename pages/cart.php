@@ -247,11 +247,12 @@ $grand = $subtotal + $vatTotal;
       <form method="post" id="checkoutForm" style="margin-top:12px">
         <?= csrfField() ?>
         <input type="hidden" name="payment_method_choice" id="paymentMethodChoice" value="">
+        <input type="hidden" name="checkout" value="1">
         <div class="form-group">
           <label class="form-label">Sipariş Notu</label>
           <textarea name="notes" class="form-control" rows="2" placeholder="Opsiyonel not..."></textarea>
         </div>
-        <button type="button" id="checkoutBtn" name="checkout" value="1" class="btn btn-primary" style="width:100%;height:44px;font-size:14px">
+        <button type="submit" id="checkoutBtn" class="btn btn-primary" style="width:100%;height:44px;font-size:14px">
           Siparişi Tamamla →
         </button>
       </form>
@@ -351,58 +352,50 @@ const view2          = document.getElementById('payMethodView2');
 const CARD_ENABLED   = <?= $cardEnabled ? 'true' : 'false' ?>;
 const BANK_ENABLED   = <?= $bankEnabled ? 'true' : 'false' ?>;
 
-function submitWithMethod(method) {
-  payMethodInput.value = method;
-  // <button type="button"> olduğu için form'a name=checkout taşıyamıyoruz —
-  // hidden input olarak ekleyip programatik submit edelim.
-  const hidden = document.createElement('input');
-  hidden.type  = 'hidden';
-  hidden.name  = 'checkout';
-  hidden.value = '1';
-  checkoutForm.appendChild(hidden);
-  checkoutForm.submit();
-}
-
 function openModal() {
+  if (!payMethodModal) return;
   payMethodModal.style.display = 'flex';
-  // Default view'ı göster: ikisi de aktifse view1, sadece havale ise view2
   if (CARD_ENABLED && BANK_ENABLED) {
-    view1.style.display = 'block';
+    if (view1) view1.style.display = 'block';
     if (view2) view2.style.display = 'none';
   } else if (BANK_ENABLED && view2) {
-    // Sadece havale → direkt hesap bilgileri view'ı
-    view1.style.display = 'none';
+    if (view1) view1.style.display = 'none';
     view2.style.display = 'block';
   }
 }
+function closeModal() { if (payMethodModal) payMethodModal.style.display = 'none'; }
 
-function closeModal() {
-  payMethodModal.style.display = 'none';
+function submitWithMethod(method) {
+  if (payMethodInput) payMethodInput.value = method;
+  if (checkoutForm) checkoutForm.submit(); // submit event'i atlar, native POST gerçekleşir
 }
 
-checkoutBtn?.addEventListener('click', () => {
+// Form submit'i intercept et — yöntem seçilmediyse modal göster
+checkoutForm?.addEventListener('submit', e => {
+  // payMethodInput zaten doluysa (modal'dan submitWithMethod çağrıldı) devam et
+  if (payMethodInput && payMethodInput.value) return;
+
   if (CARD_ENABLED && BANK_ENABLED) {
+    e.preventDefault();
     openModal();
   } else if (CARD_ENABLED && !BANK_ENABLED) {
-    // Sadece kart → modal göstermeden direkt 3DS
-    submitWithMethod('kredi_karti');
+    payMethodInput.value = 'kredi_karti'; // direkt 3DS akışına gidecek
   } else if (BANK_ENABLED && !CARD_ENABLED) {
-    // Sadece havale → hesap bilgilerini önce göster, sonra onay
-    openModal();
-  } else {
-    submitWithMethod('acik_hesap');
+    e.preventDefault();
+    openModal(); // hesap bilgileri view'ı
   }
+  // Hiçbiri yoksa fallback PHP tarafında 'acik_hesap' olur
 });
 
-// View1 — yöntem seçimleri
+// View1 — yöntem seçim butonları
 document.querySelectorAll('.payMethodOpt').forEach(btn => {
   btn.addEventListener('mouseenter', () => btn.style.borderColor = 'var(--primary)');
   btn.addEventListener('mouseleave', () => btn.style.borderColor = 'var(--border)');
   btn.addEventListener('click', () => {
     const m = btn.dataset.method;
     if (m === 'havale_eft' && view2) {
-      // 2. adıma geç: hesap bilgilerini göster
-      view1.style.display = 'none';
+      // Hesap bilgileri view'ına geç
+      if (view1) view1.style.display = 'none';
       view2.style.display = 'block';
     } else {
       submitWithMethod(m);
@@ -410,9 +403,9 @@ document.querySelectorAll('.payMethodOpt').forEach(btn => {
   });
 });
 
-// View2 — geri ve onay
+// View2 — Geri ve Onayla butonları
 document.getElementById('payMethodBack')?.addEventListener('click', () => {
-  if (CARD_ENABLED && BANK_ENABLED) {
+  if (CARD_ENABLED && BANK_ENABLED && view1) {
     view2.style.display = 'none';
     view1.style.display = 'block';
   } else {
