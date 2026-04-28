@@ -262,37 +262,75 @@ $grand = $subtotal + $vatTotal;
 </div><!-- /grid -->
 
 <!-- ── Ödeme Yöntemi Seçim Modalı ───────────────────────────────── -->
-<?php if ($cardEnabled && $bankEnabled): ?>
+<?php if ($cardEnabled || $bankEnabled): ?>
+<?php $bankAccounts = setting('bank_accounts', ''); ?>
 <div id="payMethodModal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9999;align-items:center;justify-content:center;padding:20px">
-  <div style="background:#fff;border-radius:14px;max-width:520px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.25)">
-    <h3 style="margin:0 0 6px;font-size:18px;font-weight:700">Ödeme Yöntemi Seçin</h3>
-    <p style="margin:0 0 18px;font-size:13px;color:var(--text-muted)">
-      Sipariş tutarı: <strong style="color:var(--red)"><?= money($grand) ?></strong>
-    </p>
+  <div style="background:#fff;border-radius:14px;max-width:560px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.25);max-height:90vh;overflow:auto">
 
-    <button type="button" data-method="havale_eft" class="payMethodOpt" style="display:block;width:100%;text-align:left;padding:14px 16px;margin-bottom:10px;background:#fff;border:2px solid var(--border);border-radius:10px;cursor:pointer;transition:.15s">
-      <div style="display:flex;align-items:center;gap:12px">
-        <div style="font-size:24px">🏦</div>
-        <div style="flex:1">
-          <div style="font-weight:700;font-size:14px">Havale / EFT</div>
-          <div style="font-size:12px;color:var(--text-muted)">Sipariş oluştur, sonra Ödemelerim'den dekont yükleyerek bildirin.</div>
+    <!-- ─── VIEW 1: Yöntem seç ────────────────────────────────────── -->
+    <div id="payMethodView1" <?= ($cardEnabled && $bankEnabled) ? '' : 'style="display:none"' ?>>
+      <h3 style="margin:0 0 6px;font-size:18px;font-weight:700">Ödeme Yöntemi Seçin</h3>
+      <p style="margin:0 0 18px;font-size:13px;color:var(--text-muted)">
+        Sipariş tutarı: <strong style="color:var(--red)"><?= money($grand) ?></strong>
+      </p>
+
+      <?php if ($bankEnabled): ?>
+      <button type="button" data-method="havale_eft" class="payMethodOpt" style="display:block;width:100%;text-align:left;padding:14px 16px;margin-bottom:10px;background:#fff;border:2px solid var(--border);border-radius:10px;cursor:pointer;transition:.15s">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="font-size:24px">🏦</div>
+          <div style="flex:1">
+            <div style="font-weight:700;font-size:14px">Havale / EFT</div>
+            <div style="font-size:12px;color:var(--text-muted)">Banka hesabımıza havale yapın, sonra dekont yükleyin.</div>
+          </div>
         </div>
-      </div>
-    </button>
+      </button>
+      <?php endif; ?>
 
-    <button type="button" data-method="kredi_karti" class="payMethodOpt" style="display:block;width:100%;text-align:left;padding:14px 16px;margin-bottom:10px;background:#fff;border:2px solid var(--border);border-radius:10px;cursor:pointer;transition:.15s">
-      <div style="display:flex;align-items:center;gap:12px">
-        <div style="font-size:24px">💳</div>
-        <div style="flex:1">
-          <div style="font-weight:700;font-size:14px">Kredi Kartı (3D Secure)</div>
-          <div style="font-size:12px;color:var(--text-muted)">Anında ödeme. Tek çekim veya taksit seçenekleri.</div>
+      <?php if ($cardEnabled): ?>
+      <button type="button" data-method="kredi_karti" class="payMethodOpt" style="display:block;width:100%;text-align:left;padding:14px 16px;margin-bottom:10px;background:#fff;border:2px solid var(--border);border-radius:10px;cursor:pointer;transition:.15s">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="font-size:24px">💳</div>
+          <div style="flex:1">
+            <div style="font-weight:700;font-size:14px">Kredi Kartı (3D Secure)</div>
+            <div style="font-size:12px;color:var(--text-muted)">Anında ödeme. Tek çekim veya taksit seçenekleri.</div>
+          </div>
         </div>
-      </div>
-    </button>
+      </button>
+      <?php endif; ?>
 
-    <button type="button" id="payMethodCancel" style="display:block;width:100%;padding:10px;margin-top:8px;background:transparent;border:none;color:var(--text-muted);font-size:13px;cursor:pointer">
-      İptal
-    </button>
+      <button type="button" id="payMethodCancel" style="display:block;width:100%;padding:10px;margin-top:8px;background:transparent;border:none;color:var(--text-muted);font-size:13px;cursor:pointer">
+        İptal
+      </button>
+    </div>
+
+    <!-- ─── VIEW 2: Havale hesap bilgileri ────────────────────────── -->
+    <?php if ($bankEnabled): ?>
+    <div id="payMethodView2" style="display:none">
+      <h3 style="margin:0 0 6px;font-size:18px;font-weight:700">Banka Hesap Bilgileri</h3>
+      <p style="margin:0 0 16px;font-size:13px;color:var(--text-muted)">
+        Sipariş tutarı: <strong style="color:var(--red)"><?= money($grand) ?></strong>
+        — Aşağıdaki hesap(lar)dan ödemenizi yapın, sonra <strong>Ödemelerim</strong> sayfasından dekont yükleyin.
+      </p>
+
+      <?php if (trim($bankAccounts) !== ''): ?>
+      <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px;font-family:ui-monospace,'SF Mono',Consolas,monospace;font-size:13px;line-height:1.7;white-space:pre-wrap;color:var(--text);max-height:280px;overflow:auto"><?= h($bankAccounts) ?></div>
+      <?php else: ?>
+      <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:10px;padding:12px;margin-bottom:14px;font-size:13px;color:#92400e">
+        ⚠️ Banka hesap bilgileri henüz tanımlanmamış. Yönetici ile iletişime geçin.
+      </div>
+      <?php endif; ?>
+
+      <div style="display:flex;gap:8px">
+        <button type="button" id="payMethodBack" style="flex:0 0 auto;padding:11px 16px;background:#fff;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text-muted)">
+          ← Geri
+        </button>
+        <button type="button" id="payMethodConfirmBank" class="btn btn-primary" style="flex:1;height:42px;font-size:13px;font-weight:700">
+          Hesap Bilgilerini Aldım, Siparişi Oluştur
+        </button>
+      </div>
+    </div>
+    <?php endif; ?>
+
   </div>
 </div>
 <?php endif; ?>
@@ -308,6 +346,8 @@ const checkoutForm   = document.getElementById('checkoutForm');
 const checkoutBtn    = document.getElementById('checkoutBtn');
 const payMethodInput = document.getElementById('paymentMethodChoice');
 const payMethodModal = document.getElementById('payMethodModal');
+const view1          = document.getElementById('payMethodView1');
+const view2          = document.getElementById('payMethodView2');
 const CARD_ENABLED   = <?= $cardEnabled ? 'true' : 'false' ?>;
 const BANK_ENABLED   = <?= $bankEnabled ? 'true' : 'false' ?>;
 
@@ -323,31 +363,70 @@ function submitWithMethod(method) {
   checkoutForm.submit();
 }
 
-checkoutBtn?.addEventListener('click', e => {
+function openModal() {
+  payMethodModal.style.display = 'flex';
+  // Default view'ı göster: ikisi de aktifse view1, sadece havale ise view2
   if (CARD_ENABLED && BANK_ENABLED) {
-    // İkisi de aktif → modal göster
-    payMethodModal.style.display = 'flex';
-  } else if (CARD_ENABLED) {
+    view1.style.display = 'block';
+    if (view2) view2.style.display = 'none';
+  } else if (BANK_ENABLED && view2) {
+    // Sadece havale → direkt hesap bilgileri view'ı
+    view1.style.display = 'none';
+    view2.style.display = 'block';
+  }
+}
+
+function closeModal() {
+  payMethodModal.style.display = 'none';
+}
+
+checkoutBtn?.addEventListener('click', () => {
+  if (CARD_ENABLED && BANK_ENABLED) {
+    openModal();
+  } else if (CARD_ENABLED && !BANK_ENABLED) {
+    // Sadece kart → modal göstermeden direkt 3DS
     submitWithMethod('kredi_karti');
-  } else if (BANK_ENABLED) {
-    submitWithMethod('havale_eft');
+  } else if (BANK_ENABLED && !CARD_ENABLED) {
+    // Sadece havale → hesap bilgilerini önce göster, sonra onay
+    openModal();
   } else {
     submitWithMethod('acik_hesap');
   }
 });
 
-// Modal'daki yöntem seçimleri
+// View1 — yöntem seçimleri
 document.querySelectorAll('.payMethodOpt').forEach(btn => {
   btn.addEventListener('mouseenter', () => btn.style.borderColor = 'var(--primary)');
   btn.addEventListener('mouseleave', () => btn.style.borderColor = 'var(--border)');
-  btn.addEventListener('click', () => submitWithMethod(btn.dataset.method));
+  btn.addEventListener('click', () => {
+    const m = btn.dataset.method;
+    if (m === 'havale_eft' && view2) {
+      // 2. adıma geç: hesap bilgilerini göster
+      view1.style.display = 'none';
+      view2.style.display = 'block';
+    } else {
+      submitWithMethod(m);
+    }
+  });
 });
 
-document.getElementById('payMethodCancel')?.addEventListener('click', () => {
-  payMethodModal.style.display = 'none';
+// View2 — geri ve onay
+document.getElementById('payMethodBack')?.addEventListener('click', () => {
+  if (CARD_ENABLED && BANK_ENABLED) {
+    view2.style.display = 'none';
+    view1.style.display = 'block';
+  } else {
+    closeModal();
+  }
 });
+document.getElementById('payMethodConfirmBank')?.addEventListener('click', () => {
+  submitWithMethod('havale_eft');
+});
+
+// Genel kapatma
+document.getElementById('payMethodCancel')?.addEventListener('click', closeModal);
 payMethodModal?.addEventListener('click', e => {
-  if (e.target === payMethodModal) payMethodModal.style.display = 'none';
+  if (e.target === payMethodModal) closeModal();
 });
 
 function changeQty(pid, delta) {
