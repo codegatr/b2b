@@ -130,6 +130,21 @@ if ($step === 'callback' && isset($_POST['ThreeDSessionId'])) {
                 $error = '3DS doğrulandı ancak provizyon başarısız.';
             } else {
                 $error = '3D Secure doğrulaması başarısız (mdStatus: ' . $mdStatus . ')';
+                // mdStatus → kullanıcı dostu açıklama
+                $mdMessages = [
+                    0 => 'Banka 3D Secure doğrulamasını tamamlayamadı. Şifrenizi yanlış girmiş, vazgeçmiş veya bankanın test ortamı işyerini tanımıyor olabilir. Başka bir banka kartını deneyebilirsiniz.',
+                    2 => 'Kart sahibi 3D Secure ile kayıtlı değil. Bankanızdan 3D Secure aktivasyonu yaptırmanız gerekir.',
+                    3 => 'Banka 3D Secure sistemi şu an kullanılamıyor. Lütfen birkaç dakika sonra tekrar deneyin.',
+                    4 => 'Banka 3D Secure doğrulamayı denemedi. Başka kart deneyebilirsiniz.',
+                    5 => 'Banka tarafında teknik hata. Tekrar deneyin.',
+                    6 => 'Banka 3D Secure katılımcı değil. Başka kart deneyebilirsiniz.',
+                    7 => 'Banka tarafında sistem hatası.',
+                    8 => 'Banka 3D Secure kontrolü yapamadı.',
+                    9 => 'Geçersiz CVV. Kart bilgilerinizi kontrol edin.',
+                ];
+                if (isset($mdMessages[$mdStatus])) {
+                    $error .= ' — ' . $mdMessages[$mdStatus];
+                }
             }
         } catch (Exception $e) {
             $error = 'Hata: ' . $e->getMessage();
