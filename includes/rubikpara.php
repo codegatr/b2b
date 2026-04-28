@@ -100,7 +100,29 @@ class Rubikpara {
             'ConversationId' => $auth['conversationId'],
             'MerchantNumber' => $this->merchantNo,
         ];
-        return $this->post('/v1/Tokens', $data, 'form');
+        $res = $this->post('/v1/Tokens', $data, 'form');
+
+        // Field isim varyantlarını destekle (PascalCase / camelCase / snake_case)
+        $token = $res['cardToken']
+              ?? $res['CardToken']
+              ?? $res['token']
+              ?? $res['Token']
+              ?? $res['card_token']
+              ?? '';
+
+        if (!$token) {
+            // API kabul etti ama token üretmedi — tam response'u kullanıcıya göster
+            $dump = json_encode($res, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            error_log('Rubikpara /v1/Tokens cardToken boş — yanıt: ' . $dump);
+            $msg = $res['message'] ?? $res['errorMessage'] ?? $res['description'] ?? '';
+            throw new \Exception(
+                'cardToken boş döndü' . ($msg ? " — $msg" : '') .
+                ' | Yanıt: ' . substr($dump, 0, 400)
+            );
+        }
+
+        $res['cardToken'] = $token; // normalize
+        return $res;
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -219,8 +241,7 @@ class Rubikpara {
         $cardToken = '';
         try {
             $res = $this->kartTokenize('4256691944867646', '12', '2030', '001');
-            $cardToken = $res['cardToken'] ?? '';
-            if (!$cardToken) throw new \Exception('cardToken boş döndü.');
+            $cardToken = $res['cardToken'];
             $sonuclar[] = ['adim'=>'2. Kart Tokenize (test kartı)', 'ok'=>true,
                            'detay'=>'cardToken: ' . substr($cardToken, 0, 16) . '…'];
         } catch (\Exception $e) {
