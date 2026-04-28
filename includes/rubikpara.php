@@ -88,9 +88,14 @@ class Rubikpara {
         string $expireYear,
         string $cvv
     ): array {
+        // Rubikpara: ExpireYear 2 haneli, ExpireMonth 2 haneli (zero-padded)
+        $expireMonth = str_pad(preg_replace('/\D/', '', $expireMonth), 2, '0', STR_PAD_LEFT);
+        $expireYear  = preg_replace('/\D/', '', $expireYear);
+        if (strlen($expireYear) === 4) $expireYear = substr($expireYear, -2);
+
         $auth = $this->imza();
         $data = [
-            'CardNumber'     => $cardNumber,
+            'CardNumber'     => preg_replace('/\D/', '', $cardNumber),
             'ExpireMonth'    => $expireMonth,
             'ExpireYear'     => $expireYear,
             'Cvv'            => $cvv,
@@ -237,10 +242,10 @@ class Rubikpara {
             return ['ok'=>false, 'message'=>'İmza adımında takıldı.', 'sonuclar'=>$sonuclar];
         }
 
-        // Adım 2: Tokenize (Akbank Visa test kartı)
+        // Adım 2: Tokenize (Rubikpara resmi test kartı: Akbank Visa, 12/29 000)
         $cardToken = '';
         try {
-            $res = $this->kartTokenize('4256691944867646', '12', '2030', '001');
+            $res = $this->kartTokenize('4256691944867646', '12', '29', '000');
             $cardToken = $res['cardToken'];
             $sonuclar[] = ['adim'=>'2. Kart Tokenize (test kartı)', 'ok'=>true,
                            'detay'=>'cardToken: ' . substr($cardToken, 0, 16) . '…'];
