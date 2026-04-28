@@ -57,12 +57,12 @@ $plId = (int)($dealer['price_list_id'] ?? 0);
 </div>
 
 <!-- Filtre -->
-<div class="card" style="margin-bottom:16px;padding:12px 16px">
+<div class="card products-filter" style="margin-bottom:16px;padding:12px 16px">
   <form method="get" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
     <input type="hidden" name="page" value="products">
-    <input type="text" name="q" value="<?= h($search) ?>" class="form-control"
-           placeholder="Ürün adı, kodu veya barkod..." style="flex:1;min-width:200px;max-width:360px">
-    <select name="cat" class="form-control" style="min-width:160px" onchange="this.form.submit()">
+    <input type="text" name="q" value="<?= h($search) ?>" class="form-control products-search"
+           placeholder="🔍 Ürün adı, kodu veya barkod..." style="flex:1;min-width:200px">
+    <select name="cat" class="form-control products-cat" style="min-width:160px" onchange="this.form.submit()">
       <option value="">Tüm Kategoriler</option>
       <?php foreach ($categories as $cat): ?>
       <option value="<?= $cat['id'] ?>" <?= $catId==$cat['id']?'selected':'' ?>><?= h($cat['name']) ?></option>
@@ -73,6 +73,14 @@ $plId = (int)($dealer['price_list_id'] ?? 0);
     <a href="?page=products" class="btn btn-ghost">Temizle</a>
     <?php endif; ?>
   </form>
+  <style>
+    @media (max-width: 768px) {
+      .products-filter form { gap: 8px; }
+      .products-search { flex: 1 1 100% !important; max-width: 100% !important; }
+      .products-cat    { flex: 1 1 100% !important; }
+      .products-filter .btn { flex: 1; }
+    }
+  </style>
 
   <!-- Stok Filtresi -->
   <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
@@ -108,7 +116,8 @@ $plId = (int)($dealer['price_list_id'] ?? 0);
 <?php else: ?>
 
 <!-- Ürün Tablosu -->
-<div class="card" style="overflow:hidden">
+<!-- Desktop / Tablet — Tablo görünümü -->
+<div class="card products-table-view" style="overflow:hidden">
 <div class="table-wrap">
 <table class="table" style="min-width:900px">
 <thead>
@@ -276,6 +285,113 @@ $plId = (int)($dealer['price_list_id'] ?? 0);
 </div>
 </div>
 
+<!-- MOBİL — Kart Görünümü (sadece ≤768px'de görünür) -->
+<div class="products-card-view">
+<?php foreach ($products as $p):
+    $dp       = dealerPrice($p['id'], $plId);
+    $price    = $dp['price'];
+    $base     = (float)$p['base_price'];
+    $hasDisc  = $dp['discount'] > 0;
+    $inCart   = $cartMap[$p['id']] ?? 0;
+    $inStock  = $p['stock'] > 0;
+    $lowStock = $inStock && $p['stock'] <= $p['stock_critical'];
+?>
+<div class="product-card-mobile" id="prm-<?= $p['id'] ?>" style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">
+
+  <!-- Üst kısım: resim + bilgi -->
+  <div style="display:flex;gap:12px;margin-bottom:12px">
+    <a href="?page=product&id=<?= $p['id'] ?>" style="flex:0 0 auto">
+      <?php if ($p['image']): ?>
+      <img src="/uploads/products/<?= h($p['image']) ?>" style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--border)">
+      <?php else: ?>
+      <div style="width:72px;height:72px;border-radius:8px;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:28px">📦</div>
+      <?php endif; ?>
+    </a>
+
+    <div style="flex:1;min-width:0">
+      <a href="?page=product&id=<?= $p['id'] ?>" style="font-weight:700;color:var(--text);text-decoration:none;font-size:14px;line-height:1.35;display:block">
+        <?= h($p['name']) ?>
+      </a>
+      <?php if ($p['cat_name']): ?>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:2px"><?= h($p['cat_name']) ?></div>
+      <?php endif; ?>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:5px;flex-wrap:wrap">
+        <code style="font-size:10px;color:var(--text-2);background:var(--bg);padding:2px 6px;border-radius:4px"><?= h($p['sku'] ?? '—') ?></code>
+        <?php if (!$inStock): ?>
+          <span style="background:#fee2e2;color:#dc2626;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px">● Tükendi</span>
+        <?php elseif ($lowStock): ?>
+          <span style="background:#fef3c7;color:#d97706;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px">● <?= $p['stock'] ?> adet kaldı</span>
+        <?php else: ?>
+          <span style="background:#dcfce7;color:#16a34a;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px">● Stokta (<?= $p['stock'] ?>)</span>
+        <?php endif; ?>
+        <?php if ($inCart): ?>
+          <span style="background:var(--red-light,#fef2f2);color:var(--red);font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px">🛒 <?= $inCart ?></span>
+        <?php endif; ?>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fiyat satırı -->
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:12px">
+    <div>
+      <?php if ($hasDisc): ?>
+        <div style="font-size:11px;color:var(--text-muted);text-decoration:line-through"><?= money($base) ?></div>
+        <div style="font-size:18px;font-weight:800;color:var(--success);line-height:1">
+          <?= money($price) ?>
+          <span style="font-size:10px;background:var(--success);color:#fff;padding:1px 6px;border-radius:4px;font-weight:700;margin-left:4px;vertical-align:middle">%<?= number_format($dp['discount'],0) ?></span>
+        </div>
+      <?php else: ?>
+        <div style="font-size:18px;font-weight:800;color:var(--text);line-height:1"><?= money($price) ?></div>
+      <?php endif; ?>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:3px">
+        KDV %<?= (int)$p['vat_rate'] ?> · <?= h($p['unit'] ?? 'Adet') ?>
+      </div>
+    </div>
+  </div>
+
+  <!-- Adet seçim + Sepete Ekle (TOUCH FRIENDLY) -->
+  <?php if ($inStock): ?>
+  <div style="display:flex;align-items:center;gap:10px">
+    <!-- Adet kontrolü -->
+    <div style="display:flex;align-items:center;gap:0;flex:0 0 auto;border:1px solid var(--border-2);border-radius:8px;overflow:hidden;background:#fff">
+      <button onclick="catalogChange(<?= $p['id'] ?>,-1,<?= $p['min_order_qty'] ?>)"
+              style="width:42px;height:44px;border:none;background:var(--bg);cursor:pointer;font-size:20px;color:var(--text-2);font-weight:600">−</button>
+      <input type="number" id="cqty-m-<?= $p['id'] ?>"
+             value="<?= $inCart ?: $p['min_order_qty'] ?>"
+             min="<?= $p['min_order_qty'] ?>"
+             max="<?= $p['max_order_qty'] ? min($p['max_order_qty'], $p['stock']) : $p['stock'] ?>"
+             style="width:54px;height:44px;text-align:center;border:none;border-left:1px solid var(--border-2);border-right:1px solid var(--border-2);font-size:16px;font-family:inherit;font-weight:700;background:#fff;-moz-appearance:textfield"
+             oninput="document.getElementById('cqty-'+<?= $p['id'] ?>) && (document.getElementById('cqty-'+<?= $p['id'] ?>).value = this.value)">
+      <button onclick="catalogChange(<?= $p['id'] ?>,1,<?= $p['min_order_qty'] ?>)"
+              style="width:42px;height:44px;border:none;background:var(--bg);cursor:pointer;font-size:20px;color:var(--text-2);font-weight:600">+</button>
+    </div>
+
+    <!-- Sepete Ekle -->
+    <button onclick="catalogAdd(<?= $p['id'] ?>, true)"
+            id="addbtn-m-<?= $p['id'] ?>"
+            style="flex:1;display:flex;align-items:center;justify-content:center;gap:7px;height:44px;background:var(--red);border:none;border-radius:8px;color:#fff;font-weight:700;font-size:14px;cursor:pointer;transition:all .15s;box-shadow:0 1px 3px rgba(237,41,57,.25)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+      Sepete Ekle
+    </button>
+  </div>
+  <?php else: ?>
+  <button disabled style="width:100%;height:44px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text-muted);font-weight:600;font-size:13px;cursor:not-allowed">
+    Stokta Yok
+  </button>
+  <?php endif; ?>
+</div>
+<?php endforeach; ?>
+</div>
+
+<style>
+  /* Bayağı önemli — desktop'ta kart görünümü gizle, mobilde tabloyu gizle */
+  .products-card-view { display: none; }
+  @media (max-width: 768px) {
+    .products-table-view { display: none !important; }
+    .products-card-view { display: block; }
+  }
+</style>
+
 <?php if ($pager): ?><div style="margin-top:16px"><?= $pager ?></div><?php endif; ?>
 <?php endif; ?>
 
@@ -285,18 +401,28 @@ $plId = (int)($dealer['price_list_id'] ?? 0);
 const csrf = document.querySelector('meta[name=csrf]')?.content || '';
 
 function catalogChange(pid, delta, minQty) {
-    const inp = document.getElementById('cqty-' + pid);
-    if (!inp) return;
-    const cur = parseInt(inp.value) || minQty;
-    const maxVal = parseInt(inp.max) || 9999;
-    inp.value = Math.min(maxVal, Math.max(minQty, cur + delta));
+    // Hem desktop hem mobile input'unu güncelle (görünür olan değişir, ikisi senkron kalır)
+    [`cqty-${pid}`, `cqty-m-${pid}`].forEach(id => {
+        const inp = document.getElementById(id);
+        if (!inp) return;
+        const cur = parseInt(inp.value) || minQty;
+        const maxVal = parseInt(inp.max) || 9999;
+        inp.value = Math.min(maxVal, Math.max(minQty, cur + delta));
+    });
 }
 
-function catalogAdd(pid) {
-    const inp  = document.getElementById('cqty-' + pid);
-    const qty  = inp ? parseInt(inp.value) || 1 : 1;
-    const btn  = document.getElementById('addbtn-' + pid);
-    if (btn) { btn.disabled = true; btn.textContent = '...'; }
+function catalogAdd(pid, isMobile = false) {
+    // Görünür olan input'tan miktarı oku (mobile veya desktop)
+    const inpDesktop = document.getElementById('cqty-' + pid);
+    const inpMobile  = document.getElementById('cqty-m-' + pid);
+    const inp = isMobile ? (inpMobile || inpDesktop) : (inpDesktop || inpMobile);
+    const qty = inp ? (parseInt(inp.value) || 1) : 1;
+
+    // İki butondan biri (görünür olan) loading state'e geçer
+    const btnDesktop = document.getElementById('addbtn-' + pid);
+    const btnMobile  = document.getElementById('addbtn-m-' + pid);
+    const btn = isMobile ? btnMobile : btnDesktop;
+    if (btn) { btn.disabled = true; const _orig = btn.innerHTML; btn.dataset.orig = _orig; btn.innerHTML = '...'; }
 
     fetch('/api/cart.php', {
         method: 'POST',
@@ -307,19 +433,25 @@ function catalogAdd(pid) {
     .then(d => {
         if (d.ok) {
             if (btn) {
-                btn.style.background = 'var(--success-bg)';
-                btn.style.borderColor = 'var(--success-border)';
-                btn.style.color = 'var(--success)';
-                btn.innerHTML = '✓ Eklendi';
+                if (isMobile) {
+                    btn.style.background = 'var(--success, #16a34a)';
+                    btn.innerHTML = '✓ Eklendi';
+                } else {
+                    btn.style.background = 'var(--success-bg)';
+                    btn.style.borderColor = 'var(--success-border)';
+                    btn.style.color = 'var(--success)';
+                    btn.innerHTML = '✓ Eklendi';
+                }
                 setTimeout(() => {
                     btn.style.background = '';
                     btn.style.borderColor = '';
                     btn.style.color = '';
-                    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg> Sepete Ekle';
+                    btn.innerHTML = btn.dataset.orig || (isMobile
+                        ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg> Sepete Ekle'
+                        : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg> Sepete Ekle');
                     btn.disabled = false;
                 }, 1800);
             }
-            // Sepet count badge güncelle
             const badge = document.querySelector('.cart-badge');
             if (badge) badge.textContent = parseInt(badge.textContent||0) + qty;
         } else {
