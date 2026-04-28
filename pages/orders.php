@@ -189,6 +189,29 @@ $isAuto = ($order['status'] === 'onaylandi');
   </div>
 </div>
 
+<!-- Havale ile sipariş verildi ama henüz ödenmedi → IBAN bilgileri göster -->
+<?php
+$bankInfo = setting('bank_accounts', '');
+if ($payable && ($order['payment_method'] ?? '') === 'havale_eft' && trim($bankInfo) !== ''):
+?>
+<div class="card" style="margin-bottom:16px;border-left:4px solid var(--primary)">
+  <div class="card-body">
+    <div style="display:flex;align-items:flex-start;gap:12px">
+      <div style="font-size:28px;flex:0 0 auto">🏦</div>
+      <div style="flex:1">
+        <h3 style="margin:0 0 4px;font-size:15px;font-weight:700">Banka Hesap Bilgileri</h3>
+        <p style="margin:0 0 12px;font-size:12px;color:var(--text-muted)">
+          Sipariş tutarı: <strong style="color:var(--red)"><?= money((float)$order['grand_total']) ?></strong>
+          — Aşağıdaki hesap(lar)dan ödemenizi yaptıktan sonra <strong>Havale Bildir</strong>
+          butonu ile dekontunuzu yükleyin.
+        </p>
+        <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:12px;font-family:ui-monospace,'SF Mono',Consolas,monospace;font-size:13px;line-height:1.7;white-space:pre-wrap;color:var(--text)"><?= h($bankInfo) ?></div>
+      </div>
+    </div>
+  </div>
+</div>
+<?php endif; ?>
+
 <!-- Durum Adımları -->
 <?php
 $steps  = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi'];
