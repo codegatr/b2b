@@ -109,6 +109,31 @@ if ($step === 'callback' && isset($_POST['ThreeDSessionId'])) {
                         $note = sprintf('Tek çekim — %s', money($finalAmount));
                     }
 
+                    // ── Kart ödemesi başarılı: cart.php'de atlanan adımları şimdi yap ──
+                    // 1. Stok düş (her order_items satırı için)
+                    $orderItems = dbRows("SELECT product_id, qty FROM b2b_order_items WHERE order_id=?", [$orderId]);
+                    foreach ($orderItems as $oi) {
+                        $oqty = (int)($oi['qty'] ?? 0);
+                        if ($oqty > 0 && $oi['product_id']) {
+                            dbExec("UPDATE b2b_products SET stock=stock-? WHERE id=?",
+                                   [$oqty, $oi['product_id']]);
+                        }
+                    }
+                    // 2. Sepet temizle
+                    dbExec("DELETE FROM b2b_cart WHERE dealer_id=?", [$dealer['id']]);
+                    // 3. Sipariş otomatik onayı kontrol et (cart.php mantığı)
+                    $autoApprove = ($dealer['order_approval'] ?? '') === 'auto'
+                        || ((float)setting('order_auto_approve_limit', '0') > 0
+                            && $baseAmount <= (float)setting('order_auto_approve_limit', '0'));
+                    if ($autoApprove) {
+                        dbExec("UPDATE b2b_orders SET status='onaylandi' WHERE id=? AND status='bekliyor'",
+                               [$orderId]);
+                    }
+                    // 4. Paraşüt fatura (otomatik onaylıysa)
+                    if ($autoApprove && function_exists('parasut')) {
+                        try { parasut()->syncInvoice($orderId); } catch (\Exception $e) {}
+                    }
+
                     // Ödeme kaydı (amount = bayinin kartından çekilen toplam)
                     dbExec(
                         "INSERT INTO b2b_payments
@@ -124,7 +149,7 @@ if ($step === 'callback' && isset($_POST['ThreeDSessionId'])) {
                     // Cariye sadece sipariş tutarı kadar alacak (komisyon bayinin sırtında)
                     ledgerAdd($dealer['id'], 'alacak', $baseAmount,
                         'Kart ödemesi — Rubikpara (' . $note . ')', null, null, 'payment');
-                    // Sipariş güncelle
+                    // Sipariş ödeme durumu
                     dbExec("UPDATE b2b_orders SET payment_status='odendi' WHERE id=?", [$orderId]);
 
                     // Aynı sipariş için bekleyen havale/EFT/diğer bildirimleri otomatik reddet
@@ -170,6 +195,23 @@ if ($step === 'callback' && isset($_POST['ThreeDSessionId'])) {
             }
         } catch (Exception $e) {
             $error = 'Hata: ' . $e->getMessage();
+        }
+
+        // ── Ödeme başarısız: ödenmemiş kart siparişini SİL ────────
+        // (Kart akışında stok düşürülmedi, sepet temizlenmedi — sadece order ve
+        // order_items oluşturuldu. Şimdi onları temizleyelim ki kirli kayıt
+        // kalmasın, bayi sepete dönüp tekrar deneyebilsin.)
+        if ($error !== '' && isset($order) && ($order['payment_status'] ?? '') !== 'odendi') {
+            try {
+                dbExec("DELETE FROM b2b_order_items WHERE order_id=?", [$orderId]);
+                dbExec("DELETE FROM b2b_orders WHERE id=? AND payment_status!='odendi'", [$orderId]);
+                dbExec("DELETE FROM b2b_payment_sessions WHERE order_id=?", [$orderId]);
+                unset($_SESSION['rk_pay'][$orderId]);
+                $error .= '<br><br><strong>Sepetinize geri dönüp tekrar deneyebilirsiniz.</strong> ' .
+                    '<a href="?page=cart" style="color:#fff;text-decoration:underline">Sepete Dön</a>';
+            } catch (\Throwable $e) {
+                error_log('payment-card cleanup hatası: ' . $e->getMessage());
+            }
         }
     }
 }

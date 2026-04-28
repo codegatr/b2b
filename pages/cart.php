@@ -156,26 +156,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
                 'discount_percent'=> $dp['discount'],
                 'line_total'      => $dp['price'] * $ci['qty'] * (1 + $ci['vat_rate']/100),
             ]);
-            // Stok düş
-            dbExec("UPDATE b2b_products SET stock=stock-? WHERE id=?", [$ci['qty'], $ci['product_id']]);
+            // Stok düş — KART akışında 3DS başarılı olunca callback'te düşürülecek
+            // (ödenmemiş kart siparişi 3DS fail olunca silinecek, stok da düşmemiş olacak).
+            if ($methodChoice !== 'kredi_karti') {
+                dbExec("UPDATE b2b_products SET stock=stock-? WHERE id=?", [$ci['qty'], $ci['product_id']]);
+            }
         }
 
-        // Cari borç — sadece otomatik onaylı siparişlerde
-        if ($status === 'onaylandi') {
+        // Cari borç — sadece otomatik onaylı + KART OLMAYAN siparişlerde
+        // (kart için: ödeme tamamlanınca payments kaydı düşer, borç oluşmaz)
+        if ($status === 'onaylandi' && $methodChoice !== 'kredi_karti') {
             $dueDate = date('Y-m-d', strtotime('+' . (int)($dealer['payment_term_days'] ?? 30) . ' days'));
             ledgerAdd($dealer['id'], 'borc', $grand, "Sipariş: $orderNo", 'order', $orderId, $dueDate);
         }
 
-        // Sepeti temizle
-        dbExec("DELETE FROM b2b_cart WHERE dealer_id=?", [$dealer['id']]);
+        // Sepet temizle — KART akışında sepet 3DS başarılı olunca silinir
+        // (3DS fail olursa bayi sepete dönüp tekrar deneyebilir).
+        if ($methodChoice !== 'kredi_karti') {
+            dbExec("DELETE FROM b2b_cart WHERE dealer_id=?", [$dealer['id']]);
+        }
 
-        // Paraşüt otomatik fatura (onaylandıysa)
-        if ($status === 'onaylandi' && function_exists('parasut')) {
+        // Paraşüt otomatik fatura (onaylandıysa + kart olmayan)
+        if ($status === 'onaylandi' && $methodChoice !== 'kredi_karti' && function_exists('parasut')) {
             try { parasut()->syncInvoice($orderId); } catch (Exception $e) {}
         }
 
-        auditLog('order_created', 'b2b_orders', $orderId, ['order_no'=>$orderNo]);
-        $_SESSION['flash'] = ['type'=>'success','msg'=>"Sipariş #$orderNo oluşturuldu."];
+        auditLog('order_created', 'b2b_orders', $orderId, ['order_no'=>$orderNo, 'method'=>$methodChoice]);
+        if ($methodChoice !== 'kredi_karti') {
+            $_SESSION['flash'] = ['type'=>'success','msg'=>"Sipariş #$orderNo oluşturuldu."];
+        }
 
         // Kredi kartı seçildiyse direkt ödeme sayfasına, aksi halde sipariş detayına
         $redirectUrl = ($methodChoice === 'kredi_karti')
