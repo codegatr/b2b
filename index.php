@@ -194,13 +194,11 @@ $pageTitle = match($page) {
           Sepetim
           <?php if ($cartCount > 0): ?><span class="cart-badge"><?= $cartCount ?></span><?php endif; ?>
         </a>
-        <?php if ($announceCount > 0): ?>
         <a href="?page=announcements" class="nav-item <?= $page==='announcements'?'active':'' ?>">
           <svg class="nav-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M14.5 3a.5.5 0 01.5.5v9a.5.5 0 01-.5.5h-13a.5.5 0 01-.5-.5v-9a.5.5 0 01.5-.5h13zm-13-1A1.5 1.5 0 000 3.5v9A1.5 1.5 0 001.5 14h13a1.5 1.5 0 001.5-1.5v-9A1.5 1.5 0 0014.5 2h-13zM3 5.5a.5.5 0 01.5-.5h9a.5.5 0 010 1h-9a.5.5 0 01-.5-.5zM3 8a.5.5 0 01.5-.5h9a.5.5 0 010 1h-9A.5.5 0 013 8zm0 2.5a.5.5 0 01.5-.5h6a.5.5 0 010 1h-6a.5.5 0 01-.5-.5z"/></svg>
           Duyurular
-          <span class="cart-badge" style="background:#f59e0b"><?= $announceCount ?></span>
+          <?php if ($announceCount > 0): ?><span class="cart-badge" style="background:#f59e0b"><?= $announceCount ?></span><?php endif; ?>
         </a>
-        <?php endif; ?>
       </div>
 
       <div class="nav-section">
@@ -256,8 +254,14 @@ $pageTitle = match($page) {
         <a href="?page=cart" class="topbar-btn">
           🛒<?php if ($cartCount > 0): ?><span class="notif-dot"></span><?php endif; ?>
         </a>
-        <a href="?page=notifications" class="topbar-btn">
-          🔔<?php if ($unread > 0 || $announceCount > 0): ?><span class="notif-dot"></span><?php endif; ?>
+        <a href="?page=notifications" class="topbar-btn" title="Bildirimler<?php if ($announceCount > 0): ?> + <?= $announceCount ?> duyuru<?php endif; ?>">
+          🔔
+          <?php
+          $totalAlerts = (int)$unread + (int)$announceCount;
+          if ($totalAlerts > 0):
+          ?>
+            <span style="position:absolute;top:-2px;right:-4px;background:var(--red);color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:99px;display:inline-flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid var(--surface);box-shadow:0 0 0 1px var(--red)"><?= $totalAlerts > 99 ? '99+' : $totalAlerts ?></span>
+          <?php endif; ?>
         </a>
         <div class="dropdown">
           <div class="avatar" data-dropdown="user-menu"><?= mb_substr($dealerName, 0, 1) ?></div>
