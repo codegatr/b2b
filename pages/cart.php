@@ -1,24 +1,5 @@
 <?php
 // pages/cart.php — Sepet
-
-// ── GEÇİCİ DEBUG: boş ekran sorununu teşhis için ───────────────
-// Sorun çözülünce kaldırılacak. PHP fatal error olursa sayfa altında
-// kırmızı kutuda görünür (display_errors kapalıysa bile).
-ini_set('display_errors', '1');
-error_reporting(E_ALL);
-register_shutdown_function(function() {
-    $err = error_get_last();
-    if ($err && in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR], true)) {
-        echo '<div style="background:#fee2e2;border:2px solid #dc2626;color:#991b1b;padding:16px;margin:16px;border-radius:8px;font-family:monospace;font-size:13px;line-height:1.6">';
-        echo '<strong style="font-size:15px">⚠️ PHP FATAL ERROR (cart.php debug)</strong><br><br>';
-        echo '<strong>Mesaj:</strong> ' . htmlspecialchars($err['message']) . '<br>';
-        echo '<strong>Dosya:</strong> ' . htmlspecialchars($err['file']) . '<br>';
-        echo '<strong>Satır:</strong> ' . (int)$err['line'];
-        echo '</div>';
-    }
-});
-// ────────────────────────────────────────────────────────────────
-
 requireDealer();
 $dealer = currentDealer();
 
@@ -97,24 +78,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
         $status    = ($dealer['order_approval'] === 'auto' || ($autoLimit > 0 && $grand <= $autoLimit))
                    ? 'onaylandi' : 'bekliyor';
 
-        $orderNo = setting('order_prefix','SIP') . date('ymd') . str_pad(
-            (int)dbVal("SELECT COUNT(*)+1 FROM b2b_orders WHERE DATE(created_at)=CURDATE()"), 3, '0', STR_PAD_LEFT
+        // Order numarası üretimi — MAX bazlı + retry loop:
+        // Eski yöntem (COUNT+1) silinen siparişlerde veya race condition'da
+        // duplicate üretiyordu (1062 SQLSTATE 23000). Şimdi bugünün
+        // numerik suffix'lerinden en büyüğünü buluyoruz, +1 ekliyoruz.
+        // Yine de aynı anda iki bayinin sipariş vermesi durumuna karşı
+        // 10 deneme yapıyoruz, her seferinde +1.
+        $orderPrefix = setting('order_prefix', 'SIP') . date('ymd');
+        $maxSuffix   = (int)dbVal(
+            "SELECT COALESCE(MAX(CAST(SUBSTRING(order_no, ?) AS UNSIGNED)), 0)
+             FROM b2b_orders
+             WHERE order_no LIKE CONCAT(?, '%')",
+            [strlen($orderPrefix) + 1, $orderPrefix]
         );
-
-        $orderId = dbInsertRow('b2b_orders', [
-            'dealer_id'      => $dealer['id'],
-            'order_no'       => $orderNo,
-            'status'         => $status,
-            'payment_status' => 'odenmedi',
-            'payment_method' => $methodChoice,
-            'subtotal'       => $subtotal,
-            'vat_total'      => $vatTotal,
-            'discount_total' => 0,
-            'grand_total'    => $grand,
-            'notes'          => $notes,
-            'price_list_id'  => $dealer['price_list_id'],
-            'created_at'     => date('Y-m-d H:i:s'),
-        ]);
+        $orderId = null;
+        $orderNo = '';
+        for ($try = 0; $try < 10; $try++) {
+            $orderNo = $orderPrefix . str_pad($maxSuffix + 1 + $try, 3, '0', STR_PAD_LEFT);
+            try {
+                $orderId = dbInsertRow('b2b_orders', [
+                    'dealer_id'      => $dealer['id'],
+                    'order_no'       => $orderNo,
+                    'status'         => $status,
+                    'payment_status' => 'odenmedi',
+                    'payment_method' => $methodChoice,
+                    'subtotal'       => $subtotal,
+                    'vat_total'      => $vatTotal,
+                    'discount_total' => 0,
+                    'grand_total'    => $grand,
+                    'notes'          => $notes,
+                    'price_list_id'  => $dealer['price_list_id'],
+                    'created_at'     => date('Y-m-d H:i:s'),
+                ]);
+                break; // başarılı
+            } catch (\PDOException $e) {
+                // 1062 = Duplicate entry → bir sonraki suffix'i dene
+                if (strpos($e->getMessage(), 'Duplicate') !== false || $e->getCode() === '23000') {
+                    continue;
+                }
+                throw $e; // başka bir hata ise yukarı fırlat
+            }
+        }
+        if (!$orderId) {
+            throw new \RuntimeException(
+                'Sipariş numarası üretilemedi (10 deneme sonrası hala duplicate). ' .
+                'order_prefix=' . $orderPrefix . ' maxSuffix=' . $maxSuffix
+            );
+        }
 
         foreach ($cartItems as $ci) {
             $dp = dealerPrice($ci['product_id'], (int)$dealer['price_list_id']);
