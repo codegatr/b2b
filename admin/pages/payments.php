@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($p && $p['status'] === 'bekliyor') {
             dbExec("UPDATE b2b_payments SET status='onaylandi', approved_by=?, approved_at=NOW() WHERE id=?", [adminId(), $pid]);
             // Cari alacak yaz
-            ledgerAdd($p['dealer_id'], 'alacak', $p['amount'], "Ödeme onaylandı: " . h($p['type']), 'payment', $pid);
+            ledgerAdd($p['dealer_id'], 'alacak', $p['amount'], "Ödeme onaylandı: " . h(paymentMethodLabel($p["type"] ?? "")), 'payment', $pid);
             // Sipariş ödeme durumu güncelle
             if ($p['order_id']) {
                 $orderBalance = dbVal(
@@ -141,7 +141,7 @@ $_tabs = ['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','reddedildi'=>'Reddedi
         <td><?= fmtDate($p['created_at']) ?></td>
         <td><a href="?page=dealers&action=detail&id=<?= $p['dealer_id'] ?>"><?= h($p['company_name']) ?></a></td>
         <td class="font-medium text-success"><?= money($p['amount']) ?></td>
-        <td><?= h($p['type']) ?></td>
+        <td><?= h(paymentMethodLabel($p["type"] ?? "")) ?></td>
         <td>
             <?php if ($p['receipt_file']): ?>
             <a href="<?= h($p['receipt_file']) ?>" target="_blank" class="btn btn-xs btn-ghost">📄 Dekont</a>

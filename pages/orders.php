@@ -357,7 +357,7 @@ $curIdx = array_search($order['status'] ?? '', $steps);
       <?php $fields = [
         'Sipariş No'    => $order['order_no'],
         'Tarih'         => fmtDate($order['created_at']),
-        'Ödeme Yöntemi' => $order['payment_method'] === 'acik_hesap' ? 'Açık Hesap' : h($order['payment_method'] ?? '—'),
+        'Ödeme Yöntemi' => paymentMethodLabel($order['payment_method'] ?? ''),
       ]; ?>
       <?php foreach ($fields as $k=>$v): ?>
       <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
@@ -397,7 +397,7 @@ $curIdx = array_search($order['status'] ?? '', $steps);
       <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid var(--border)">
         <div>
           <div style="font-size:13px;font-weight:600"><?= money((float)$pay['amount']) ?></div>
-          <div style="font-size:11px;color:var(--text-muted)"><?= fmtDate($pay['created_at']) ?> · <?= h($pay['type'] ?? '') ?></div>
+          <div style="font-size:11px;color:var(--text-muted)"><?= fmtDate($pay['created_at']) ?> · <?= h(paymentMethodLabel($pay['type'] ?? '')) ?></div>
         </div>
         <span class="badge badge-<?= $pst==='onaylandi'?'success':($pst==='reddedildi'?'danger':'warning') ?>">
           <?= ['onaylandi'=>'Onaylandı','reddedildi'=>'Reddedildi','bekliyor'=>'Bekliyor'][$pst] ?? $pst ?>

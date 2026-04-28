@@ -92,6 +92,35 @@ function paymentStatusLabel(string $status): string {
     };
 }
 
+/** Ödeme yöntemi insan-okunur etiketi — Türkçe görünen ad */
+function paymentMethodLabel(string $method): string {
+    return match($method) {
+        'kredi_karti' => 'Kredi Kartı',
+        'havale_eft'  => 'Havale / EFT',
+        'havale'      => 'Havale / EFT',
+        'acik_hesap'  => 'Açık Hesap',
+        'pesin'       => 'Peşin',
+        'nakit'       => 'Nakit',
+        'cek'         => 'Çek',
+        ''            => '—',
+        default       => ucfirst(str_replace('_', ' ', $method)),
+    };
+}
+
+/** Sipariş statüsü düz metin (badge HTML'siz) — başlıklar / dropdown / mail için */
+function orderStatusText(string $status): string {
+    return match($status) {
+        'bekliyor'      => 'Sipariş Alındı',
+        'onaylandi'     => 'Onaylandı',
+        'hazirlaniyor'  => 'Hazırlanıyor',
+        'kargoda'       => 'Teslimata Hazır',
+        'teslim_edildi' => 'Teslim Edildi',
+        'iptal'         => 'İptal',
+        'iade'          => 'İade',
+        default         => ucfirst($status),
+    };
+}
+
 // ──────────────────────────────────────────────────────────────
 // CARİ HESAP
 // ──────────────────────────────────────────────────────────────

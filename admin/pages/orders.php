@@ -132,26 +132,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = 'detail'; $id = $oid;
     }
 
-    // Kargo / Durum güncelle
+    // Kargo / Durum güncelle — tüm transition'lara izin ver (ileri/geri)
     if ($act === 'update_status') {
         $status = $_POST['new_status'];
         $cargo  = trim($_POST['cargo_company'] ?? '');
         $track  = trim($_POST['tracking_number'] ?? '');
-        $allowed = ['hazirlaniyor','kargoda','teslim_edildi'];
+        $allowed = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi'];
         if (in_array($status, $allowed)) {
-            dbExec("UPDATE b2b_orders SET status=?, cargo_company=?, tracking_number=? WHERE id=?", [$status, $cargo, $track, $oid]);
-            if ($status === 'teslim_edildi') {
-                dbExec("UPDATE b2b_orders SET delivered_at=NOW() WHERE id=?", [$oid]);
+            $oldOrder = dbRow("SELECT * FROM b2b_orders WHERE id=?", [$oid]);
+            $oldStatus = $oldOrder['status'] ?? '';
+
+            // ÖZEL TRANSITION: bekliyor → onaylandi (ilk onay)
+            // Stok düşür + ledger ekle + parasut faturayı yansıt + mail gönder.
+            // 'approve' action'ının mantığı buraya da yansıtılıyor ki listing'den
+            // inline değiştirmek de aynı sonucu versin.
+            if ($oldStatus === 'bekliyor' && $status === 'onaylandi') {
+                dbExec("UPDATE b2b_orders SET status='onaylandi', approved_by=?, approved_at=NOW() WHERE id=?", [adminId(), $oid]);
+                // Stok düş — kart akışında zaten cart.php'de düşmüş ama
+                // havale/açık hesap akışında order_created'da düşmemiş.
+                // Çift düşmemesi için payment_method kontrol edilmiyor; cart.php
+                // her zaman stoğu düşürdüğü için burada yine düşürmüyoruz.
+                // (Eski 'approve' action'ı stockUpdate çağırıyordu — bu doğru değildi
+                //  çünkü cart.php zaten düşürüyor. O bug burada DA tekrar etmesin.)
+                $dealer  = dbRow("SELECT * FROM b2b_dealers WHERE id=?", [$oldOrder['dealer_id']]);
+                $dueDate = date('Y-m-d', strtotime("+" . (int)($dealer['payment_term_days'] ?? 0) . " days"));
+                ledgerAdd($oldOrder['dealer_id'], 'borc', (float)$oldOrder['grand_total'],
+                    "Sipariş: {$oldOrder['order_no']}", 'order', $oid, $dueDate);
+                try { parasut()->syncInvoice($oid); } catch (\Throwable $e) {}
+                notifyDealer($oldOrder['dealer_id'], 'order', 'Siparişiniz Onaylandı',
+                    "#{$oldOrder['order_no']} numaralı siparişiniz onaylandı.",
+                    '?page=orders&action=detail&id='.$oid);
+                sendOrderStatusEmail($oid, 'onaylandi');
+                auditLog('order_approved', 'b2b_orders', $oid, ['via'=>'inline_status_change']);
+                $success = 'Sipariş onaylandı.';
+            } else {
+                // Normal status güncelleme (ileri ya da geri arası geçiş)
+                if ($status === 'kargoda') {
+                    dbExec("UPDATE b2b_orders SET status=?, cargo_company=?, tracking_number=? WHERE id=?",
+                        [$status, $cargo, $track, $oid]);
+                } else {
+                    dbExec("UPDATE b2b_orders SET status=? WHERE id=?", [$status, $oid]);
+                }
+                // delivered_at: yalnızca teslim_edildi'ye ilk girişte set, geri dönüşlerde NULL
+                if ($status === 'teslim_edildi' && $oldStatus !== 'teslim_edildi') {
+                    dbExec("UPDATE b2b_orders SET delivered_at=NOW() WHERE id=?", [$oid]);
+                } elseif ($oldStatus === 'teslim_edildi' && $status !== 'teslim_edildi') {
+                    dbExec("UPDATE b2b_orders SET delivered_at=NULL WHERE id=?", [$oid]);
+                }
+                // bekliyor'a geri dönüş: onay zincirini sıfırla
+                if ($status === 'bekliyor' && $oldStatus !== 'bekliyor') {
+                    dbExec("UPDATE b2b_orders SET approved_by=NULL, approved_at=NULL WHERE id=?", [$oid]);
+                }
+                $order = dbRow("SELECT * FROM b2b_orders WHERE id=?", [$oid]);
+                notifyDealer($order['dealer_id'], 'order',
+                    'Sipariş Durumu Güncellendi',
+                    "#{$order['order_no']}: " . orderStatusText($status),
+                    '?page=orders&action=detail&id='.$oid);
+                $extra = '';
+                if ($status === 'kargoda' && ($cargo || $track)) {
+                    $extra = ($cargo ? $cargo : '') . ($track ? ' — Takip No: ' . $track : '');
+                }
+                sendOrderStatusEmail($oid, $status, $extra);
+                $success = 'Durum güncellendi: ' . orderStatusText($status) . '.';
             }
-            $order = dbRow("SELECT * FROM b2b_orders WHERE id=?", [$oid]);
-            notifyDealer($order['dealer_id'], 'order', 'Sipariş Durumu Güncellendi', "#{$order['order_no']}: " . orderStatusLabel($status, false), '?page=orders&action=detail&id='.$oid);
-            // Statü değişimine özel mail (kargoda → 'Teslimata Hazır' subject)
-            $extra = '';
-            if ($status === 'kargoda' && ($cargo || $track)) {
-                $extra = ($cargo ? $cargo : '') . ($track ? ' — Takip No: ' . $track : '');
-            }
-            sendOrderStatusEmail($oid, $status, $extra);
-            $success = 'Durum güncellendi.';
+        }
+        if (!empty($_POST['return_to_list'])) {
+            redirect('?page=orders' . (!empty($_POST['return_q']) ? '&q='.urlencode($_POST['return_q']) : '') . (!empty($_POST['return_status']) ? '&status='.urlencode($_POST['return_status']) : ''));
         }
         $action = 'detail'; $id = $oid;
     }
@@ -278,6 +324,16 @@ if ($action === 'list') {
     $pendingCount  = dbVal("SELECT COUNT(*) FROM b2b_orders WHERE status='bekliyor' AND is_archived=0", []);
     $archiveCount  = dbVal("SELECT COUNT(*) FROM b2b_orders WHERE is_archived=1", []);
     $archivableCount = dbVal("SELECT COUNT(*) FROM b2b_orders WHERE is_archived=0 AND status IN('iptal','teslim_edildi','iade')", []);
+    // Filter butonlarındaki sayım için durum bazlı counts (search query'sini de hesaba kat)
+    $statusCountsRaw = dbRows(
+        "SELECT o.status, COUNT(*) AS c FROM b2b_orders o JOIN b2b_dealers d ON d.id=o.dealer_id "
+        . "WHERE o.is_archived=0 "
+        . ($search ? " AND (o.order_no LIKE ? OR d.company_name LIKE ?)" : '')
+        . " GROUP BY o.status",
+        $search ? ["%$search%", "%$search%"] : []
+    );
+    $statusCounts = ['_all' => 0];
+    foreach ($statusCountsRaw as $r) { $statusCounts[$r['status']] = (int)$r['c']; $statusCounts['_all'] += (int)$r['c']; }
 }
 
 if ($action === 'archive_list') {
@@ -310,28 +366,67 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
 <?php if (!empty($success)): ?><div class="alert alert-success"><?= h($success) ?></div><?php endif; ?>
 <?php if (!empty($error)):   ?><div class="alert alert-danger"><?= h($error) ?></div><?php endif; ?>
 
-<!-- Filtre -->
-<div class="card" style="padding:12px 16px;margin-bottom:16px">
-  <form method="get" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+<!-- Filtre — Pill-style butonlar + arama -->
+<div class="card" style="padding:14px 16px;margin-bottom:16px">
+  <form method="get" style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
     <input type="hidden" name="page" value="orders">
-    <input type="text" name="q" value="<?= h($search ?? '') ?>" class="form-control" placeholder="Sipariş no veya bayi..." style="flex:1;min-width:180px;max-width:280px">
-    <select name="status" class="form-control" style="min-width:140px" onchange="this.form.submit()">
-      <option value="">Tüm Durumlar</option>
-      <?php foreach (['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','hazirlaniyor'=>'Hazırlanan','kargoda'=>'Teslimata Hazır','teslim_edildi'=>'Teslim','iptal'=>'İptal'] as $v=>$l): ?>
-      <option value="<?= $v ?>" <?= ($status??'')===$v?'selected':'' ?>><?= $l ?></option>
-      <?php endforeach; ?>
-    </select>
-    <button type="submit" class="btn btn-secondary">Ara</button>
-    <?php if (!empty($search) || !empty($status)): ?><a href="?page=orders" class="btn btn-ghost">Temizle</a><?php endif; ?>
+    <?php if (!empty($status)): ?><input type="hidden" name="status" value="<?= h($status) ?>"><?php endif; ?>
+    <input type="text" name="q" value="<?= h($search ?? '') ?>" class="form-control"
+           placeholder="🔍 Sipariş no veya bayi adı ile ara..."
+           style="flex:1;min-width:200px;height:38px">
+    <button type="submit" class="btn btn-secondary" style="height:38px">Ara</button>
+    <?php if (!empty($search)): ?><a href="?page=orders<?= !empty($status) ? '&status='.urlencode($status) : '' ?>" class="btn btn-ghost" style="height:38px">✕ Aramayı Temizle</a><?php endif; ?>
   </form>
+
+  <!-- Status Pill Filtreleri -->
+  <?php
+  $statusFilters = [
+      ''             => ['label'=>'Tümü',           'color'=>'#475569', 'bg'=>'#f1f5f9'],
+      'bekliyor'     => ['label'=>'Sipariş Alındı', 'color'=>'#d97706', 'bg'=>'#fef3c7'],
+      'onaylandi'    => ['label'=>'Onaylandı',      'color'=>'#0369a1', 'bg'=>'#dbeafe'],
+      'hazirlaniyor' => ['label'=>'Hazırlanıyor',   'color'=>'#b45309', 'bg'=>'#fed7aa'],
+      'kargoda'      => ['label'=>'Teslimata Hazır','color'=>'#0e7490', 'bg'=>'#cffafe'],
+      'teslim_edildi'=> ['label'=>'Teslim Edildi',  'color'=>'#15803d', 'bg'=>'#d1fae5'],
+      'iptal'        => ['label'=>'İptal',          'color'=>'#b91c1c', 'bg'=>'#fee2e2'],
+  ];
+  ?>
+  <div style="display:flex;gap:6px;flex-wrap:wrap">
+    <?php foreach ($statusFilters as $sk => $sf):
+      $count = $sk === '' ? ($statusCounts['_all'] ?? 0) : ($statusCounts[$sk] ?? 0);
+      $active = ($status ?? '') === $sk;
+      $url = '?page=orders' . ($search ? '&q='.urlencode($search) : '') . ($sk ? '&status='.urlencode($sk) : '');
+    ?>
+      <a href="<?= h($url) ?>"
+         style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:99px;text-decoration:none;font-size:12px;font-weight:600;transition:.15s;<?php
+           if ($active) {
+             echo "background:{$sf['color']};color:#fff;border:1px solid {$sf['color']};box-shadow:0 1px 4px rgba(0,0,0,.1)";
+           } else {
+             echo "background:{$sf['bg']};color:{$sf['color']};border:1px solid transparent";
+           }
+         ?>">
+        <?= h($sf['label']) ?>
+        <span style="<?= $active ? 'background:rgba(255,255,255,.25);color:#fff' : "background:#fff;color:{$sf['color']}" ?>;padding:1px 7px;border-radius:99px;font-size:10px;font-weight:700;min-width:18px;text-align:center"><?= $count ?></span>
+      </a>
+    <?php endforeach; ?>
+  </div>
 </div>
 
 <!-- Tablo -->
 <div class="card">
 <div class="table-wrap">
 <table class="table">
-  <thead><tr><th>Sipariş No</th><th>Bayi</th><th>Tarih</th><th style="text-align:right">Tutar</th><th>Durum</th><th>Ödeme</th><th></th></tr></thead>
+  <thead><tr><th>Sipariş No</th><th>Bayi</th><th>Tarih</th><th style="text-align:right">Tutar</th><th style="min-width:170px">Durum</th><th>Ödeme</th><th></th></tr></thead>
   <tbody>
+  <?php
+  // Durum hızlı geçiş için tüm status'ler ve label'ları
+  $quickStatuses = [
+      'bekliyor'      => 'Sipariş Alındı',
+      'onaylandi'     => 'Onaylandı',
+      'hazirlaniyor'  => 'Hazırlanıyor',
+      'kargoda'       => 'Teslimata Hazır',
+      'teslim_edildi' => 'Teslim Edildi',
+  ];
+  ?>
   <?php foreach ($orders as $o): ?>
   <tr style="<?= !empty($o['cancel_requested'])?'background:rgba(245,158,11,.05)':'' ?>">
     <td class="fw-600"><a href="?page=orders&action=detail&id=<?= $o['id'] ?>"><?= h($o['order_no']) ?></a></td>
@@ -339,7 +434,29 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
     <td style="font-size:12px;color:var(--text-muted)"><?= fmtDate($o['created_at']) ?></td>
     <td style="text-align:right;font-weight:600"><?= money($o['grand_total']) ?></td>
     <td>
-      <?= orderStatusLabel($o['status']) ?>
+      <!-- Inline durum güncelleme dropdown (iptal/iade hariç) -->
+      <?php if (in_array($o['status'], ['iptal','iade'])): ?>
+        <?= orderStatusLabel($o['status']) ?>
+      <?php else: ?>
+        <form method="post" style="margin:0;display:inline-block">
+          <?= csrfField() ?>
+          <input type="hidden" name="form_action" value="update_status">
+          <input type="hidden" name="order_id" value="<?= (int)$o['id'] ?>">
+          <input type="hidden" name="return_to_list" value="1">
+          <input type="hidden" name="return_q" value="<?= h($search ?? '') ?>">
+          <input type="hidden" name="return_status" value="<?= h($status ?? '') ?>">
+          <?php
+          $sf = $statusFilters[$o['status']] ?? ['color'=>'#475569', 'bg'=>'#f1f5f9'];
+          ?>
+          <select name="new_status" onchange="if(confirm('Durumu \''+this.options[this.selectedIndex].text+'\' olarak güncellensin mi?'))this.form.submit();else this.value=this.dataset.orig"
+                  data-orig="<?= h($o['status']) ?>"
+                  style="padding:5px 28px 5px 10px;border-radius:6px;font-size:12px;font-weight:600;background:<?= $sf['bg'] ?>;color:<?= $sf['color'] ?>;border:1px solid <?= $sf['color'] ?>33;cursor:pointer">
+            <?php foreach ($quickStatuses as $sv => $sl): ?>
+              <option value="<?= $sv ?>" <?= $o['status']===$sv?'selected':'' ?>><?= h($sl) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </form>
+      <?php endif; ?>
       <?php if (!empty($o['cancel_requested'])): ?>
       <div style="font-size:10px;background:#fffbeb;color:#d97706;border:1px solid #fed7aa;border-radius:4px;padding:1px 6px;margin-top:3px;width:fit-content">⏳ İptal Talebi</div>
       <?php endif; ?>
@@ -350,6 +467,7 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
       $plabel = match($ps) { 'odendi'=>'Ödendi', 'kismi_odeme'=>'Kısmen', default=>'Bekliyor' };
       ?>
       <span class="badge badge-<?= $pstyle ?>"><?= $plabel ?></span>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:2px"><?= h(paymentMethodLabel($o['payment_method'] ?? '')) ?></div>
     </td>
     <td><a href="?page=orders&action=detail&id=<?= $o['id'] ?>" class="btn btn-ghost btn-sm">Detay →</a></td>
   </tr>
@@ -472,7 +590,7 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
       <div class="card-header"><h3 class="card-title">Sipariş Bilgisi</h3></div>
       <div class="card-body" style="font-size:13px">
         <div style="margin-bottom:6px"><span style="color:var(--text-muted)">No:</span> <strong><?= h($order['order_no']) ?></strong></div>
-        <div style="margin-bottom:6px"><span style="color:var(--text-muted)">Ödeme:</span> <?= $order['payment_method']==='acik_hesap'?'Açık Hesap':h($order['payment_method']??'') ?></div>
+        <div style="margin-bottom:6px"><span style="color:var(--text-muted)">Ödeme:</span> <?= h(paymentMethodLabel($order['payment_method'] ?? '')) ?></div>
         <?php if ($order['notes'] ?? ''): ?><div style="font-size:12px;color:var(--text-muted);margin-top:6px"><?= nl2br(h($order['notes'])) ?></div><?php endif; ?>
         <?php if ($order['cancel_reason'] ?? ''): ?><div style="margin-top:6px;color:var(--danger);font-size:12px">İptal: <?= h($order['cancel_reason']) ?></div><?php endif; ?>
       </div>
@@ -594,7 +712,7 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
     <form method="post" id="form-status"><?= csrfField() ?><input type="hidden" name="form_action" value="update_status"><input type="hidden" name="order_id" value="<?= $order['id'] ?>">
       <div class="form-group"><label class="form-label">Yeni Durum</label>
         <select name="new_status" class="form-control">
-          <?php foreach (['hazirlaniyor'=>'Hazırlanıyor','kargoda'=>'Teslimata Hazır','teslim_edildi'=>'Teslim Edildi'] as $v=>$l): ?>
+          <?php foreach (['bekliyor'=>'Sipariş Alındı','onaylandi'=>'Onaylandı','hazirlaniyor'=>'Hazırlanıyor','kargoda'=>'Teslimata Hazır','teslim_edildi'=>'Teslim Edildi'] as $v=>$l): ?>
           <option value="<?= $v ?>" <?= ($order['status']??'')===$v?'selected':'' ?>><?= $l ?></option>
           <?php endforeach; ?>
         </select>
