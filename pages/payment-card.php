@@ -25,53 +25,71 @@ $step   = $_GET['step'] ?? 'card'; // card | threeds | result
 // ── 3DS Callback ────────────────────────────────────────────────
 if ($step === 'callback' && isset($_POST['ThreeDSessionId'])) {
     $sessionId = $_POST['ThreeDSessionId'];
-    try {
-        $result  = $rb->threeDSSonuc($sessionId);
-        $mdStatus = (int)($result['mdStatus'] ?? 0);
+    // Form POST aşamasında session'a yazılmış olan komisyonlu tutar / taksit bilgisi
+    $payInfo = $_SESSION['rk_pay'][$orderId] ?? null;
+    if (!$payInfo || ($payInfo['sessionId'] ?? '') !== $sessionId) {
+        $error = 'Ödeme oturumu bulunamadı veya geçersiz. Lütfen tekrar deneyin.';
+    } else {
+        try {
+            $result   = $rb->threeDSSonuc($sessionId);
+            $mdStatus = (int)($result['mdStatus'] ?? 0);
 
-        if ($mdStatus === 1) {
-            // Provizyon
-            $prov = $rb->odeme($sessionId, (float)$order['grand_total']);
-            if ($prov['isSucceed'] ?? false) {
-                // Ödeme kaydı oluştur
-                dbExec(
-                    "INSERT INTO b2b_payments
-                     (dealer_id,order_id,amount,type,status,payment_date,bank_name,transaction_ref,approved_at,approved_by)
-                     VALUES (?,?,?,'kredi_karti','onaylandi',NOW(),'Rubikpara',?,NOW(),0)",
-                    [
-                        $dealer['id'], $orderId,
-                        $order['grand_total'],
-                        $prov['transactionId'] ?? $sessionId,
-                    ]
-                );
-                // Cari alacak
-                ledgerAdd($dealer['id'], 'alacak', (float)$order['grand_total'],
-                    'Kart ödemesi — Rubikpara', null, null, 'payment');
-                // Sipariş güncelle
-                dbExec("UPDATE b2b_orders SET payment_status='odendi' WHERE id=?", [$orderId]);
+            if ($mdStatus === 1) {
+                // Provizyon — komisyonlu (gerçek çekilecek) tutar
+                $finalAmount = (float)$payInfo['amount'];
+                $baseAmount  = (float)$payInfo['baseAmount'];
+                $commission  = (float)$payInfo['commission'];
+                $rate        = (float)$payInfo['rate'];
+                $installment = (int)$payInfo['installment'];
 
-                // Aynı sipariş için bekleyen havale/EFT/diğer bildirimleri otomatik reddet
-                // (kart ile ödendiği için admin tarafında çift kayıt karışıklığı olmasın)
-                dbExec(
-                    "UPDATE b2b_payments
-                     SET status='reddedildi',
-                         admin_note=CONCAT(COALESCE(admin_note,''),
-                            IF(admin_note IS NULL OR admin_note='','','\n'),
-                            '[Otomatik] Sipariş kart ile ödendi, bu bildirim geçersiz.')
-                     WHERE order_id=? AND status='bekliyor' AND type<>'kredi_karti'",
-                    [$orderId]
-                );
+                $prov = $rb->odeme($sessionId, $finalAmount, $installment);
+                if ($prov['isSucceed'] ?? false) {
+                    $note = $installment > 1
+                        ? sprintf('%d taksit — Sipariş %s + Komisyon %s (%%%s)',
+                            $installment, money($baseAmount), money($commission), $rate)
+                        : sprintf('Tek çekim — %s', money($finalAmount));
 
-                $_SESSION['flash'] = ['type'=>'success','msg'=>'Ödeme başarıyla tamamlandı!'];
-                header('Location: ?page=orders&action=detail&id=' . $orderId);
-                exit;
+                    // Ödeme kaydı (amount = bayinin kartından çekilen toplam)
+                    dbExec(
+                        "INSERT INTO b2b_payments
+                         (dealer_id,order_id,amount,type,status,payment_date,bank_name,transaction_ref,dealer_note,approved_at,approved_by)
+                         VALUES (?,?,?,'kredi_karti','onaylandi',NOW(),'Rubikpara',?,?,NOW(),0)",
+                        [
+                            $dealer['id'], $orderId,
+                            $finalAmount,
+                            $prov['transactionId'] ?? $sessionId,
+                            $note,
+                        ]
+                    );
+                    // Cariye sadece sipariş tutarı kadar alacak (komisyon bayinin sırtında)
+                    ledgerAdd($dealer['id'], 'alacak', $baseAmount,
+                        'Kart ödemesi — Rubikpara (' . $note . ')', null, null, 'payment');
+                    // Sipariş güncelle
+                    dbExec("UPDATE b2b_orders SET payment_status='odendi' WHERE id=?", [$orderId]);
+
+                    // Aynı sipariş için bekleyen havale/EFT/diğer bildirimleri otomatik reddet
+                    dbExec(
+                        "UPDATE b2b_payments
+                         SET status='reddedildi',
+                             admin_note=CONCAT(COALESCE(admin_note,''),
+                                IF(admin_note IS NULL OR admin_note='','','\n'),
+                                '[Otomatik] Sipariş kart ile ödendi, bu bildirim geçersiz.')
+                         WHERE order_id=? AND status='bekliyor' AND type<>'kredi_karti'",
+                        [$orderId]
+                    );
+
+                    unset($_SESSION['rk_pay'][$orderId]);
+                    $_SESSION['flash'] = ['type'=>'success','msg'=>'Ödeme başarıyla tamamlandı!'];
+                    header('Location: ?page=orders&action=detail&id=' . $orderId);
+                    exit;
+                }
+                $error = '3DS doğrulandı ancak provizyon başarısız.';
+            } else {
+                $error = '3D Secure doğrulaması başarısız (mdStatus: ' . $mdStatus . ')';
             }
-            $error = '3DS doğrulandı ancak provizyon başarısız.';
-        } else {
-            $error = '3D Secure doğrulaması başarısız (mdStatus: ' . $mdStatus . ')';
+        } catch (Exception $e) {
+            $error = 'Hata: ' . $e->getMessage();
         }
-    } catch (Exception $e) {
-        $error = 'Hata: ' . $e->getMessage();
     }
 }
 
@@ -83,21 +101,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 'card') {
     $expYear    = $_POST['expire_year'] ?? '';
     $cvv        = $_POST['cvv'] ?? '';
     $holderName = trim($_POST['card_holder'] ?? '');
-    $installment= intval($_POST['installment'] ?? 1);
+    $installment= max(1, intval($_POST['installment'] ?? 1));
 
     if (!$cardNo || !$expMonth || !$expYear || !$cvv || !$holderName) {
         $error = 'Tüm kart alanlarını doldurun.';
     } else {
         try {
+            $baseAmount = (float)$order['grand_total'];
+
+            // Server-side taksit doğrulama (manipülasyon koruması)
+            // — Kullanıcı 12 taksit seçti diye 100₺ çekemesin, gerçek tutarı API söyler.
+            $finalAmount = $baseAmount;
+            $commission  = 0.0;
+            $rate        = 0.0;
+            if ($installment > 1) {
+                $bin     = substr(preg_replace('/\D/','',$cardNo), 0, 6);
+                $options = $rb->taksitSorgula($bin, $baseAmount);
+                $match   = null;
+                foreach ($options as $o) {
+                    if ((int)$o['installmentCount'] === $installment) { $match = $o; break; }
+                }
+                if (!$match) {
+                    throw new Exception('Seçilen taksit bu kartta desteklenmiyor.');
+                }
+                $finalAmount = (float)$match['totalAmount'];
+                $commission  = (float)$match['commission'];
+                $rate        = (float)$match['commissionRate'];
+            }
+
             // Tokenize
             $tokenRes = $rb->kartTokenize($cardNo, $expMonth, $expYear, $cvv);
             $cardToken = $tokenRes['cardToken'] ?? '';
             if (!$cardToken) throw new Exception('Kart tokenize edilemedi.');
 
-            // 3DS oturum
-            $sessRes   = $rb->threeDSOturum($cardToken, (float)$order['grand_total'], $installment);
+            // 3DS oturum — komisyonlu tutar ile aç
+            $sessRes   = $rb->threeDSOturum($cardToken, $finalAmount, $installment);
             $sessionId = $sessRes['threeDSessionId'] ?? '';
             if (!$sessionId) throw new Exception('3DS oturumu oluşturulamadı.');
+
+            // Callback'in okuyacağı bilgileri session'a yaz
+            $_SESSION['rk_pay'][$orderId] = [
+                'sessionId'   => $sessionId,
+                'amount'      => $finalAmount,   // çekilecek (komisyonlu)
+                'baseAmount'  => $baseAmount,    // sipariş tutarı
+                'commission'  => $commission,
+                'rate'        => $rate,
+                'installment' => $installment,
+                'created_at'  => time(),
+            ];
 
             // 3DS başlat
             $callbackUrl = B2B_URL . '/?page=payment-card&order_id=' . $orderId . '&step=callback';
@@ -106,7 +157,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 'card') {
             $htmlContent = $initRes['htmlContent'] ?? '';
 
             if ($htmlContent) {
-                // Banka doğrulama sayfasını göster
                 echo $htmlContent;
                 exit;
             }
@@ -193,19 +243,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 'card') {
       </div>
 
       <div class="form-group">
-        <label class="form-label">Taksit</label>
-        <select name="installment" class="form-control">
-          <option value="1">Tek çekim</option>
-          <option value="2">2 taksit</option>
-          <option value="3">3 taksit</option>
-          <option value="6">6 taksit</option>
-          <option value="9">9 taksit</option>
-          <option value="12">12 taksit</option>
+        <label class="form-label">Taksit
+          <span id="instLoading" style="display:none;font-size:11px;color:var(--text-muted);font-weight:400">— sorgulanıyor…</span>
+        </label>
+        <select name="installment" id="installment" class="form-control" disabled>
+          <option value="1">Tek çekim — <?= money((float)$order['grand_total']) ?></option>
         </select>
+        <div id="instHint" style="font-size:11px;color:var(--text-muted);margin-top:6px">
+          Kart numarasını girince taksit seçenekleri ve banka komisyonları otomatik gelir.
+        </div>
       </div>
 
-      <button type="submit" class="btn btn-primary" style="width:100%;height:44px;font-size:14px">
-        🔒 3D Secure ile Öde — <?= money((float)$order['grand_total']) ?>
+      <!-- Komisyon özet kutusu -->
+      <div id="commissionBox" style="display:none;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:14px;font-size:13px">
+        <div style="display:flex;justify-content:space-between;padding:3px 0">
+          <span style="color:var(--text-muted)">Sipariş tutarı</span>
+          <span id="cbBase"></span>
+        </div>
+        <div id="cbCommissionRow" style="display:flex;justify-content:space-between;padding:3px 0">
+          <span style="color:var(--text-muted)">Banka komisyonu (<span id="cbRate"></span>)</span>
+          <span id="cbCommission"></span>
+        </div>
+        <div id="cbPerInstallRow" style="display:flex;justify-content:space-between;padding:3px 0">
+          <span style="color:var(--text-muted)">Aylık taksit</span>
+          <span id="cbPerInstall"></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0 0;border-top:1px solid var(--border);margin-top:6px">
+          <strong>Kartınızdan çekilecek toplam</strong>
+          <strong id="cbTotal" style="color:var(--red)"></strong>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary" id="payBtn" style="width:100%;height:44px;font-size:14px">
+        🔒 3D Secure ile Öde — <span id="payBtnAmount"><?= money((float)$order['grand_total']) ?></span>
       </button>
       <p style="text-align:center;font-size:11px;color:var(--text-muted);margin-top:10px">
         Ödemeniz PF Gateway (Rubikpara) altyapısı üzerinden 3D Secure korumalı olarak işlenir.
@@ -269,4 +339,97 @@ const updateExpiry = () => {
 };
 expM?.addEventListener('change', updateExpiry);
 expY?.addEventListener('change', updateExpiry);
+
+// ── Dinamik Taksit Sorgulama (Rubikpara /v1/Installment) ────────
+const ORDER_ID    = <?= (int)$orderId ?>;
+const BASE_AMOUNT = <?= json_encode((float)$order['grand_total']) ?>;
+const CSRF_TOKEN  = <?= json_encode(csrfToken()) ?>;
+const fmtTL = n => new Intl.NumberFormat('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2}).format(n) + ' ₺';
+
+const sel  = document.getElementById('installment');
+const hint = document.getElementById('instHint');
+const load = document.getElementById('instLoading');
+const box  = document.getElementById('commissionBox');
+const btnAmt = document.getElementById('payBtnAmount');
+
+let lastBin = '';
+let currentOptions = [{ installmentCount:1, totalAmount:BASE_AMOUNT, installmentAmount:BASE_AMOUNT, commission:0, commissionRate:0 }];
+let debounceTimer = null;
+
+function renderOptions(list) {
+  currentOptions = list;
+  sel.innerHTML = '';
+  list.forEach(o => {
+    const opt = document.createElement('option');
+    opt.value = o.installmentCount;
+    opt.textContent = o.installmentCount === 1
+      ? `Tek çekim — ${fmtTL(o.totalAmount)}`
+      : `${o.installmentCount} taksit × ${fmtTL(o.installmentAmount)} = ${fmtTL(o.totalAmount)}`;
+    sel.appendChild(opt);
+  });
+  sel.disabled = false;
+  updateCommissionBox();
+}
+
+function updateCommissionBox() {
+  const sel_count = parseInt(sel.value, 10);
+  const o = currentOptions.find(x => x.installmentCount === sel_count) || currentOptions[0];
+  btnAmt.textContent = fmtTL(o.totalAmount);
+  if (o.installmentCount > 1 && o.commission > 0) {
+    box.style.display = 'block';
+    document.getElementById('cbBase').textContent = fmtTL(BASE_AMOUNT);
+    document.getElementById('cbCommission').textContent = fmtTL(o.commission);
+    document.getElementById('cbRate').textContent = '%' + o.commissionRate.toFixed(2);
+    document.getElementById('cbPerInstall').textContent = fmtTL(o.installmentAmount);
+    document.getElementById('cbTotal').textContent = fmtTL(o.totalAmount);
+  } else {
+    box.style.display = 'none';
+  }
+}
+
+function fetchInstallments(bin) {
+  if (bin === lastBin) return;
+  lastBin = bin;
+  load.style.display = 'inline';
+  hint.style.display = 'none';
+
+  const body = new URLSearchParams({ csrf: CSRF_TOKEN, bin: bin, order_id: ORDER_ID });
+  fetch('<?= B2B_URL ?>/api/rubikpara-installments.php', {
+    method: 'POST',
+    headers: {'Content-Type':'application/x-www-form-urlencoded'},
+    body: body.toString(),
+  })
+  .then(r => r.json())
+  .then(d => {
+    load.style.display = 'none';
+    if (!d.ok || !d.installments || !d.installments.length) {
+      hint.style.display = 'block';
+      hint.textContent = d.message || 'Taksit bilgisi alınamadı, sadece tek çekim kullanılabilir.';
+      hint.style.color = '#dc2626';
+      renderOptions([{ installmentCount:1, totalAmount:BASE_AMOUNT, installmentAmount:BASE_AMOUNT, commission:0, commissionRate:0 }]);
+      return;
+    }
+    hint.style.display = 'block';
+    hint.style.color = 'var(--text-muted)';
+    hint.textContent = `${d.installments.length} seçenek bulundu — komisyonlar bankanın güncel oranlarıdır.`;
+    renderOptions(d.installments);
+  })
+  .catch(err => {
+    load.style.display = 'none';
+    hint.style.display = 'block';
+    hint.style.color = '#dc2626';
+    hint.textContent = 'Bağlantı hatası: ' + err.message;
+    renderOptions([{ installmentCount:1, totalAmount:BASE_AMOUNT, installmentAmount:BASE_AMOUNT, commission:0, commissionRate:0 }]);
+  });
+}
+
+cardNo?.addEventListener('input', e => {
+  const cleaned = e.target.value.replace(/\D/g,'');
+  clearTimeout(debounceTimer);
+  if (cleaned.length >= 6) {
+    debounceTimer = setTimeout(() => fetchInstallments(cleaned.substring(0,6)), 350);
+  }
+});
+
+sel.addEventListener('change', updateCommissionBox);
 </script>

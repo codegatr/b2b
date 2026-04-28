@@ -219,6 +219,104 @@ class Rubikpara {
     // HTTP yardımcıları
     // ─────────────────────────────────────────────────────────────
 
+    // ─────────────────────────────────────────────────────────────
+    // Taksit Sorgulama  (GET /v1/Installment)
+    // Bayi kart numarasını girince çağrılır; banka/karta göre
+    // taksit seçeneklerini ve komisyon oranlarını döndürür.
+    // ─────────────────────────────────────────────────────────────
+
+    public function taksitSorgula(string $bin, float $amount): array {
+        if (!$this->ayarliMi()) {
+            throw new \Exception('Rubikpara yapılandırılmamış.');
+        }
+
+        $bin = preg_replace('/\D/', '', $bin);
+        if (strlen($bin) < 6) {
+            throw new \Exception('Geçersiz BIN (en az 6 hane gerekli).');
+        }
+        $bin = substr($bin, 0, 6);
+
+        $auth  = $this->imza();
+        $query = http_build_query([
+            'BinNumber' => $bin,
+            'Amount'    => number_format($amount, 2, '.', ''),
+        ]);
+
+        $res = $this->get('/v1/Installment?' . $query, $auth);
+
+        // Response normalize — Rubikpara alan isimleri çeşitli olabilir,
+        // hangi varsa onu yakalayalım.
+        $list = $res['installmentInfos']
+              ?? $res['installments']
+              ?? $res['data']
+              ?? [];
+
+        $out = [];
+        foreach ($list as $row) {
+            $count = (int)($row['installmentCount'] ?? $row['installmentNumber'] ?? $row['count'] ?? 0);
+            if ($count < 1) continue;
+            $total = (float)($row['totalAmount']
+                          ?? $row['totalPayment']
+                          ?? $row['total']
+                          ?? $amount);
+            $perInstall = $count > 0 ? round($total / $count, 2) : $total;
+            $commission = round($total - $amount, 2);
+            $rate       = $amount > 0 ? round(($commission / $amount) * 100, 2) : 0.0;
+            $out[] = [
+                'installmentCount'  => $count,
+                'totalAmount'       => $total,
+                'installmentAmount' => $perInstall,
+                'commission'        => $commission,
+                'commissionRate'    => $rate,
+                'cardFamily'        => $row['cardFamilyName'] ?? $row['bankName'] ?? '',
+            ];
+        }
+        usort($out, fn($a,$b) => $a['installmentCount'] <=> $b['installmentCount']);
+        return $out;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // HTTP yardımcıları
+    // ─────────────────────────────────────────────────────────────
+
+    private function get(string $endpoint, array $auth): array {
+        if (!function_exists('curl_init')) {
+            throw new \Exception('cURL PHP eklentisi yüklü değil.');
+        }
+
+        $ch = curl_init($this->baseUrl . $endpoint);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER     => [
+                'Accept: application/json',
+                'PublicKey: '      . $this->publicKey,
+                'Nonce: '          . $auth['nonce'],
+                'Signature: '      . $auth['signature'],
+                'ConversationId: ' . $auth['conversationId'],
+                'MerchantNumber: ' . $this->merchantNo,
+                'ClientIpAddress: ' . ($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1'),
+            ],
+            CURLOPT_TIMEOUT        => 15,
+            CURLOPT_SSL_VERIFYPEER => true,
+        ]);
+        $body    = curl_exec($ch);
+        $code    = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr = curl_error($ch);
+        curl_close($ch);
+
+        if ($curlErr) throw new \Exception('cURL hatası: ' . $curlErr);
+
+        $parsed = json_decode($body, true);
+        if ($parsed === null) {
+            throw new \Exception("API yanıtı JSON değil (HTTP $code): " . substr($body, 0, 200));
+        }
+        if (isset($parsed['isSucceed']) && $parsed['isSucceed'] === false) {
+            $msg = $parsed['message'] ?? $parsed['errorMessage'] ?? 'API hatası';
+            throw new \Exception($msg);
+        }
+        return $parsed;
+    }
+
     private function post(
         string  $endpoint,
         array   $data,
