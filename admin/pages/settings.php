@@ -183,6 +183,22 @@ if (isset($_GET['test_rb']) && function_exists('rubikpara')) {
 <?php endif; ?>
 <?php if ($rbTest): ?>
 <div class="alert alert-<?= $rbTest['ok']?'success':'danger' ?>"><?= htmlspecialchars($rbTest['message']) ?></div>
+<?php if (!empty($rbTest['sonuclar'])): ?>
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header"><h3 class="card-title">🔍 Rubikpara Diagnostic</h3></div>
+  <div class="card-body" style="padding:0">
+    <?php foreach ($rbTest['sonuclar'] as $r): ?>
+    <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border)">
+      <div style="font-size:18px;flex-shrink:0"><?= $r['ok']?'✅':'❌' ?></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:13px"><?= htmlspecialchars($r['adim']) ?></div>
+        <div style="font-size:12px;color:<?= $r['ok']?'var(--text-muted)':'#dc2626' ?>;word-break:break-all;white-space:pre-wrap;margin-top:2px"><?= htmlspecialchars($r['detay']) ?></div>
+      </div>
+    </div>
+    <?php endforeach; ?>
+  </div>
+</div>
+<?php endif; ?>
 <?php endif; ?>
 
 <div class="settings-layout">

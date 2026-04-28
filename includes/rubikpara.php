@@ -202,13 +202,55 @@ class Rubikpara {
     // ─────────────────────────────────────────────────────────────
 
     public function baglantiTest(): array {
+        $sonuclar = [];
+
+        // Adım 1: İmza
         try {
             $auth = $this->imza();
-            if (!isset($auth['signature'])) throw new \Exception('İmza alınamadı.');
-            return ['ok' => true, 'message' => 'Bağlantı başarılı.', 'auth' => $auth];
+            if (empty($auth['signature'])) throw new \Exception('İmza yanıtı eksik (signature alanı boş).');
+            $sonuclar[] = ['adim'=>'1. İmza Oluşturma', 'ok'=>true,
+                           'detay'=>'nonce: ' . substr($auth['nonce'] ?? '', 0, 13) . '… alındı'];
         } catch (\Exception $e) {
-            return ['ok' => false, 'message' => $e->getMessage()];
+            $sonuclar[] = ['adim'=>'1. İmza Oluşturma', 'ok'=>false, 'detay'=>$e->getMessage()];
+            return ['ok'=>false, 'message'=>'İmza adımında takıldı.', 'sonuclar'=>$sonuclar];
         }
+
+        // Adım 2: Tokenize (Akbank Visa test kartı)
+        $cardToken = '';
+        try {
+            $res = $this->kartTokenize('4256691944867646', '12', '2030', '001');
+            $cardToken = $res['cardToken'] ?? '';
+            if (!$cardToken) throw new \Exception('cardToken boş döndü.');
+            $sonuclar[] = ['adim'=>'2. Kart Tokenize (test kartı)', 'ok'=>true,
+                           'detay'=>'cardToken: ' . substr($cardToken, 0, 16) . '…'];
+        } catch (\Exception $e) {
+            $sonuclar[] = ['adim'=>'2. Kart Tokenize (test kartı)', 'ok'=>false, 'detay'=>$e->getMessage()];
+            return ['ok'=>false, 'message'=>'Tokenize adımında takıldı.', 'sonuclar'=>$sonuclar];
+        }
+
+        // Adım 3: BIN/Taksit sorgu
+        try {
+            $list = $this->taksitSorgula('425669', 100.00);
+            $sonuclar[] = ['adim'=>'3. Taksit Sorgulama (BIN 425669)', 'ok'=>true,
+                           'detay'=>count($list) . ' seçenek döndü'];
+        } catch (\Exception $e) {
+            $sonuclar[] = ['adim'=>'3. Taksit Sorgulama (BIN 425669)', 'ok'=>false, 'detay'=>$e->getMessage()];
+            // Bu adım kritik değil, devam et
+        }
+
+        // Adım 4: 3DS oturum
+        try {
+            $res = $this->threeDSOturum($cardToken, 100.00, 1);
+            $sid = $res['threeDSessionId'] ?? '';
+            if (!$sid) throw new \Exception('threeDSessionId boş döndü.');
+            $sonuclar[] = ['adim'=>'4. 3DS Oturum Oluşturma', 'ok'=>true,
+                           'detay'=>'sessionId: ' . substr($sid, 0, 16) . '…'];
+        } catch (\Exception $e) {
+            $sonuclar[] = ['adim'=>'4. 3DS Oturum Oluşturma', 'ok'=>false, 'detay'=>$e->getMessage()];
+            return ['ok'=>false, 'message'=>'3DS oturum adımında takıldı.', 'sonuclar'=>$sonuclar];
+        }
+
+        return ['ok'=>true, 'message'=>'Tüm uçtan uca adımlar başarılı.', 'sonuclar'=>$sonuclar];
     }
 
     public function ayarliMi(): bool {
