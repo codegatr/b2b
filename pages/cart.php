@@ -165,6 +165,13 @@ unset($it);
 $grand = $subtotal + $vatTotal;
 ?>
 <div class="page-body">
+
+<!-- DEBUG: cart.php sürümü (sorun çözülünce kaldırılacak) -->
+<div style="background:#dbeafe;border:1px solid #3b82f6;color:#1e40af;padding:6px 12px;margin-bottom:10px;border-radius:6px;font-size:11px;font-family:ui-monospace,monospace">
+  cart.php sürüm: <strong>v3 (19207da+)</strong> — <span id="dbgJsStatus">JS yüklenmedi ❌</span>
+  <noscript> | <strong style="color:#dc2626">JavaScript devre dışı</strong></noscript>
+</div>
+
 <div class="page-header">
   <div><h1 class="page-title">Sepetim</h1></div>
   <a href="?page=products" class="btn btn-secondary">← Alışverişe Devam</a>
@@ -340,6 +347,12 @@ $grand = $subtotal + $vatTotal;
 </div>
 
 <script>
+// JS yüklendi sinyalini hemen ver (DOM hazırdan önce de çalışsın diye basit)
+(function(){
+  const s = document.getElementById('dbgJsStatus');
+  if (s) s.innerHTML = 'JS yüklendi ✅';
+})();
+
 const csrfToken = document.querySelector('meta[name=csrf]')?.content || '';
 
 // ── Ödeme yöntemi seçim akışı ──────────────────────────────────
