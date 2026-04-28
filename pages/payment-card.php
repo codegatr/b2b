@@ -3,10 +3,44 @@
  * Rubikpara 3D Secure Kart ile Ödeme
  * ?page=payment-card&order_id=X
  */
-requireDealer();
 
+$step    = $_GET['step'] ?? 'card'; // card | callback
 $orderId = intval($_GET['order_id'] ?? 0);
-$order   = $orderId ? dbRow(
+
+// 3DS callback'inde tarayıcı cross-site POST nedeniyle session cookie'yi
+// göndermemiş olabilir. Bu durumda DB'deki geçici 3DS kaydından dealer'ı
+// kurtarıp session'ı yeniden bağlarız. Banka POST'ta ThreeDSessionId
+// gönderdiği için doğrulama mümkün; kayıt yoksa zaten devam etmeyiz.
+if ($step === 'callback'
+    && $_SERVER['REQUEST_METHOD'] === 'POST'
+    && !empty($_POST['ThreeDSessionId'])
+    && !isDealer()) {
+    $rawSid = $_POST['ThreeDSessionId'];
+    $rec    = dbRow(
+        "SELECT * FROM b2b_payment_sessions
+         WHERE threeds_session_id=? AND order_id=? AND created_at > NOW() - INTERVAL 1 HOUR",
+        [$rawSid, $orderId]
+    );
+    if ($rec) {
+        // Geçici giriş: sadece bu callback request'i için dealer bağla
+        $_SESSION['dealer_id']   = (int)$rec['dealer_id'];
+        $_SESSION['rk_pay'][$orderId] = [
+            'sessionId'   => $rec['threeds_session_id'],
+            'amount'      => (float)$rec['amount'],
+            'baseAmount'  => (float)$rec['base_amount'],
+            'commission'  => (float)$rec['commission'],
+            'rate'        => (float)$rec['commission_rate'],
+            'installment' => (int)$rec['installment'],
+            'created_at'  => time(),
+            'recovered_from_db' => true,
+        ];
+    }
+}
+
+requireDealer();
+$dealer = currentDealer();
+
+$order = $orderId ? dbRow(
     "SELECT o.*, d.company_name, d.first_name, d.last_name
      FROM b2b_orders o JOIN b2b_dealers d ON d.id=o.dealer_id
      WHERE o.id=? AND o.dealer_id=?",
@@ -18,14 +52,13 @@ if (!$order) {
     exit;
 }
 
-$rb     = rubikpara();
-$error  = '';
-$step   = $_GET['step'] ?? 'card'; // card | threeds | result
+$rb    = rubikpara();
+$error = '';
 
 // ── 3DS Callback ────────────────────────────────────────────────
 if ($step === 'callback' && isset($_POST['ThreeDSessionId'])) {
     $sessionId = $_POST['ThreeDSessionId'];
-    // Form POST aşamasında session'a yazılmış olan komisyonlu tutar / taksit bilgisi
+    // Form POST aşamasında session'a (veya DB-fallback'ten) yüklenen tutar bilgisi
     $payInfo = $_SESSION['rk_pay'][$orderId] ?? null;
     if (!$payInfo || ($payInfo['sessionId'] ?? '') !== $sessionId) {
         $error = 'Ödeme oturumu bulunamadı veya geçersiz. Lütfen tekrar deneyin.';
@@ -84,6 +117,12 @@ if ($step === 'callback' && isset($_POST['ThreeDSessionId'])) {
                     );
 
                     unset($_SESSION['rk_pay'][$orderId]);
+                    // DB-fallback kaydını da temizle
+                    try {
+                        dbExec("DELETE FROM b2b_payment_sessions WHERE threeds_session_id=?", [$sessionId]);
+                    } catch (\Throwable $e) {
+                        error_log('payment-card DB-fallback cleanup hatası: ' . $e->getMessage());
+                    }
                     $_SESSION['flash'] = ['type'=>'success','msg'=>'Ödeme başarıyla tamamlandı!'];
                     header('Location: ?page=orders&action=detail&id=' . $orderId);
                     exit;
@@ -163,6 +202,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 'card') {
                 'installment' => $installment,
                 'created_at'  => time(),
             ];
+
+            // DB-fallback: callback'te tarayıcı session cookie'sini göndermezse
+            // (cross-site POST) bu kayıttan ödeme bilgilerini kurtarırız.
+            try {
+                dbExec("DELETE FROM b2b_payment_sessions
+                        WHERE threeds_session_id=? OR created_at < NOW() - INTERVAL 1 HOUR",
+                       [$sessionId]);
+                dbExec(
+                    "INSERT INTO b2b_payment_sessions
+                     (threeds_session_id, dealer_id, order_id, amount, base_amount,
+                      commission, commission_rate, installment, created_at)
+                     VALUES (?,?,?,?,?,?,?,?,NOW())",
+                    [$sessionId, $dealer['id'], $orderId, $finalAmount, $baseAmount,
+                     $commission, $rate, $installment]
+                );
+            } catch (\Throwable $e) {
+                error_log('payment-card DB-fallback insert hatası: ' . $e->getMessage());
+                // Insert başarısız olsa bile akışa devam — session zaten yazıldı
+            }
 
             // 3DS başlat
             $stage       = '3ds-baslat';

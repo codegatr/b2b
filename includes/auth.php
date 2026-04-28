@@ -7,12 +7,26 @@ defined('B2B_ROOT') || define('B2B_ROOT', dirname(__DIR__));
 function b2b_session_start(): void {
     if (session_status() === PHP_SESSION_NONE) {
         $cfg = require B2B_ROOT . '/config.php';
+
+        // HTTPS algılaması — proxy/CDN arkasındaysa X-Forwarded-Proto'yu da kontrol et
+        $isHttps = (
+            (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' && $_SERVER['HTTPS'] !== '') ||
+            (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https') ||
+            (((int)($_SERVER['SERVER_PORT'] ?? 0)) === 443)
+        );
+
         session_name('b2b_sess');
-        ini_set('session.cookie_httponly', '1');
-        ini_set('session.cookie_samesite', 'Lax');
-        if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
-            ini_set('session.cookie_secure', '1');
-        }
+        // SameSite=None: 3DS gibi cross-site POST callback'lerinde de cookie gönderilir.
+        // Tarayıcı kuralı gereği None ile birlikte Secure flag zorunlu (HTTPS lazım).
+        // CSRF zaten ayrıca csrfToken() ile korunuyor, SameSite=None güvenliği zayıflatmıyor.
+        session_set_cookie_params([
+            'lifetime' => 0,
+            'path'     => '/',
+            'domain'   => '',
+            'secure'   => $isHttps,
+            'httponly' => true,
+            'samesite' => $isHttps ? 'None' : 'Lax',
+        ]);
         session_start();
     }
 }
