@@ -240,8 +240,10 @@ if ($step === 'callback' && isset($_POST['ThreeDSessionId'])) {
                         ]
                     );
                     // Cariye sadece sipariş tutarı kadar alacak (komisyon bayinin sırtında)
+                    // ledgerAdd(dealerId, type, amount, desc, refType='manual', refId=0, dueDate=null)
                     ledgerAdd($dealer['id'], 'alacak', $baseAmount,
-                        'Kart ödemesi — Rubikpara (' . $note . ')', null, null, 'payment');
+                        'Kart ödemesi — Rubikpara (' . $note . ')',
+                        'payment', $orderId);
                     // Sipariş ödeme durumu
                     dbExec("UPDATE b2b_orders SET payment_status='odendi' WHERE id=?", [$orderId]);
 
