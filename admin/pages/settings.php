@@ -66,6 +66,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // E-posta
     if ($tab === 'smtp') {
+        // Test mail gönder
+        if (!empty($_POST['do_test_smtp'])) {
+            $admin = dbRow("SELECT email FROM b2b_admin_users WHERE id=?", [adminId()]);
+            $testTo = $admin['email'] ?? '';
+            if (!$testTo) {
+                $_SESSION['flash_admin'] = ['type'=>'danger','msg'=>'Admin kullanıcısının e-posta adresi yok.'];
+            } else {
+                $body = mailTemplate('Test E-postası',
+                    '<p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.7">'.
+                    'Bu bir <strong>SMTP konfigürasyon test maili</strong>dir. Bu maili aldıysanız e-posta gönderim ayarlarınız çalışıyor demektir. ✓</p>'.
+                    '<p style="margin:0;font-size:12px;color:#9ca3af">Tarih: '.date('d.m.Y H:i').'</p>'
+                );
+                $ok = sendMail($testTo, '[Test] SMTP Konfigürasyon Testi', $body);
+                // Son log kaydını çek (sendMail az önce yazdı)
+                $last = dbRow("SELECT * FROM b2b_mail_log ORDER BY id DESC LIMIT 1");
+                $note = $last['note'] ?? '';
+                if ($ok) {
+                    $_SESSION['flash_admin'] = ['type'=>'success','msg'=>"Test maili gönderildi: $testTo · $note"];
+                } else {
+                    $_SESSION['flash_admin'] = ['type'=>'danger','msg'=>"Mail gönderilemedi · $note"];
+                }
+            }
+            redirect('?page=settings&tab=smtp');
+        }
         foreach (['smtp_host','smtp_port','smtp_user','smtp_from_name','smtp_from_email','smtp_secure'] as $f) {
             settingSave($f, trim($_POST[$f] ?? ''));
         }
@@ -377,6 +401,67 @@ if ($li && !file_exists($liPath)) {
     </div>
     <div class="form-actions"><button type="submit" class="btn btn-primary">Kaydet</button></div>
 </form>
+
+<!-- Test Mail Butonu -->
+<div style="margin-top:20px;padding-top:18px;border-top:1px solid var(--border)">
+  <h4 style="margin:0 0 10px;font-size:13px;font-weight:700;color:var(--text)">📧 SMTP Test</h4>
+  <p style="margin:0 0 12px;font-size:12px;color:var(--text-muted);line-height:1.6">
+    Mevcut SMTP ayarlarıyla kendi adresinize test maili gönderin. Mail gelmiyorsa aşağıdaki log tablosunda hata mesajı görünecektir.
+  </p>
+  <form method="post" style="margin:0">
+    <?= csrfField() ?>
+    <input type="hidden" name="tab" value="smtp">
+    <input type="hidden" name="do_test_smtp" value="1">
+    <button type="submit" class="btn" style="background:#0ea5e9;color:#fff;border:none">
+      📤 Test Maili Gönder
+    </button>
+  </form>
+</div>
+
+<!-- Son Mail Logları -->
+<?php
+$logsExist = (int)dbVal("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='b2b_mail_log'");
+if ($logsExist):
+    $mailLogs = dbRows("SELECT * FROM b2b_mail_log ORDER BY id DESC LIMIT 10");
+?>
+<div style="margin-top:20px;padding-top:18px;border-top:1px solid var(--border)">
+  <h4 style="margin:0 0 12px;font-size:13px;font-weight:700;color:var(--text)">📋 Son Mail Logları</h4>
+  <?php if (empty($mailLogs)): ?>
+    <p style="margin:0;font-size:12px;color:var(--text-muted);font-style:italic">Henüz log kaydı yok.</p>
+  <?php else: ?>
+    <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="background:#f1f5f9">
+            <th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-2);font-weight:700">DURUM</th>
+            <th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-2);font-weight:700">ALICI</th>
+            <th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-2);font-weight:700">KONU</th>
+            <th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text-2);font-weight:700">NOT</th>
+            <th style="padding:8px 10px;text-align:right;font-size:11px;color:var(--text-2);font-weight:700">TARİH</th>
+          </tr>
+        </thead>
+        <tbody>
+        <?php foreach ($mailLogs as $log): ?>
+          <tr style="border-top:1px solid var(--border);background:<?= $log['success'] ? '#f0fdf4' : '#fef2f2' ?>">
+            <td style="padding:8px 10px;white-space:nowrap"><?= $log['success'] ? '<span style="color:#16a34a;font-weight:700">✓ OK</span>' : '<span style="color:#dc2626;font-weight:700">✗ Hata</span>' ?></td>
+            <td style="padding:8px 10px;font-family:ui-monospace,monospace;font-size:11px"><?= h($log['recipient']) ?></td>
+            <td style="padding:8px 10px;font-size:11px"><?= h(mb_substr($log['subject'], 0, 50)) ?></td>
+            <td style="padding:8px 10px;font-size:11px;color:<?= $log['success'] ? 'var(--text-2)' : '#dc2626' ?>"><?= h($log['note']) ?></td>
+            <td style="padding:8px 10px;text-align:right;font-size:11px;color:var(--text-muted);white-space:nowrap"><?= h(date('d.m.Y H:i', strtotime($log['created_at']))) ?></td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  <?php endif; ?>
+</div>
+<?php else: ?>
+<div style="margin-top:20px;padding:14px 16px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;font-size:12px;color:#92400e">
+  ⚠️ <strong>migration_012.sql çalıştırılmamış.</strong>
+  Mail log tablosu (b2b_mail_log) eksik. Admin → Güncelleme Merkezi'nden güncelleme yaparsanız otomatik oluşturulacak.
+</div>
+<?php endif; ?>
+
 </div></div>
 
 <?php elseif ($activeTab === 'bank'): ?>

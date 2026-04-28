@@ -391,14 +391,28 @@ function sendMail(string $to, string $subject, string $html): bool {
     $smtpPort = (int)setting('smtp_port', '587');
     $smtpSec  = setting('smtp_secure', 'tls');
 
-    // SMTP varsa PHPMailer olmadan elle gönder
+    $logResult = function(bool $ok, string $note = '') use ($to, $subject, $smtpHost) {
+        try {
+            dbExec(
+                "INSERT INTO b2b_mail_log (recipient, subject, smtp_host, success, note, created_at)
+                 VALUES (?, ?, ?, ?, ?, NOW())",
+                [$to, $subject, $smtpHost ?: '(php mail)', $ok ? 1 : 0, mb_substr($note, 0, 500)]
+            );
+        } catch (\Throwable $e) {
+            // Log tablosu yoksa yut, mail çağrısını engelleme
+            error_log('sendMail log: ' . $e->getMessage());
+        }
+        return $ok;
+    };
+
+    // SMTP varsa elle gönder
     if ($smtpHost && $smtpUser) {
-        return sendMailSmtp($to, $subject, $html, $fromEmail, $fromName,
+        $ok = sendMailSmtp($to, $subject, $html, $fromEmail, $fromName,
                             $smtpHost, $smtpPort, $smtpUser, $smtpPass, $smtpSec);
+        return $logResult($ok, $ok ? 'SMTP OK' : 'SMTP başarısız');
     }
 
     // Fallback: PHP mail()
-    // From adresi sunucunun kabul ettiği bir domain olmalı
     $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
     if (!$fromEmail || str_ends_with($fromEmail, 'localhost')) {
         $fromEmail = 'noreply@' . $host;
@@ -412,15 +426,19 @@ function sendMail(string $to, string $subject, string $html): bool {
         "Content-Type: text/html; charset=UTF-8",
         "X-Mailer: PHP/" . phpversion(),
     ]);
-    return mail($to, $encSubj, $html, $headers);
+    $ok = mail($to, $encSubj, $html, $headers);
+    return $logResult($ok, $ok ? 'PHP mail() OK' : 'PHP mail() başarısız (SMTP konfigürasyonu eksik)');
 }
 
 /** SMTP ile gönder — cURL tabanlı, blocking yok */
 function sendMailSmtp(string $to, string $subject, string $html,
                       string $fromEmail, string $fromName,
                       string $host, int $port, string $user, string $pass,
-                      string $secure): bool {
-    if (!function_exists('curl_init')) return false;
+                      string $secure, ?string &$errOut = null): bool {
+    if (!function_exists('curl_init')) {
+        $errOut = 'cURL yok';
+        return false;
+    }
     try {
         $encSubj = '=?UTF-8?B?' . base64_encode($subject) . '?=';
         $encFrom = '=?UTF-8?B?' . base64_encode($fromName) . '?=';
@@ -443,7 +461,6 @@ function sendMailSmtp(string $to, string $subject, string $html,
             default => "smtp://$host:$port",
         };
 
-        // Geçici dosya ile güvenli READFUNCTION
         $tmpFile = tmpfile();
         fwrite($tmpFile, $raw);
         rewind($tmpFile);
@@ -462,14 +479,24 @@ function sendMailSmtp(string $to, string $subject, string $html,
             CURLOPT_SSL_VERIFYHOST => 0,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT        => 15,
+            CURLOPT_VERBOSE        => false,
         ]);
 
-        $result = curl_exec($ch);
-        $err    = curl_errno($ch);
+        $result   = curl_exec($ch);
+        $err      = curl_errno($ch);
+        $errMsg   = curl_error($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
         fclose($tmpFile);
-        return $err === 0;
-    } catch (Throwable $e) {
+
+        if ($err !== 0) {
+            $errOut = "cURL hata #$err: $errMsg";
+            return false;
+        }
+        $errOut = "OK (HTTP $httpCode)";
+        return true;
+    } catch (\Throwable $e) {
+        $errOut = 'Exception: ' . $e->getMessage();
         return false;
     }
 }
