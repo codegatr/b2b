@@ -197,18 +197,40 @@ class Rubikpara {
         string $threeDSessionId,
         float  $amount,
         int    $installment     = 1,
-        float  $pointAmount     = 0.0
+        float  $pointAmount     = 0.0,
+        string $cardToken       = '',
+        string $cardHolderName  = ''
     ): array {
         $auth = $this->imza();
-        return $this->post('/v1/Payments/provision', [
+        $body = [
             'amount'           => $amount,
             'pointAmount'      => $pointAmount,
             'threeDSessionId'  => $threeDSessionId,
             'paymentType'      => 'Auth',
+            'integrationMode'  => 'Api',     // doc'a göre zorunlu
             'installmentCount' => $installment,
             'currency'         => 'TRY',
             'languageCode'     => 'tr',
-        ], 'json', true, $auth);
+        ];
+        // cardToken doc örneğinde 3DS'li akışta da gönderiliyor — opsiyonel ama
+        // bazı merchant config'lerinde zorunlu olabiliyor
+        if ($cardToken !== '')      $body['cardToken']      = $cardToken;
+        if ($cardHolderName !== '') $body['cardHolderName'] = $cardHolderName;
+
+        $res = $this->post('/v1/Payments/provision', $body, 'json', true, $auth);
+
+        // post() zaten isSucceed=false durumunda exception atar.
+        // Buraya geldiyse isSucceed yok demektir veya true. Defansif kontrol:
+        if (!($res['isSucceed'] ?? false)) {
+            $msg = $res['message'] ?? $res['errorMessage'] ?? $res['description'] ?? '';
+            $dump = json_encode($res, JSON_UNESCAPED_UNICODE);
+            error_log('Rubikpara /v1/Payments/provision isSucceed yok — yanıt: ' . $dump);
+            throw new \Exception(
+                'Provizyon başarısız' . ($msg ? " — $msg" : '') .
+                ' | Yanıt: ' . substr($dump, 0, 400)
+            );
+        }
+        return $res;
     }
 
     // ─────────────────────────────────────────────────────────────

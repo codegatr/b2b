@@ -26,6 +26,8 @@ if ($step === 'callback'
         $_SESSION['dealer_id']   = (int)$rec['dealer_id'];
         $_SESSION['rk_pay'][$orderId] = [
             'sessionId'   => $rec['threeds_session_id'],
+            'cardToken'   => $rec['card_token'] ?? '',
+            'cardHolder'  => $rec['card_holder'] ?? '',
             'amount'      => (float)$rec['amount'],
             'baseAmount'  => (float)$rec['base_amount'],
             'commission'  => (float)$rec['commission'],
@@ -75,7 +77,12 @@ if ($step === 'callback' && isset($_POST['ThreeDSessionId'])) {
                 $rate        = (float)$payInfo['rate'];
                 $installment = (int)$payInfo['installment'];
 
-                $prov = $rb->odeme($sessionId, $finalAmount, $installment);
+                $prov = $rb->odeme(
+                    $sessionId, $finalAmount, $installment,
+                    0.0,
+                    $payInfo['cardToken']  ?? '',
+                    $payInfo['cardHolder'] ?? ''
+                );
                 if ($prov['isSucceed'] ?? false) {
                     if ($installment > 1) {
                         $note = sprintf('%d taksit — Sipariş %s + Komisyon %s (%%%s)',
@@ -209,13 +216,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 'card') {
 
             // Callback'in okuyacağı bilgileri session'a yaz
             $_SESSION['rk_pay'][$orderId] = [
-                'sessionId'   => $sessionId,
-                'amount'      => $finalAmount,   // çekilecek (komisyonlu)
-                'baseAmount'  => $baseAmount,    // sipariş tutarı
-                'commission'  => $commission,
-                'rate'        => $rate,
-                'installment' => $installment,
-                'created_at'  => time(),
+                'sessionId'    => $sessionId,
+                'cardToken'    => $cardToken,
+                'cardHolder'   => $holderName,
+                'amount'       => $finalAmount,   // çekilecek (komisyonlu)
+                'baseAmount'   => $baseAmount,    // sipariş tutarı
+                'commission'   => $commission,
+                'rate'         => $rate,
+                'installment'  => $installment,
+                'created_at'   => time(),
             ];
 
             // DB-fallback: callback'te tarayıcı session cookie'sini göndermezse
@@ -227,10 +236,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 'card') {
                 dbExec(
                     "INSERT INTO b2b_payment_sessions
                      (threeds_session_id, dealer_id, order_id, amount, base_amount,
-                      commission, commission_rate, installment, created_at)
-                     VALUES (?,?,?,?,?,?,?,?,NOW())",
+                      commission, commission_rate, installment, card_token, card_holder, created_at)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,NOW())",
                     [$sessionId, $dealer['id'], $orderId, $finalAmount, $baseAmount,
-                     $commission, $rate, $installment]
+                     $commission, $rate, $installment, $cardToken, $holderName]
                 );
             } catch (\Throwable $e) {
                 error_log('payment-card DB-fallback insert hatası: ' . $e->getMessage());
