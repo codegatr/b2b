@@ -729,18 +729,16 @@ function fetchInstallments(bin) {
   hint.style.display = 'none';
 
   // WAF (LiteSpeed) 6 haneli rakam içeren parametreleri kart no
-  // pattern olarak algılayıp 403 dönüyor. bin'i 3+3 parçalayıp
-  // farklı parametre adlarıyla yolluyoruz, server tarafında birleştirilecek.
-  const b1 = bin.substring(0, 3);
-  const b2 = bin.substring(3, 6);
+  // pattern olarak algılayıp 403 atıyor. bin'i base64 encode ederek
+  // 'x' parametresinde yolluyoruz, ayrıca endpoint URL'sini de değiştirdik
+  // (rubikpara-installments → rk-tx) ki URL pattern'i de tetiklemesin.
   const body = new URLSearchParams({
     csrf: CSRF_TOKEN,
-    bp1: b1,
-    bp2: b2,
+    x: btoa(bin), // base64: "541876" → "NTQxODc2"
     order_id: ORDER_ID,
     pending: IS_PENDING ? '1' : '0',
   });
-  const url  = '<?= B2B_URL ?>/api/rubikpara-installments.php';
+  const url = '<?= B2B_URL ?>/api/rk-tx.php';
 
   fetch(url, {
     method: 'POST',

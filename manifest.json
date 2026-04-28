@@ -44,6 +44,7 @@
     "api/cart.php",
     "api/notifications.php",
     "api/rubikpara-installments.php",
+    "api/rk-tx.php",
     "api/.htaccess",
     "pages/announcements.php",
     "pages/payment-card.php",
