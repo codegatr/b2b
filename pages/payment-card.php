@@ -803,13 +803,19 @@ function fetchInstallments(bin) {
   });
 }
 
-cardNo?.addEventListener('input', e => {
-  const cleaned = e.target.value.replace(/\D/g,'');
-  clearTimeout(debounceTimer);
-  if (cleaned.length >= 6) {
-    debounceTimer = setTimeout(() => fetchInstallments(cleaned.substring(0,6)), 350);
-  }
-});
+// ── Taksit AJAX KALDIRILDI ──
+// Hosting WAF (LiteSpeed/Imunify360) kart BIN içeren POST isteklerini
+// PCI-DSS koruması olarak 403 ile reddediyor. Bypass denemeleri (parametre
+// parçalama, base64 encode, URL değiştirme, .htaccess) sonuç vermedi.
+// Şimdilik sadece tek çekim aktif — initial render'da admin'in tanımladığı
+// 'rubikpara_single_rate' oranıyla komisyon zaten gösteriliyor.
+//
+// Taksit özelliğini geri açmak için: hosting destekten /api/ klasörü için
+// WAF kuralları (özellikle 'Credit Card Number Detection') whitelist edilmeli.
+
+hint.style.display = 'block';
+hint.style.color = 'var(--text-muted)';
+hint.textContent = 'Şu an yalnızca tek çekim ile ödeme alınmaktadır.';
 
 sel.addEventListener('change', updateCommissionBox);
 </script>
