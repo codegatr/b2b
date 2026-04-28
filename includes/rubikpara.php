@@ -393,9 +393,13 @@ class Rubikpara {
         if ($type === 'json') {
             $headers[] = 'Content-Type: application/json';
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-        } else {
-            // multipart/form-data
+        } elseif ($type === 'multipart') {
+            // multipart/form-data — array verince cURL otomatik boundary üretir
             curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+        } else {
+            // 'form' = application/x-www-form-urlencoded (varsayılan & en uyumlu)
+            $headers[] = 'Content-Type: application/x-www-form-urlencoded';
+            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
         }
 
         curl_setopt_array($ch, [
