@@ -10,7 +10,7 @@ $id     = intval($_GET['id'] ?? 0);
 $allowedPayMethods = array_filter(explode(',', $dealer['payment_methods'] ?? 'havale,kredi_karti'));
 $cardEnabled       = in_array('kredi_karti', $allowedPayMethods, true)
                   && function_exists('rubikpara')
-                  && rubikpara()->isConfigured();
+                  && rubikpara()->ayarliMi();
 
 // İptal talebi POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'cancel_request') {

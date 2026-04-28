@@ -30,16 +30,6 @@ class Rubikpara {
             : 'https://pfapi.rubikpara.com';
     }
 
-    /**
-     * Rubikpara için minimum yapılandırma yapılmış mı?
-     * (Kart ile Öde butonunu göstermek için kullanılır)
-     */
-    public function isConfigured(): bool {
-        return $this->publicKey !== ''
-            && $this->secretKey !== ''
-            && $this->merchantNo !== '';
-    }
-
     // ─────────────────────────────────────────────────────────────
     // 1. İmza oluştur
     // ─────────────────────────────────────────────────────────────

@@ -59,7 +59,7 @@ $allowedPayMethods = array_filter(explode(',', $dealer['payment_methods'] ?? 'ha
 if (empty($allowedPayMethods)) $allowedPayMethods = ['havale'];
 $cardEnabled = in_array('kredi_karti', $allowedPayMethods, true)
             && function_exists('rubikpara')
-            && rubikpara()->isConfigured();
+            && rubikpara()->ayarliMi();
 $allPayMethods = [
     'havale'      => 'Havale / EFT',
     'nakit'       => 'Nakit',
