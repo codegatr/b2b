@@ -53,7 +53,7 @@ $totalUnread = (int)dbVal("SELECT COUNT(*) FROM b2b_notifications WHERE admin_id
     <form method="get" style="display:inline" onsubmit="return confirm('Tüm bildirimleri silmek istediğinize emin misiniz?')">
       <input type="hidden" name="page" value="notifications">
       <input type="hidden" name="delete_all" value="1">
-      <input type="hidden" name="<?= csrfFieldName() ?>" value="<?= csrfToken() ?>">
+      <?= csrfField() ?>
       <button type="submit" class="btn" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5">
         🗑 Tümünü Sil
       </button>
@@ -80,22 +80,28 @@ $totalUnread = (int)dbVal("SELECT COUNT(*) FROM b2b_notifications WHERE admin_id
 <div class="card">
   <div class="card-body" style="padding:0">
     <?php foreach ($rows as $n): ?>
-    <a href="<?= h($n['url'] ?: '?page=notifications&read=' . $n['id']) ?>"
-       style="display:block;padding:14px 18px;border-bottom:1px solid var(--border);text-decoration:none;color:inherit;<?= $n['is_read'] ? '' : 'background:#fefce8' ?>">
+    <?php
+    $url   = !empty($n['url']) ? $n['url'] : '?page=notifications&read=' . (int)$n['id'];
+    $title = (string)($n['title'] ?? '');
+    $body  = (string)($n['body']  ?? '');
+    $type  = (string)($n['type']  ?? '');
+    $isRead = !empty($n['is_read']);
+    $icons = ['order'=>'📦','payment'=>'💰','dealer'=>'🏢','application'=>'📝','ticket'=>'🎫','system'=>'⚙️','stock'=>'📊'];
+    $icon  = $icons[$type] ?? '🔔';
+    ?>
+    <a href="<?= h($url) ?>"
+       style="display:block;padding:14px 18px;border-bottom:1px solid var(--border);text-decoration:none;color:inherit;<?= $isRead ? '' : 'background:#fefce8' ?>">
       <div style="display:flex;align-items:flex-start;gap:12px">
-        <div style="font-size:20px;flex:0 0 auto;margin-top:1px">
-          <?php
-          $icons = ['order'=>'📦','payment'=>'💰','dealer'=>'🏢','application'=>'📝','ticket'=>'🎫','system'=>'⚙️','stock'=>'📊'];
-          echo $icons[$n['type']] ?? '🔔';
-          ?>
-        </div>
+        <div style="font-size:20px;flex:0 0 auto;margin-top:1px"><?= $icon ?></div>
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
-            <strong style="font-size:13px;color:var(--text)"><?= h($n['title']) ?></strong>
-            <?php if (!$n['is_read']): ?><span style="width:6px;height:6px;background:var(--red);border-radius:50%"></span><?php endif; ?>
+            <strong style="font-size:13px;color:var(--text)"><?= h($title) ?></strong>
+            <?php if (!$isRead): ?><span style="width:6px;height:6px;background:var(--red);border-radius:50%"></span><?php endif; ?>
           </div>
-          <div style="font-size:12px;color:var(--text-2);margin-bottom:4px"><?= h($n['body']) ?></div>
-          <div style="font-size:11px;color:var(--text-muted)"><?= fmtDateTime($n['created_at']) ?></div>
+          <?php if ($body !== ''): ?>
+          <div style="font-size:12px;color:var(--text-2);margin-bottom:4px"><?= h($body) ?></div>
+          <?php endif; ?>
+          <div style="font-size:11px;color:var(--text-muted)"><?= fmtDateTime($n['created_at'] ?? '') ?></div>
         </div>
       </div>
     </a>
