@@ -471,19 +471,35 @@ function sendMailSmtp(string $to, string $subject, string $html,
     try {
         $encSubj = '=?UTF-8?B?' . base64_encode($subject) . '?=';
         $encFrom = '=?UTF-8?B?' . base64_encode($fromName) . '?=';
-        $msgId   = '<' . md5(uniqid()) . '@' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '>';
-        $raw = implode("\r\n", [
+        // Message-ID domain'i fromEmail ile aynı domain olmalı — spam filtresi
+        // mismatch görürse spam'a atar. SERVER['HTTP_HOST'] genellikle
+        // bayi.lemondedutacos.com olur, ama From: info@lemondedutacos.com
+        // olabilir — Message-ID'yi From: domain'inden türetelim.
+        $fromDomain = strpos($fromEmail, '@') !== false
+            ? substr(strrchr($fromEmail, '@'), 1)
+            : ($_SERVER['HTTP_HOST'] ?? 'localhost');
+        $msgId   = '<' . md5(uniqid('', true) . microtime(true)) . '@' . $fromDomain . '>';
+        $siteName = setting('site_name', $fromName);
+
+        $headers = [
             "Message-ID: $msgId",
             "Date: " . date('r'),
             "From: $encFrom <$fromEmail>",
             "To: $to",
+            "Reply-To: $fromEmail",
             "Subject: $encSubj",
             "MIME-Version: 1.0",
             "Content-Type: text/html; charset=UTF-8",
             "Content-Transfer-Encoding: base64",
-            "",
-            chunk_split(base64_encode($html)),
-        ]);
+            // Anti-spam header'ları
+            "X-Mailer: " . htmlspecialchars($siteName) . " B2B Portal",
+            "X-Priority: 3",
+            "List-Unsubscribe: <mailto:$fromEmail?subject=unsubscribe>",
+            "Auto-Submitted: auto-generated",
+            "Precedence: bulk",
+        ];
+
+        $raw = implode("\r\n", $headers) . "\r\n\r\n" . chunk_split(base64_encode($html));
 
         $proto = match($secure) {
             'ssl'  => "smtps://$host:$port",
