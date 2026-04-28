@@ -27,7 +27,7 @@ class Rubikpara {
         $this->testMode   = (bool) setting('rubikpara_test_mode', '1');
         $this->baseUrl    = $this->testMode
             ? 'https://testpfapi.rubikpara.com'
-            : 'https://pfapi.rubikpara.com';
+            : 'https://prodpfapi.rubikpara.com';
     }
 
     // ─────────────────────────────────────────────────────────────

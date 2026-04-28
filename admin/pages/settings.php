@@ -468,7 +468,7 @@ Saygılarımla</div>
         <div class="form-group"><label class="form-label">Ortam</label>
             <select name="rubikpara_test_mode" class="form-control">
                 <option value="1" <?= setting('rubikpara_test_mode','1')==='1'?'selected':'' ?>>Test (testpfapi.rubikpara.com)</option>
-                <option value="0" <?= setting('rubikpara_test_mode','1')==='0'?'selected':'' ?>>Canlı (pfapi.rubikpara.com)</option>
+                <option value="0" <?= setting('rubikpara_test_mode','1')==='0'?'selected':'' ?>>Canlı (prodpfapi.rubikpara.com)</option>
             </select></div>
     </div>
 
