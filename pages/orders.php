@@ -1,5 +1,21 @@
 <?php
 // pages/orders.php — Bayi Siparişleri
+
+// ── DEBUG: Tüm akış doğrulanana kadar kalacak ──────────────────
+ini_set('display_errors', '1');
+error_reporting(E_ALL);
+register_shutdown_function(function() {
+    $err = error_get_last();
+    if ($err && in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR], true)) {
+        echo '<div style="background:#fee2e2;border:2px solid #dc2626;color:#991b1b;padding:16px;margin:16px;border-radius:8px;font-family:monospace;font-size:13px;line-height:1.6">';
+        echo '<strong style="font-size:15px">⚠️ PHP FATAL (orders.php)</strong><br>';
+        echo '<strong>Mesaj:</strong> ' . htmlspecialchars($err['message']) . '<br>';
+        echo '<strong>Dosya:</strong> ' . htmlspecialchars($err['file']) . ':' . (int)$err['line'];
+        echo '</div>';
+    }
+});
+// ────────────────────────────────────────────────────────────────
+
 requireDealer();
 $dealer = currentDealer();
 
