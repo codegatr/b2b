@@ -167,6 +167,9 @@ $pageTitle = match($page) {
 <body>
 
 <div class="layout">
+  <!-- ── Sidebar Backdrop (mobil drawer açıkken) ── -->
+  <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
   <!-- ── Sidebar ── -->
   <aside class="sidebar">
     <div class="sidebar-logo">
@@ -248,7 +251,7 @@ $pageTitle = match($page) {
   <div class="main-content">
     <!-- Topbar -->
     <div class="topbar">
-      <button id="sidebar-toggle" class="btn btn-ghost btn-icon" style="display:none">☰</button>
+      <button id="sidebar-toggle" class="mobile-hamburger" aria-label="Menüyü aç">☰</button>
       <div class="topbar-title"><?= h($pageTitle) ?></div>
       <div class="topbar-actions">
         <a href="?page=cart" class="topbar-btn">

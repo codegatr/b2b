@@ -39,9 +39,61 @@ document.addEventListener('click', e => {
 // ── Sidebar toggle (mobile) ───────────────────────────────────
 const sidebarToggle = document.getElementById('sidebar-toggle');
 const sidebar = document.querySelector('.sidebar');
-if (sidebarToggle && sidebar) {
-  sidebarToggle.addEventListener('click', () => sidebar.classList.toggle('open'));
+const sidebarBackdrop = document.getElementById('sidebar-backdrop');
+
+function openSidebar() {
+  if (!sidebar) return;
+  sidebar.classList.add('open');
+  document.body.classList.add('sidebar-open');
+  if (sidebarBackdrop) sidebarBackdrop.classList.add('show');
 }
+function closeSidebar() {
+  if (!sidebar) return;
+  sidebar.classList.remove('open');
+  document.body.classList.remove('sidebar-open');
+  if (sidebarBackdrop) sidebarBackdrop.classList.remove('show');
+}
+function toggleSidebar() {
+  if (!sidebar) return;
+  sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+}
+
+if (sidebarToggle) {
+  sidebarToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleSidebar();
+  });
+}
+
+// Backdrop click → kapat
+if (sidebarBackdrop) {
+  sidebarBackdrop.addEventListener('click', closeSidebar);
+}
+
+// ESC tuşu → kapat
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && sidebar && sidebar.classList.contains('open')) {
+    closeSidebar();
+  }
+});
+
+// Sidebar içindeki linklere tıklandığında kapat (mobilde)
+if (sidebar) {
+  sidebar.addEventListener('click', (e) => {
+    const link = e.target.closest('a[href]');
+    if (link && window.innerWidth <= 768) {
+      // Hash linkler veya same-page linkler hariç
+      if (!link.getAttribute('href').startsWith('#')) {
+        closeSidebar();
+      }
+    }
+  });
+}
+
+// Pencere boyutu değişince — desktop'a geçildiyse drawer'ı temizle
+window.addEventListener('resize', () => {
+  if (window.innerWidth > 768) closeSidebar();
+});
 
 // ── Alert otomatik kapat ──────────────────────────────────────
 document.querySelectorAll('.alert[data-auto-close]').forEach(el => {

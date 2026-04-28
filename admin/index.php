@@ -247,6 +247,9 @@ function renderAdminPage(string $page, array $vars = []): void {
 
 <div class="layout">
   <!-- ── Admin Sidebar ── -->
+  <!-- ── Sidebar Backdrop (mobil drawer açıkken) ── -->
+  <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
   <aside class="sidebar">
     <div class="sidebar-logo">
       <div class="logo-mark">B2</div>
@@ -381,6 +384,7 @@ function renderAdminPage(string $page, array $vars = []): void {
 
   <div class="main-content">
     <div class="topbar">
+      <button id="sidebar-toggle" class="mobile-hamburger" aria-label="Menüyü aç">☰</button>
       <div class="topbar-title"><?= h($pageTitle) ?></div>
       <div class="topbar-actions" style="gap:6px">
 

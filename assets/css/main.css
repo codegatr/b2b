@@ -318,14 +318,200 @@ textarea { resize: vertical; min-height: 80px; padding-top: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
 /* ══════════════════════════════════════════════════════════════
-   MOBİL
+   MOBİL — Kapsamlı Responsive (Tablet ≤1024px, Mobil ≤768px, Telefon ≤480px)
 ══════════════════════════════════════════════════════════════ */
-@media(max-width:768px) {
-  .sidebar { transform: translateX(-100%); transition: transform .25s; }
+
+/* Backdrop overlay (sidebar açıkken) */
+.sidebar-backdrop {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.45);
+  z-index: 50;
+  backdrop-filter: blur(2px);
+  animation: fadeIn .15s;
+}
+.sidebar-backdrop.show { display: block; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* Hamburger butonu (sadece mobilde görünür) */
+.mobile-hamburger {
+  display: none;
+  background: transparent; border: none;
+  width: 40px; height: 40px;
+  border-radius: 8px;
+  align-items: center; justify-content: center;
+  font-size: 22px; color: var(--text);
+  cursor: pointer; padding: 0;
+  flex-shrink: 0;
+  transition: background .15s;
+}
+.mobile-hamburger:hover { background: var(--bg); }
+.mobile-hamburger:active { background: var(--border); }
+
+/* TABLET (≤ 1024px) */
+@media (max-width: 1024px) {
+  :root { --sidebar-w: 220px; }
+  .grid-cols-4 { grid-template-columns: repeat(2, 1fr); }
+  .topbar-title { font-size: 14px; }
+}
+
+/* MOBİL (≤ 768px) — Sidebar slide-in drawer */
+@media (max-width: 768px) {
+  /* Sidebar — slide-out drawer */
+  .sidebar {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: 280px; max-width: 85vw;
+    transform: translateX(-100%);
+    transition: transform .28s cubic-bezier(.4, 0, .2, 1);
+    z-index: 60;
+    box-shadow: 4px 0 24px rgba(0,0,0,.15);
+  }
   .sidebar.open { transform: translateX(0); }
+
+  /* Ana içerik tam genişlik */
   .main-content { margin-left: 0; }
-  .stats-grid { grid-template-columns: 1fr 1fr; }
-  .page-body { padding: 16px; }
+
+  /* Hamburger butonu görünür */
+  .mobile-hamburger {
+    display: inline-flex;
+  }
+
+  /* Topbar kompakt */
+  .topbar {
+    padding: 10px 12px !important;
+    gap: 8px !important;
+    position: sticky; top: 0;
+    z-index: 30;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar-title {
+    font-size: 14px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .topbar-btn { padding: 6px 8px; font-size: 14px; }
+  .avatar { width: 32px; height: 32px; font-size: 12px; }
+
+  /* Sayfa içeriği — daha az padding */
+  .page-body { padding: 12px; }
+  .page-header {
+    padding: 14px 12px !important;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .page-title { font-size: 18px !important; line-height: 1.3; }
+  .page-sub   { font-size: 12px !important; }
+
+  /* Stat kartları tek/çift sütun */
+  .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat-card { padding: 14px !important; }
+  .stat-value { font-size: 18px !important; }
+  .stat-label { font-size: 10px !important; }
+
+  /* Form — full width inputs, daha rahat tıklama */
+  .form-control,
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="date"],
+  input[type="search"],
+  select,
+  textarea {
+    font-size: 16px !important;  /* iOS auto-zoom önleme */
+    min-height: 44px;            /* Touch target minimum */
+  }
+  .form-grid-2,
+  .form-grid-3 { grid-template-columns: 1fr !important; gap: 12px !important; }
+
+  /* Butonlar — touch-friendly minimum 44px */
+  .btn { min-height: 40px; padding: 10px 14px; font-size: 13px; }
+  .btn-sm { min-height: 32px; padding: 6px 10px; font-size: 12px; }
+  .btn-icon { min-width: 40px; min-height: 40px; }
+
+  /* Tablo — yatay scroll (zorunlu olduğu durumlarda) */
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .table-wrap table { min-width: 600px; }
+
+  /* Card padding ve margin azaltma */
+  .card { border-radius: 10px; }
+  .card-header { padding: 12px 14px; }
+  .card-body { padding: 14px; }
+
+  /* Modal — full screen mobilde */
+  .modal { padding: 0 !important; }
+  .modal-content {
+    max-width: 100% !important; width: 100% !important;
+    height: 100vh; max-height: 100vh;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    overflow-y: auto;
+  }
+
+  /* Dropdown menüleri full width değil ama daha geniş tıklama */
+  .dropdown-menu { min-width: 200px; right: 0 !important; left: auto !important; }
+  .dropdown-item { padding: 12px 14px; font-size: 13px; }
+
+  /* Alert bant tam genişlik */
+  .alert { padding: 12px 14px; font-size: 13px; line-height: 1.5; }
+
+  /* Grid sayfaları (ürün katalog vs) - 2 sütun mobil */
+  .product-grid { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
+
+  /* Genel layout grid'leri tek sütuna düş */
+  [style*="grid-template-columns:1fr 1fr"],
+  [style*="grid-template-columns: 1fr 1fr"],
+  [style*="grid-template-columns:repeat(2"],
+  [style*="grid-template-columns:1.3fr"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* TELEFON (≤ 480px) — daha agresif sıkıştırma */
+@media (max-width: 480px) {
+  /* Stat kartları tek sütun */
+  .stats-grid,
+  .grid-cols-2,
+  .grid-cols-3,
+  .grid-cols-4 { grid-template-columns: 1fr !important; }
+
+  /* Page header dikey */
+  .page-header {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+  .page-header .btn { width: 100%; justify-content: center; }
+
+  /* Card içi paddingler */
+  .card-body { padding: 12px; }
+
+  /* Tablo daha sıkı */
+  .table th, .table td { padding: 8px 10px; font-size: 12px; }
+
+  /* Topbar başlığı çok uzunsa kısalt */
+  .topbar-title { display: none; }  /* Mobil cep telefonunda gizle */
+
+  /* Sepet/sipariş satırları dikey */
+  .product-grid { grid-template-columns: 1fr !important; }
+
+  /* Kompakt button group */
+  .btn-group { flex-direction: column; gap: 8px; }
+  .btn-group .btn { width: 100%; }
+}
+
+/* Ek dokunmatik iyileştirmeler — bütün cihazlar için */
+@media (hover: none) {
+  .btn:active { transform: scale(0.97); }
+  .nav-item:active { background: var(--sidebar-hover); }
+  a:active, button:active { opacity: .85; }
+}
+
+/* Body scroll kilitleme — sidebar açıkken */
+body.sidebar-open {
+  overflow: hidden;
+  position: fixed; width: 100%;
 }
 
 /* ══════════════════════════════════════════════════════════════
