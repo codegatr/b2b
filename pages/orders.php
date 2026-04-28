@@ -105,7 +105,7 @@ if ($action === 'list') {
         <td>
             <?php
             $payable = ($o['payment_status'] ?? '') !== 'odendi'
-                    && in_array($o['status'] ?? '', ['onaylandi','hazirlaniyor','kargoda'], true);
+                    && !in_array($o['status'] ?? '', ['iptal','iade'], true);
             ?>
             <?php if ($payable && $cardEnabled): ?>
             <a href="?page=payment-card&order_id=<?= $o['id'] ?>"
@@ -174,7 +174,7 @@ $isAuto = ($order['status'] === 'onaylandi');
     <a href="?page=orders" class="btn btn-secondary">← Geri</a>
     <?php
     $payable = ($order['payment_status'] ?? '') !== 'odendi'
-            && in_array($order['status'] ?? '', ['onaylandi','hazirlaniyor','kargoda'], true);
+            && !in_array($order['status'] ?? '', ['iptal','iade'], true);
     ?>
     <?php if ($payable && $cardEnabled): ?>
     <a href="?page=payment-card&order_id=<?= $order['id'] ?>"

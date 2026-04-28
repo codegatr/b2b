@@ -50,6 +50,18 @@ if ($step === 'callback' && isset($_POST['ThreeDSessionId'])) {
                 // Sipariş güncelle
                 dbExec("UPDATE b2b_orders SET payment_status='odendi' WHERE id=?", [$orderId]);
 
+                // Aynı sipariş için bekleyen havale/EFT/diğer bildirimleri otomatik reddet
+                // (kart ile ödendiği için admin tarafında çift kayıt karışıklığı olmasın)
+                dbExec(
+                    "UPDATE b2b_payments
+                     SET status='reddedildi',
+                         admin_note=CONCAT(COALESCE(admin_note,''),
+                            IF(admin_note IS NULL OR admin_note='','','\n'),
+                            '[Otomatik] Sipariş kart ile ödendi, bu bildirim geçersiz.')
+                     WHERE order_id=? AND status='bekliyor' AND type<>'kredi_karti'",
+                    [$orderId]
+                );
+
                 $_SESSION['flash'] = ['type'=>'success','msg'=>'Ödeme başarıyla tamamlandı!'];
                 header('Location: ?page=orders&action=detail&id=' . $orderId);
                 exit;
