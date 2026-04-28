@@ -63,7 +63,24 @@ function migrationRun(string $filePath): array {
 
         foreach ($statements as $stmt) {
             if (empty($stmt)) continue;
-            db()->exec($stmt);
+            try {
+                db()->exec($stmt);
+            } catch (\Throwable $e) {
+                $msg = $e->getMessage();
+                // Idempotent hatalar (kolon zaten var, tablo zaten var, indeks zaten var) yutulur
+                // — migration tekrar çalıştırılırsa bile patlamaz.
+                $idempotent = (
+                    str_contains($msg, 'Duplicate column') ||
+                    str_contains($msg, 'already exists') ||
+                    str_contains($msg, 'Duplicate key name') ||
+                    str_contains($msg, 'check that column/key exists')
+                );
+                if (!$idempotent) {
+                    throw $e;
+                }
+                // Idempotent hatayı log'a yaz, devam et
+                error_log("Migration $name idempotent skip: $msg");
+            }
         }
 
         // Çalışmış olarak işaretle

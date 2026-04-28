@@ -88,7 +88,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Kaydı kapat
     if ($act === 'close_entry') {
         $eid = intval($_POST['entry_id']);
-        dbExec("UPDATE b2b_ledger SET is_closed=1, closed_at=NOW() WHERE id=?", [$eid]);
+        // closed_at kolonu yeni eklendi (migration_013) — eski DB'lerde yoksa fallback
+        try {
+            dbExec("UPDATE b2b_ledger SET is_closed=1, closed_at=NOW() WHERE id=?", [$eid]);
+        } catch (\Throwable $e) {
+            // closed_at yoksa sadece is_closed update et
+            dbExec("UPDATE b2b_ledger SET is_closed=1 WHERE id=?", [$eid]);
+        }
         $success = 'Kayıt kapatıldı.';
     }
 
