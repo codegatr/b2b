@@ -304,14 +304,20 @@ class Rubikpara {
         $curlErr = curl_error($ch);
         curl_close($ch);
 
-        if ($curlErr) throw new \Exception('cURL hatası: ' . $curlErr);
+        if ($curlErr) {
+            error_log("Rubikpara cURL hatası [$endpoint]: $curlErr");
+            throw new \Exception('cURL hatası: ' . $curlErr);
+        }
 
         $parsed = json_decode($body, true);
         if ($parsed === null) {
-            throw new \Exception("API yanıtı JSON değil (HTTP $code): " . substr($body, 0, 200));
+            $snippet = substr(trim((string)$body), 0, 500);
+            error_log("Rubikpara non-JSON [$endpoint] HTTP $code: $snippet");
+            throw new \Exception("Rubikpara $endpoint HTTP $code — yanıt: " . ($snippet ?: '(boş)'));
         }
         if (isset($parsed['isSucceed']) && $parsed['isSucceed'] === false) {
             $msg = $parsed['message'] ?? $parsed['errorMessage'] ?? 'API hatası';
+            error_log("Rubikpara API error [$endpoint] HTTP $code: $msg");
             throw new \Exception($msg);
         }
         return $parsed;
@@ -364,14 +370,22 @@ class Rubikpara {
         $curlErr = curl_error($ch);
         curl_close($ch);
 
-        if ($curlErr) throw new \Exception('cURL hatası: ' . $curlErr);
+        if ($curlErr) {
+            error_log("Rubikpara cURL hatası [$endpoint]: $curlErr");
+            throw new \Exception('cURL hatası: ' . $curlErr);
+        }
 
         $parsed = json_decode($body, true);
-        if ($parsed === null) throw new \Exception("API yanıtı JSON değil (HTTP $code): " . substr($body, 0, 200));
+        if ($parsed === null) {
+            $snippet = substr(trim((string)$body), 0, 500);
+            error_log("Rubikpara non-JSON [$endpoint] HTTP $code: $snippet");
+            throw new \Exception("Rubikpara $endpoint HTTP $code — yanıt: " . ($snippet ?: '(boş)'));
+        }
 
         // Hata kontrolü
         if (isset($parsed['isSucceed']) && $parsed['isSucceed'] === false) {
             $msg = $parsed['message'] ?? $parsed['errorMessage'] ?? 'API hatası';
+            error_log("Rubikpara API error [$endpoint] HTTP $code: $msg");
             throw new \Exception($msg);
         }
 

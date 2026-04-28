@@ -108,6 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 'card') {
     } else {
         try {
             $baseAmount = (float)$order['grand_total'];
+            $stage      = 'taksit';   // log için: hangi aşamada hata oluştu
 
             // Server-side taksit doğrulama (manipülasyon koruması)
             // — Kullanıcı 12 taksit seçti diye 100₺ çekemesin, gerçek tutarı API söyler.
@@ -130,11 +131,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 'card') {
             }
 
             // Tokenize
+            $stage    = 'tokenize';
             $tokenRes = $rb->kartTokenize($cardNo, $expMonth, $expYear, $cvv);
             $cardToken = $tokenRes['cardToken'] ?? '';
             if (!$cardToken) throw new Exception('Kart tokenize edilemedi.');
 
             // 3DS oturum — komisyonlu tutar ile aç
+            $stage     = '3ds-oturum';
             $sessRes   = $rb->threeDSOturum($cardToken, $finalAmount, $installment);
             $sessionId = $sessRes['threeDSessionId'] ?? '';
             if (!$sessionId) throw new Exception('3DS oturumu oluşturulamadı.');
@@ -151,6 +154,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 'card') {
             ];
 
             // 3DS başlat
+            $stage       = '3ds-baslat';
             $callbackUrl = B2B_URL . '/?page=payment-card&order_id=' . $orderId . '&step=callback';
             $clientIp    = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
             $initRes     = $rb->threeDSBaslat($sessionId, $callbackUrl, $holderName, $clientIp);
@@ -162,7 +166,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 'card') {
             }
             throw new Exception('3DS başlatma yanıtı boş.');
         } catch (Exception $e) {
-            $error = $e->getMessage();
+            $error = '[' . ($stage ?? '?') . '] ' . $e->getMessage();
+            error_log("payment-card hatası (order $orderId, stage $stage): " . $e->getMessage());
         }
     }
 }
