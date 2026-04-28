@@ -12,8 +12,7 @@ if ($action === 'delete' && $editId) {
     } else {
         dbExec("DELETE FROM b2b_admin_users WHERE id=?", [$editId]);
         auditLog('admin_delete', 'b2b_admin_users', $editId, ['deleted_by' => $_SESSION['admin_id']]);
-        header('Location: ?page=admins&msg=deleted');
-        exit;
+        redirect('?page=admins&msg=deleted');
     }
 }
 

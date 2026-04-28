@@ -46,8 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'cance
         auditLog('cancel_requested', 'b2b_orders', $oid, ['reason'=>$reason]);
         $_SESSION['flash'] = ['type'=>'success','msg'=>'İptal talebiniz yöneticiye iletildi.'];
     }
-    header('Location: ?page=orders&action=detail&id='.$oid);
-    exit;
+    redirect('?page=orders&action=detail&id='.$oid);
 }
 
 // Sipariş detay

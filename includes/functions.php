@@ -197,7 +197,21 @@ function jsonResponse(array $data, int $code = 200): never {
 }
 
 function redirect(string $url): never {
-    header('Location: ' . $url);
+    // headers henüz gönderilmediyse normal Location header
+    if (!headers_sent()) {
+        header('Location: ' . $url);
+        exit;
+    }
+    // Output zaten başlamış (admin layout HTML'i gönderildi gibi) →
+    // meta refresh + JS + manuel link fallback
+    $safe = htmlspecialchars($url, ENT_QUOTES);
+    echo '<!DOCTYPE html><html><head><meta charset="utf-8">';
+    echo '<meta http-equiv="refresh" content="0;url=' . $safe . '">';
+    echo '<script>window.location.replace(' . json_encode($url) . ');</script>';
+    echo '</head><body style="font-family:system-ui;padding:40px;text-align:center;background:#f4f5f7">';
+    echo '<p>Yönlendiriliyorsunuz...</p>';
+    echo '<p><a href="' . $safe . '">Otomatik gitmezse buraya tıklayın</a></p>';
+    echo '</body></html>';
     exit;
 }
 

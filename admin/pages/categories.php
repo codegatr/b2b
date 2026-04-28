@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id = intval($_POST['cat_id']);
         $c = dbVal("SELECT is_active FROM b2b_categories WHERE id=?", [$id]);
         dbExec("UPDATE b2b_categories SET is_active=? WHERE id=?", [$c?0:1, $id]);
-        header('Location: ?page=categories'); exit;
+        redirect('?page=categories');
     }
 
     if ($act === 'delete') {

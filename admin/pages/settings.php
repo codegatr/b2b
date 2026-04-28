@@ -47,8 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     settingSave('login_image', $fname);
                     settingClearCache();
                     $_SESSION['flash_admin'] = ['type'=>'success','msg'=>'Görsel yüklendi: '.$fname];
-                    header('Location: ?page=settings&tab=general');
-                    exit;
+                    redirect('?page=settings&tab=general');
                 } else {
                     $error = 'Dosya taşınamadı.';
                 }
@@ -72,16 +71,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if (!empty($_POST['smtp_pass'])) settingSave('smtp_pass', $_POST['smtp_pass']);
         settingClearCache();
-        header('Location: ?page=settings&tab=smtp&saved=1');
-        exit;
+        redirect('?page=settings&tab=smtp&saved=1');
     }
 
     // Banka
     if ($tab === 'bank') {
         settingSave('bank_accounts', trim($_POST['bank_accounts'] ?? ''));
         settingClearCache();
-        header('Location: ?page=settings&tab=bank&saved=1');
-        exit;
+        redirect('?page=settings&tab=bank&saved=1');
     }
 
     // Paraşüt
@@ -96,11 +93,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         settingClearCache();
         // Test butonu ile geldiyse → test URL'sine yönlendir
         if (!empty($_POST['do_test_parasut'])) {
-            header('Location: ?page=settings&tab=parasut&test_parasut=1');
+            redirect('?page=settings&tab=parasut&test_parasut=1');
         } else {
-            header('Location: ?page=settings&tab=parasut&saved=1');
+            redirect('?page=settings&tab=parasut&saved=1');
         }
-        exit;
     }
 
     // Rubikpara

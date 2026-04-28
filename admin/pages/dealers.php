@@ -53,8 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 dbUpdateRow('b2b_dealers', $data, 'id', $id);
                 auditLog('dealer_updated', 'b2b_dealers', $id, ['label' => $label]);
                 $_SESSION['flash_success'] = 'Bayi güncellendi.';
-                header('Location: ?page=dealers&action=detail&id=' . $id);
-                exit;
+                redirect('?page=dealers&action=detail&id=' . $id);
             } else {
                 // Yeni bayi — şifre zorunlu
                 $pass = trim($_POST['password'] ?? '');
@@ -72,8 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     try { parasut()->syncDealer($newId); } catch (Exception $e) {}
                     // PRG — yenileme sorununu önle, mesajı session ile taşı
                     $_SESSION['flash_success'] = 'Bayi başarıyla eklendi.';
-                    header('Location: ?page=dealers');
-                    exit;
+                    redirect('?page=dealers');
                 }
             }
         }
@@ -86,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             dbExec("UPDATE b2b_dealers SET is_active=? WHERE id=?", [$new, $dealer['id']]);
             auditLog('dealer_toggle', 'b2b_dealers', $dealer['id'], ['is_active' => $new]);
         }
-        header('Location: ?page=dealers'); exit;
+        redirect('?page=dealers');
     }
 
     if ($act === 'delete') {

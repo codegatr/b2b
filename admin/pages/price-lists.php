@@ -63,8 +63,7 @@ if (isPost() && $action === 'delete-list') {
     dbExec("DELETE FROM b2b_price_list_items WHERE price_list_id=?", [$listId]);
     dbExec("DELETE FROM b2b_price_lists WHERE id=?", [$listId]);
     $_SESSION['flash_admin'] = ['type'=>'success','msg'=>'Fiyat listesi silindi.'];
-    header('Location: ?page=price-lists');
-    exit;
+    redirect('?page=price-lists');
 }
 
 // ── Bayiye toplu atama ────────────────────────────────────────
@@ -223,7 +222,7 @@ $lists = dbRows("SELECT pl.*, COUNT(pli.id) as item_count,
 <?php elseif ($action === 'items'): ?>
 <?php
 $list = dbRow("SELECT * FROM b2b_price_lists WHERE id=?", [$listId]);
-if (!$list) { header('Location: ?page=price-lists'); exit; }
+if (!$list) { redirect('?page=price-lists'); }
 
 $search = trim($_GET['q']??'');
 $items = dbRows(

@@ -1,7 +1,7 @@
 <?php
 // Zaten giriş yapmışsa yönlendir
-if (isset($_SESSION['dealer_id'])) { header('Location: ?page=dashboard'); exit; }
-if (isset($_SESSION['admin_id']))  { header('Location: ' . B2B_URL . '/admin/?page=dashboard'); exit; }
+if (isset($_SESSION['dealer_id'])) { redirect('?page=dashboard'); }
+if (isset($_SESSION['admin_id']))  { redirect(B2B_URL . '/admin/?page=dashboard'); }
 
 // Flash mesajı oku
 $flash = null;
@@ -85,8 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? '') === 'logi
             $_SESSION['admin_role'] = $admin['role'];
             dbExec("UPDATE b2b_admin_users SET last_login=NOW() WHERE id=?", [$admin['id']]);
             session_regenerate_id(true);
-            header('Location: ' . B2B_URL . '/admin/?page=dashboard');
-            exit;
+            redirect(B2B_URL . '/admin/?page=dashboard');
         }
         // Sonra bayi tablosuna bak
         $dealer = dbRow("SELECT * FROM b2b_dealers WHERE email=? AND is_active=1", [$email]);
@@ -99,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? '') === 'logi
             dbExec("UPDATE b2b_dealers SET last_login=NOW() WHERE id=?", [$dealer['id']]);
             session_regenerate_id(true);
             $next = preg_replace('/[^a-z0-9\-\/\.\?\=\&]/i', '', $_GET['next'] ?? '');
-            header('Location: ' . ($next ?: '?page=dashboard'));
+            redirect($next ?: '?page=dashboard');
             exit;
         }
         $error = 'E-posta veya şifre hatalı ya da hesabınız aktif değil.';

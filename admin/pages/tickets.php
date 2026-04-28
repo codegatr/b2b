@@ -36,8 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             auditLog('ticket_deleted', 'b2b_tickets', $tid, ['subject' => $t['subject']]);
             $_SESSION['flash_admin'] = ['type' => 'success', 'msg' => 'Destek talebi silindi.'];
         }
-        header('Location: ?page=tickets');
-        exit;
+        redirect('?page=tickets');
     }
 
     // Admin adına yeni talep aç

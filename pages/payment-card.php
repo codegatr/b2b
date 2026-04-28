@@ -94,8 +94,7 @@ if ($pending) {
     ) : null;
 
     if (!$order) {
-        header('Location: ?page=orders');
-        exit;
+        redirect('?page=orders');
     }
 }
 

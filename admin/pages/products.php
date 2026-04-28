@@ -97,7 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pid = intval($_POST['product_id']);
         $cur = dbVal("SELECT is_active FROM b2b_products WHERE id=?", [$pid]);
         dbExec("UPDATE b2b_products SET is_active=? WHERE id=?", [$cur?0:1, $pid]);
-        header('Location: ?page=products'); exit;
+        redirect('?page=products');
     }
 }
 

@@ -4,10 +4,10 @@ $dealerId  = $_SESSION['dealer_id'];
 $dealer    = currentDealer();
 $productId = (int)($_GET['id'] ?? 0);
 
-if (!$productId) { header('Location: ?page=products'); exit; }
+if (!$productId) { redirect('?page=products'); }
 
 $product = dbRow("SELECT p.*, c.name as category_name FROM b2b_products p LEFT JOIN b2b_categories c ON c.id = p.category_id WHERE p.id = ? AND p.is_active = 1", [$productId]);
-if (!$product) { header('Location: ?page=products'); exit; }
+if (!$product) { redirect('?page=products'); }
 
 $dp       = dealerPrice($productId, (int)($dealer['price_list_id'] ?? 0));
 $price    = $dp['price'];

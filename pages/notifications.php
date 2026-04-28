@@ -6,8 +6,7 @@ $dealerId = $_SESSION['dealer_id'];
 // Tümünü okundu işaretle
 if (isset($_GET['mark_all'])) {
     dbExec("UPDATE b2b_notifications SET is_read=1 WHERE dealer_id=?", [$dealerId]);
-    header('Location: ?page=notifications');
-    exit;
+    redirect('?page=notifications');
 }
 
 // Tekil okundu

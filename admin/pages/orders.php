@@ -36,8 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             auditLog('order_deleted', 'b2b_orders', $oid, ['order_no' => $ord['order_no']]);
             $_SESSION['flash_admin'] = ['type' => 'success', 'msg' => "#{$ord['order_no']} siparişi, stoklar geri yüklendi ve cari kaydı silindi."];
         }
-        header('Location: ?page=orders');
-        exit;
+        redirect('?page=orders');
     }
 
     // ── İptal onayla ─────────────────────────────────────────
