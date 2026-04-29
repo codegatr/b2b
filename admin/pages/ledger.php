@@ -99,23 +99,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // Kaydı sil — sadece manuel girilmiş kayıtlar veya test kayıtları için
-    // ref_type=order veya ref_type=payment ise sipariş/ödeme tarafıyla bağ var,
+    // reference_type=order veya reference_type=payment ise sipariş/ödeme tarafıyla bağ var,
     // onları silmek tutarsızlık yaratır. Yine de admin'in sorumluluğunda.
     if ($act === 'delete_entry') {
         $eid = intval($_POST['entry_id']);
         $entry = dbRow("SELECT * FROM b2b_ledger WHERE id=?", [$eid]);
         if ($entry) {
             // Bağlı b2b_payments kaydını da temizle.
-            // ref_type='payment' ise ref_id payment_id'dir (yeni doğru mantık).
-            // Eski tarihli kayıtlarda yanlışlıkla ref_id=orderId yazılmıştı —
+            // reference_type='payment' ise reference_id payment_id'dir (yeni doğru mantık).
+            // Eski tarihli kayıtlarda yanlışlıkla reference_id=orderId yazılmıştı —
             // o yüzden ID eşleşmezse dealer_id+amount+yaklaşık tarih ile fallback.
-            if (($entry['ref_type'] ?? '') === 'payment') {
+            if (($entry['reference_type'] ?? '') === 'payment') {
                 $deleted = false;
-                if (!empty($entry['ref_id'])) {
-                    $deleted = (bool)dbExec("DELETE FROM b2b_payments WHERE id=?", [(int)$entry['ref_id']]);
+                if (!empty($entry['reference_id'])) {
+                    $deleted = (bool)dbExec("DELETE FROM b2b_payments WHERE id=?", [(int)$entry['reference_id']]);
                 }
                 // Fallback: aynı bayi + aynı tutar + aynı gün payment kayıtlarını sil
-                // (yanlış ref_id olan eski kayıtlar için)
+                // (yanlış reference_id olan eski kayıtlar için)
                 if (!$deleted) {
                     dbExec(
                         "DELETE FROM b2b_payments
@@ -124,19 +124,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     );
                 }
             }
-            // ref_type='order' ise sipariş ödeme statüsünü 'odenmedi'ye al
+            // reference_type='order' ise sipariş ödeme statüsünü 'odenmedi'ye al
             // (kayıt silindi, demek ödeme geri alındı)
-            if (($entry['ref_type'] ?? '') === 'order' && !empty($entry['ref_id'])) {
-                dbExec("UPDATE b2b_orders SET payment_status='odenmedi' WHERE id=?", [(int)$entry['ref_id']]);
+            if (($entry['reference_type'] ?? '') === 'order' && !empty($entry['reference_id'])) {
+                dbExec("UPDATE b2b_orders SET payment_status='odenmedi' WHERE id=?", [(int)$entry['reference_id']]);
             }
             dbExec("DELETE FROM b2b_ledger WHERE id=?", [$eid]);
             auditLog('ledger_entry_deleted', 'b2b_ledger', $eid, [
-                'dealer_id' => $entry['dealer_id'],
-                'type'      => $entry['type'],
-                'amount'    => $entry['amount'],
-                'desc'      => $entry['description'],
-                'ref_type'  => $entry['ref_type'] ?? null,
-                'ref_id'    => $entry['ref_id'] ?? null,
+                'dealer_id'      => $entry['dealer_id'],
+                'type'           => $entry['type'],
+                'amount'         => $entry['amount'],
+                'desc'           => $entry['description'],
+                'reference_type' => $entry['reference_type'] ?? null,
+                'reference_id'   => $entry['reference_id'] ?? null,
             ]);
             $success = 'Cari hareket silindi (bağlı ödeme/sipariş kaydı da temizlendi).';
         } else {

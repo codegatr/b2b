@@ -54,9 +54,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $p = dbRow("SELECT * FROM b2b_payments WHERE id=?", [$pid]);
         if ($p) {
             // Bağlı ledger kayıtlarını bul ve sil:
-            // 1) ref_type=payment ve ref_id=payment_id (yeni doğru kayıtlar)
-            $linkedLedger = dbRows("SELECT id FROM b2b_ledger WHERE ref_type='payment' AND ref_id=?", [$pid]);
-            // 2) Eski/yanlış: ref_type=payment, ref_id=order_id veya hiç ref olmayan ama
+            // 1) reference_type=payment ve reference_id=payment_id (yeni doğru kayıtlar)
+            $linkedLedger = dbRows("SELECT id FROM b2b_ledger WHERE reference_type='payment' AND reference_id=?", [$pid]);
+            // 2) Eski/yanlış: reference_type=payment, reference_id=order_id veya hiç ref olmayan ama
             //    aynı bayi+tutar+tarihte alacak kaydı (fallback)
             if (empty($linkedLedger)) {
                 $linkedLedger = dbRows(
