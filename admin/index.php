@@ -106,6 +106,21 @@ if ($page === 'logout') {
     exit;
 }
 
+// ── PRINT/PDF/EXPORT ENDPOINT'LERİ ─────────────────────────────
+// Bu çıktılar kendi HTML/PDF response'unu üretir; admin layout YÜKLENMEZ.
+// Header kullandıkları için layout HTML'inden ÖNCE intercept edilmeli.
+if (!empty($_GET['export']) || !empty($_GET['print'])) {
+    // İzinli sayfaların tümünü buraya alın — örn. ledger PDF, raporlar PDF
+    $allowedExportPages = ['ledger', 'reports', 'dealers', 'orders'];
+    if (in_array($page, $allowedExportPages, true)) {
+        $pageFile = __DIR__ . "/pages/$page.php";
+        if (file_exists($pageFile)) {
+            require $pageFile;
+            exit; // Page dosyası kendi exit'ini yapsın, etmediyse biz bitiriyoruz
+        }
+    }
+}
+
 $siteName  = setting('site_name', 'B2B Bayi Portalı');
 $admin     = isAdmin() ? currentAdmin() : null;
 $unread    = isAdmin() ? unreadNotifCount('admin') : 0;

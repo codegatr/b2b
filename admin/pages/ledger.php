@@ -98,6 +98,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $success = 'Kayıt kapatıldı.';
     }
 
+    // Kaydı sil — sadece manuel girilmiş kayıtlar veya test kayıtları için
+    // ref_type=order veya ref_type=payment ise sipariş/ödeme tarafıyla bağ var,
+    // onları silmek tutarsızlık yaratır. Yine de admin'in sorumluluğunda.
+    if ($act === 'delete_entry') {
+        $eid = intval($_POST['entry_id']);
+        $entry = dbRow("SELECT * FROM b2b_ledger WHERE id=?", [$eid]);
+        if ($entry) {
+            // Bağlı bir payment kaydı varsa onu da sil (payment cari hareket ile bağlantılı)
+            if (($entry['ref_type'] ?? '') === 'payment' && !empty($entry['ref_id'])) {
+                dbExec("DELETE FROM b2b_payments WHERE id=?", [(int)$entry['ref_id']]);
+            }
+            dbExec("DELETE FROM b2b_ledger WHERE id=?", [$eid]);
+            auditLog('ledger_entry_deleted', 'b2b_ledger', $eid, [
+                'dealer_id' => $entry['dealer_id'],
+                'type'      => $entry['type'],
+                'amount'    => $entry['amount'],
+                'desc'      => $entry['description'],
+            ]);
+            $success = 'Cari hareket silindi.';
+        } else {
+            $error = 'Kayıt bulunamadı.';
+        }
+    }
+
     // Cari kodu inline güncelleme
     if ($act === 'update_dealer_code') {
         $did  = intval($_POST['dealer_id']);
@@ -370,14 +394,22 @@ $genelAlacak = array_sum(array_column($cariList, 'toplam_alacak'));
           <?php endif; ?>
         </td>
         <td>
-          <?php if (!$e['is_closed']): ?>
-          <form method="post" style="display:inline">
-            <?= csrfField() ?>
-            <input type="hidden" name="form_action" value="close_entry">
-            <input type="hidden" name="entry_id" value="<?= $e['id'] ?>">
-            <button type="submit" class="btn btn-ghost btn-sm" title="Kapat" style="padding:3px 8px">✓</button>
-          </form>
-          <?php endif; ?>
+          <div style="display:inline-flex;gap:4px">
+            <?php if (!$e['is_closed']): ?>
+            <form method="post" style="display:inline" onsubmit="return confirm('Bu hareketi KAPALI olarak işaretle?');">
+              <?= csrfField() ?>
+              <input type="hidden" name="form_action" value="close_entry">
+              <input type="hidden" name="entry_id" value="<?= $e['id'] ?>">
+              <button type="submit" class="btn btn-ghost btn-sm" title="Kapat" style="padding:3px 8px">✓</button>
+            </form>
+            <?php endif; ?>
+            <form method="post" style="display:inline" onsubmit="return confirm('Bu cari hareketi KALICI olarak silinsin mi?\n\n<?= addslashes(($e['type']==='borc'?'Borç':'Alacak').' — '.$e['description'].' — '.number_format($e['amount'],2,',','.').' ₺') ?>\n\nBu işlem geri alınamaz!');">
+              <?= csrfField() ?>
+              <input type="hidden" name="form_action" value="delete_entry">
+              <input type="hidden" name="entry_id" value="<?= $e['id'] ?>">
+              <button type="submit" class="btn btn-ghost btn-sm" title="Sil" style="padding:3px 8px;color:#dc2626">🗑</button>
+            </form>
+          </div>
         </td>
       </tr>
       <?php endforeach; ?>
