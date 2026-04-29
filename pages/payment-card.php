@@ -241,11 +241,13 @@ if ($step === 'callback' && isset($_POST['ThreeDSessionId'])) {
                             $note,
                         ]
                     );
+                    $paymentId = (int)db()->lastInsertId();
                     // Cariye sadece sipariş tutarı kadar alacak (komisyon bayinin sırtında)
-                    // ledgerAdd(dealerId, type, amount, desc, refType='manual', refId=0, dueDate=null)
+                    // ref_id artık DOĞRU payment_id (eskiden yanlışlıkla orderId yazılıyordu —
+                    //  delete_entry'de bağlı payment'ı bulamıyordu).
                     ledgerAdd($dealer['id'], 'alacak', $baseAmount,
                         'Kart ödemesi — Rubikpara (' . $note . ')',
-                        'payment', $orderId);
+                        'payment', $paymentId);
                     // Sipariş ödeme durumu
                     dbExec("UPDATE b2b_orders SET payment_status='odendi' WHERE id=?", [$orderId]);
 

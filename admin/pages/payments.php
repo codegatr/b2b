@@ -49,6 +49,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = 'list';
     }
 
+    // Tahsilat kaydını + bağlı cari hareketini KALICI sil
+    if ($act === 'delete_payment') {
+        $p = dbRow("SELECT * FROM b2b_payments WHERE id=?", [$pid]);
+        if ($p) {
+            // Bağlı ledger kayıtlarını bul ve sil:
+            // 1) ref_type=payment ve ref_id=payment_id (yeni doğru kayıtlar)
+            $linkedLedger = dbRows("SELECT id FROM b2b_ledger WHERE ref_type='payment' AND ref_id=?", [$pid]);
+            // 2) Eski/yanlış: ref_type=payment, ref_id=order_id veya hiç ref olmayan ama
+            //    aynı bayi+tutar+tarihte alacak kaydı (fallback)
+            if (empty($linkedLedger)) {
+                $linkedLedger = dbRows(
+                    "SELECT id FROM b2b_ledger
+                     WHERE dealer_id=? AND type='alacak' AND amount=? AND DATE(created_at)=DATE(?)",
+                    [(int)$p['dealer_id'], (float)$p['amount'], $p['created_at']]
+                );
+            }
+            foreach ($linkedLedger as $lg) {
+                dbExec("DELETE FROM b2b_ledger WHERE id=?", [(int)$lg['id']]);
+            }
+            // Sipariş ödeme statüsünü geri al (payment silindi → odenmedi)
+            if (!empty($p['order_id'])) {
+                dbExec("UPDATE b2b_orders SET payment_status='odenmedi' WHERE id=?", [(int)$p['order_id']]);
+            }
+            dbExec("DELETE FROM b2b_payments WHERE id=?", [$pid]);
+            auditLog('payment_deleted', 'b2b_payments', $pid, [
+                'dealer_id' => $p['dealer_id'],
+                'order_id'  => $p['order_id'] ?? null,
+                'amount'    => $p['amount'],
+                'type'      => $p['type'],
+                'status'    => $p['status'],
+                'ledger_deleted_count' => count($linkedLedger),
+            ]);
+            $success = 'Tahsilat ve bağlı cari hareketleri silindi.';
+        } else {
+            $error = 'Tahsilat kaydı bulunamadı.';
+        }
+        $action = 'list';
+    }
+
     // Manuel tahsilat girişi
     if ($act === 'manual') {
         $did    = intval($_POST['dealer_id']);
@@ -162,8 +201,15 @@ $_tabs = ['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','reddedildi'=>'Reddedi
             </form>
             <button class="btn btn-xs btn-danger" onclick="rejectPayment(<?= $p['id'] ?>)">✕ Reddet</button>
             <?php else: ?>
-            <span class="text-muted text-sm"><?= $p['approved_at'] ? fmtDate($p['approved_at']) : '' ?></span>
+            <span class="text-muted text-sm" style="margin-right:4px"><?= $p['approved_at'] ? fmtDate($p['approved_at']) : '' ?></span>
             <?php endif; ?>
+            <!-- Tahsilat KALICI silme — onaylı/red/bekleyen tüm durumlarda -->
+            <form method="post" style="display:inline" onsubmit="return confirm('Bu tahsilatı KALICI olarak silinsin mi?\n\n<?= addslashes(paymentMethodLabel($p['type']) . ' — ' . number_format($p['amount'],2,',','.') . ' ₺ — ' . $p['company_name']) ?>\n\nBağlı cari hareket de temizlenecek. Bu işlem geri alınamaz!');">
+                <?= csrfField() ?>
+                <input type="hidden" name="form_action" value="delete_payment">
+                <input type="hidden" name="payment_id" value="<?= $p['id'] ?>">
+                <button class="btn btn-xs btn-ghost" type="submit" title="Tahsilatı sil" style="color:#dc2626">🗑</button>
+            </form>
         </td>
     </tr>
     <?php if ($p['dealer_note']): ?>

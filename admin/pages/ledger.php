@@ -105,9 +105,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $eid = intval($_POST['entry_id']);
         $entry = dbRow("SELECT * FROM b2b_ledger WHERE id=?", [$eid]);
         if ($entry) {
-            // Bağlı bir payment kaydı varsa onu da sil (payment cari hareket ile bağlantılı)
-            if (($entry['ref_type'] ?? '') === 'payment' && !empty($entry['ref_id'])) {
-                dbExec("DELETE FROM b2b_payments WHERE id=?", [(int)$entry['ref_id']]);
+            // Bağlı b2b_payments kaydını da temizle.
+            // ref_type='payment' ise ref_id payment_id'dir (yeni doğru mantık).
+            // Eski tarihli kayıtlarda yanlışlıkla ref_id=orderId yazılmıştı —
+            // o yüzden ID eşleşmezse dealer_id+amount+yaklaşık tarih ile fallback.
+            if (($entry['ref_type'] ?? '') === 'payment') {
+                $deleted = false;
+                if (!empty($entry['ref_id'])) {
+                    $deleted = (bool)dbExec("DELETE FROM b2b_payments WHERE id=?", [(int)$entry['ref_id']]);
+                }
+                // Fallback: aynı bayi + aynı tutar + aynı gün payment kayıtlarını sil
+                // (yanlış ref_id olan eski kayıtlar için)
+                if (!$deleted) {
+                    dbExec(
+                        "DELETE FROM b2b_payments
+                         WHERE dealer_id=? AND amount=? AND DATE(created_at)=DATE(?)",
+                        [(int)$entry['dealer_id'], (float)$entry['amount'], $entry['created_at']]
+                    );
+                }
+            }
+            // ref_type='order' ise sipariş ödeme statüsünü 'odenmedi'ye al
+            // (kayıt silindi, demek ödeme geri alındı)
+            if (($entry['ref_type'] ?? '') === 'order' && !empty($entry['ref_id'])) {
+                dbExec("UPDATE b2b_orders SET payment_status='odenmedi' WHERE id=?", [(int)$entry['ref_id']]);
             }
             dbExec("DELETE FROM b2b_ledger WHERE id=?", [$eid]);
             auditLog('ledger_entry_deleted', 'b2b_ledger', $eid, [
@@ -115,8 +135,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'type'      => $entry['type'],
                 'amount'    => $entry['amount'],
                 'desc'      => $entry['description'],
+                'ref_type'  => $entry['ref_type'] ?? null,
+                'ref_id'    => $entry['ref_id'] ?? null,
             ]);
-            $success = 'Cari hareket silindi.';
+            $success = 'Cari hareket silindi (bağlı ödeme/sipariş kaydı da temizlendi).';
         } else {
             $error = 'Kayıt bulunamadı.';
         }
