@@ -68,7 +68,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $data['created_at'] = date('Y-m-d H:i:s');
                     $newId = dbInsertRow('b2b_dealers', $data);
                     auditLog('dealer_created', 'b2b_dealers', $newId, ['label' => $label]);
-                    try { parasut()->syncDealer($newId); } catch (Exception $e) {}
+                    try {
+                        $newDealer = dbRow("SELECT * FROM b2b_dealers WHERE id=?", [$newId]);
+                        if ($newDealer) parasut()->syncDealer($newDealer);
+                    } catch (\Throwable $e) {}
                     // PRG — yenileme sorununu önle, mesajı session ile taşı
                     $_SESSION['flash_success'] = 'Bayi başarıyla eklendi.';
                     redirect('?page=dealers');

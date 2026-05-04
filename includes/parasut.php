@@ -135,9 +135,15 @@ class Parasut {
     // CARI (Bayi = Müşteri)
     // ──────────────────────────────────────────────────────────
 
-    /** Paraşüt'te müşteri oluştur veya güncelle */
-    public function syncDealer(array $dealer): ?string {
+    /** Paraşüt'te müşteri oluştur veya güncelle. $dealer int ID veya tam dealer satırı olabilir. */
+    public function syncDealer(int|array $dealer): ?string {
         if (!$this->isEnabled()) return null;
+
+        // Eğer sadece ID geldiyse, tam kaydı çek
+        if (is_int($dealer)) {
+            $dealer = dbRow("SELECT * FROM b2b_dealers WHERE id=?", [$dealer]);
+            if (!$dealer) return null;
+        }
 
         $isKurumsal = $dealer['type'] === 'kurumsal';
         $name = $isKurumsal ? $dealer['company_name'] : ($dealer['first_name'] . ' ' . $dealer['last_name']);

@@ -306,7 +306,9 @@ function pagination(int $total, int $perPage, int $currentPage, string $baseUrl)
     $html = '<div class="pagination">';
     for ($i = 1; $i <= $pages; $i++) {
         $active = $i === $currentPage ? ' active' : '';
-        $html .= "<a href=\"{$baseUrl}&pg={$i}\" class=\"page-btn{$active}\">$i</a>";
+        // baseUrl çağıran tarafından sayfa parametresinin başlangıcına kadar oluşturulup verilir
+        // (örn: '?page=products&q=foo&p=') ve sonuna sadece sayfa numarası eklenir
+        $html .= "<a href=\"{$baseUrl}{$i}\" class=\"page-btn{$active}\">$i</a>";
     }
     return $html . '</div>';
 }

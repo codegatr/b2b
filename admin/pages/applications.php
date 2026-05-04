@@ -33,7 +33,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             dbExec("UPDATE b2b_applications SET status='onaylandi', reviewed_by=?, reviewed_at=NOW() WHERE id=?",
                 [adminId(), $aid]);
             // Paraşüt sync
-            try { parasut()->syncDealer($did); } catch (Exception $e) {}
+            try {
+                $newDealer = dbRow("SELECT * FROM b2b_dealers WHERE id=?", [$did]);
+                if ($newDealer) parasut()->syncDealer($newDealer);
+            } catch (\Throwable $e) {}
             auditLog('application_approved', 'b2b_applications', $aid, ['dealer_id'=>$did]);
             $success = "Başvuru onaylandı. Bayi hesabı oluşturuldu. Geçici şifre: <strong>$pass</strong> (bayiye e-posta gönderin)";
         }
