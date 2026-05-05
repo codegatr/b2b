@@ -58,7 +58,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($img) $data['image'] = $img;
                 }
                 if ($id) {
-                    dbUpdateRow('b2b_products', $data, 'id', $id);
+                    $beforeRow = dbRow("SELECT base_price, vat_rate, name FROM b2b_products WHERE id=?", [$id]);
+                    $affected = dbUpdateRow('b2b_products', $data, 'id', $id);
+                    $afterRow = dbRow("SELECT base_price, vat_rate, name FROM b2b_products WHERE id=?", [$id]);
                     // Stok değişimi log
                     $old = dbRow("SELECT stock FROM b2b_products WHERE id=?", [$id]);
                     if ($old && $old['stock'] != $data['stock']) {
@@ -67,7 +69,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             [$id, $diff>0?'giris':'cikis', $old['stock'], abs($diff), $data['stock'], 'Admin düzenlemesi', adminId()]); } catch (\Throwable $e) {}
                     }
                     auditLog('product_updated', 'b2b_products', $id, ['name'=>$data['name']]);
-                    $success = 'Ürün güncellendi.';
+                    // GEÇİCİ DEBUG: tam ne kaydedildi göster
+                    $success = "Ürün güncellendi. " .
+                        "[DEBUG] Mod={$priceMode}, Raw={$rawPrice}, Net={$netPrice}, KDV={$vatRate}% — " .
+                        "Önce: base_price=" . ($beforeRow['base_price'] ?? 'null') . ", vat=" . ($beforeRow['vat_rate'] ?? 'null') .
+                        " → Sonra: base_price=" . ($afterRow['base_price'] ?? 'null') . ", vat=" . ($afterRow['vat_rate'] ?? 'null') .
+                        " (etkilenen satır: $affected)";
                 } else {
                     $data['slug'] = preg_replace('/[^a-z0-9]+/','-',strtolower($data['name'])).'-'.time();
                     $data['created_at'] = date('Y-m-d H:i:s');
