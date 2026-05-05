@@ -25,19 +25,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             : $rawPrice;
 
         $data = [
-            'category_id'       => intval($_POST['category_id']) ?: null,
-            'name'              => trim($_POST['name']),
-            'sku'               => trim($_POST['sku']),
-            'description'       => trim($_POST['description']),
+            'category_id'       => intval($_POST['category_id'] ?? 0) ?: null,
+            'name'              => trim($_POST['name'] ?? ''),
+            'sku'               => trim($_POST['sku'] ?? ''),
+            'description'       => trim($_POST['description'] ?? ''),
             'short_description' => substr(trim($_POST['short_description'] ?? ''), 0, 100),
             'base_price'        => $netPrice,
-            'unit'              => trim($_POST['unit']) ?: 'adet',
-            'min_order_qty'     => intval($_POST['min_order_qty']) ?: 1,
-            'max_order_qty'     => intval($_POST['max_order_qty']) ?: null,
-            'stock'             => intval($_POST['stock']),
-            'stock_critical'    => intval($_POST['stock_critical']),
+            'unit'              => trim($_POST['unit'] ?? '') ?: 'adet',
+            'min_order_qty'     => intval($_POST['min_order_qty'] ?? 1) ?: 1,
+            'max_order_qty'     => intval($_POST['max_order_qty'] ?? 0) ?: null,
+            'stock'             => intval($_POST['stock'] ?? 0),
+            'stock_critical'    => intval($_POST['stock_critical'] ?? 5),
             'vat_rate'          => $vatRate,
-            'parasut_product_id'=> trim($_POST['parasut_product_id']),
+            'parasut_product_id'=> trim($_POST['parasut_product_id'] ?? ''),
             'is_active'         => isset($_POST['is_active']) ? 1 : 0,
         ];
 
@@ -466,6 +466,10 @@ $stockLog = dbRows("SELECT sl.*, COALESCE(a.name, 'Sistem') AS created_by_name F
         <div class="form-group">
             <label>Minimum Sipariş Miktarı</label>
             <input type="number" name="min_order_qty" value="<?= $product['min_order_qty']??1 ?>" class="form-control" min="1">
+        </div>
+        <div class="form-group">
+            <label>Maksimum Sipariş Miktarı</label>
+            <input type="number" name="max_order_qty" value="<?= $product['max_order_qty']??'' ?>" class="form-control" min="0" placeholder="Sınırsız için boş bırak">
         </div>
         <div class="form-group">
             <label>Paraşüt Ürün ID</label>
