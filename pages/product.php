@@ -63,17 +63,30 @@ $related = dbRows("SELECT p.* FROM b2b_products p WHERE p.category_id=? AND p.id
             </div>
 
             <!-- Fiyat -->
+            <?php
+            $bayiPriceMode = setting('price_input_includes_vat', '0') === '1' ? 'gross' : 'net';
+            $vat           = (float)$product['vat_rate'];
+            $vatMul        = 1 + ($vat / 100);
+            $displayPrice  = $bayiPriceMode === 'gross' ? $price * $vatMul : $price;
+            $displayBase   = $bayiPriceMode === 'gross' ? $basePrice * $vatMul : $basePrice;
+            $vatLabel      = $bayiPriceMode === 'gross' ? 'KDV Dahil' : 'KDV Hariç';
+            ?>
             <div style="margin-bottom:1.5rem">
                 <div style="font-size:2rem;font-weight:800;color:var(--primary)">
-                    <?= fmtPrice($price) ?> ₺
+                    <?= fmtPrice($displayPrice) ?> ₺
                 </div>
                 <?php if ($discount > 0): ?>
                 <div style="display:flex;align-items:center;gap:.5rem;margin-top:.25rem">
-                    <span style="font-size:1rem;color:var(--text-muted);text-decoration:line-through"><?= fmtPrice($basePrice) ?> ₺</span>
+                    <span style="font-size:1rem;color:var(--text-muted);text-decoration:line-through"><?= fmtPrice($displayBase) ?> ₺</span>
                     <span class="badge badge-success">%<?= $discount ?> İndirim</span>
                 </div>
                 <?php endif; ?>
-                <div style="font-size:.8rem;color:var(--text-muted);margin-top:.25rem">KDV Hariç</div>
+                <div style="font-size:.8rem;color:var(--text-muted);margin-top:.25rem">
+                    <?= $vatLabel ?> · KDV %<?= (int)$vat ?>
+                    <?php if ($bayiPriceMode === 'gross'): ?>
+                    <span style="margin-left:8px;opacity:.7">(Net: <?= fmtPrice($price) ?> ₺ + KDV: <?= fmtPrice($price * $vat / 100) ?> ₺)</span>
+                    <?php endif; ?>
+                </div>
             </div>
 
             <!-- Stok -->

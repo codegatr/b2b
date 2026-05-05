@@ -141,10 +141,19 @@ $plId = (int)($dealer['price_list_id'] ?? 0);
 </tr>
 </thead>
 <tbody>
+<?php
+// Sistem ayarı: KDV dahil ana fiyat mı, KDV hariç mi?
+$bayiPriceMode = setting('price_input_includes_vat', '0') === '1' ? 'gross' : 'net';
+?>
 <?php foreach ($products as $p):
     $dp       = dealerPrice($p['id'], $plId);
-    $price    = $dp['price'];         // indirimli fiyat
-    $base     = (float)$p['base_price']; // liste fiyatı
+    $price    = $dp['price'];         // indirimli net fiyat
+    $base     = (float)$p['base_price']; // liste net fiyatı
+    $vat      = (float)$p['vat_rate'];
+    $vatMul   = 1 + ($vat / 100);
+    // Sistem 'gross' ise bayinin gördüğü ana fiyat KDV dahil olsun
+    $basePrice  = $bayiPriceMode === 'gross' ? $base * $vatMul  : $base;
+    $finalPrice = $bayiPriceMode === 'gross' ? $price * $vatMul : $price;
     $hasDisc  = $dp['discount'] > 0;
     $inCart   = $cartMap[$p['id']] ?? 0;
     $inStock  = $p['stock'] > 0;
@@ -193,15 +202,16 @@ $plId = (int)($dealer['price_list_id'] ?? 0);
   <!-- Liste Fiyatı -->
   <td style="text-align:right;font-size:13px">
     <span style="<?= $hasDisc?'text-decoration:line-through;color:var(--text-muted)':'' ?>">
-      <?= money($base) ?>
+      <?= money($basePrice) ?>
     </span>
   </td>
 
   <!-- İndirimli Fiyat -->
   <td style="text-align:right">
     <span style="font-weight:700;font-size:14px;color:<?= $hasDisc?'var(--success)':'var(--text)' ?>">
-      <?= money($price) ?>
+      <?= money($finalPrice) ?>
     </span>
+    <div style="font-size:10px;color:var(--text-muted);margin-top:1px"><?= $bayiPriceMode === 'gross' ? 'KDV Dahil' : 'KDV Hariç' ?></div>
     <?php if ($hasDisc): ?>
     <div style="font-size:10px;color:var(--success)">%<?= number_format($dp['discount'],0) ?> indirim</div>
     <?php endif; ?>
@@ -291,6 +301,10 @@ $plId = (int)($dealer['price_list_id'] ?? 0);
     $dp       = dealerPrice($p['id'], $plId);
     $price    = $dp['price'];
     $base     = (float)$p['base_price'];
+    $vat      = (float)$p['vat_rate'];
+    $vatMul   = 1 + ($vat / 100);
+    $basePrice  = $bayiPriceMode === 'gross' ? $base * $vatMul  : $base;
+    $finalPrice = $bayiPriceMode === 'gross' ? $price * $vatMul : $price;
     $hasDisc  = $dp['discount'] > 0;
     $inCart   = $cartMap[$p['id']] ?? 0;
     $inStock  = $p['stock'] > 0;
@@ -335,16 +349,16 @@ $plId = (int)($dealer['price_list_id'] ?? 0);
   <div style="display:flex;align-items:flex-end;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:12px">
     <div>
       <?php if ($hasDisc): ?>
-        <div style="font-size:11px;color:var(--text-muted);text-decoration:line-through"><?= money($base) ?></div>
+        <div style="font-size:11px;color:var(--text-muted);text-decoration:line-through"><?= money($basePrice) ?></div>
         <div style="font-size:18px;font-weight:800;color:var(--success);line-height:1">
-          <?= money($price) ?>
+          <?= money($finalPrice) ?>
           <span style="font-size:10px;background:var(--success);color:#fff;padding:1px 6px;border-radius:4px;font-weight:700;margin-left:4px;vertical-align:middle">%<?= number_format($dp['discount'],0) ?></span>
         </div>
       <?php else: ?>
-        <div style="font-size:18px;font-weight:800;color:var(--text);line-height:1"><?= money($price) ?></div>
+        <div style="font-size:18px;font-weight:800;color:var(--text);line-height:1"><?= money($finalPrice) ?></div>
       <?php endif; ?>
       <div style="font-size:10px;color:var(--text-muted);margin-top:3px">
-        KDV %<?= (int)$p['vat_rate'] ?> · <?= h($p['unit'] ?? 'Adet') ?>
+        <?= $bayiPriceMode === 'gross' ? 'KDV Dahil' : 'KDV Hariç' ?> · <?= h($p['unit'] ?? 'Adet') ?>
       </div>
     </div>
   </div>
