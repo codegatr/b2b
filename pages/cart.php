@@ -290,7 +290,7 @@ $grand = $subtotal + $vatTotal;
   </div>
   <div class="table-wrap">
     <table class="table">
-      <thead><tr><th>Ürün</th><th>Birim Fiyat</th><th>Miktar</th><th>Toplam</th><th></th></tr></thead>
+      <thead><tr><th>Ürün</th><th>Birim Fiyat<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">(KDV Hariç)</span></th><th>Miktar</th><th>Toplam<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">(KDV Dahil)</span></th><th></th></tr></thead>
       <tbody>
       <?php foreach ($items as $it): ?>
       <tr id="row-<?= $it['product_id'] ?>">
@@ -300,7 +300,10 @@ $grand = $subtotal + $vatTotal;
           <?php if (!$it['is_active']): ?><span class="badge badge-danger">Pasif</span><?php endif; ?>
           <?php if ($it['qty'] > $it['stock']): ?><span class="badge badge-danger">Stok yetersiz</span><?php endif; ?>
         </td>
-        <td><?= money($it['price']) ?><div style="font-size:11px;color:var(--text-muted)">+%<?= $it['vat_rate'] ?> KDV</div></td>
+        <td>
+          <?= money($it['price']) ?>
+          <div style="font-size:11px;color:var(--text-muted)">KDV hariç · +%<?= $it['vat_rate'] ?></div>
+        </td>
         <td>
           <div class="qty-spinner">
             <button type="button" class="qty-btn" onclick="changeQty(<?= $it['product_id'] ?>,-1)">−</button>
@@ -311,7 +314,16 @@ $grand = $subtotal + $vatTotal;
             <button type="button" class="qty-btn" onclick="changeQty(<?= $it['product_id'] ?>,1)">+</button>
           </div>
         </td>
-        <td class="fw-600"><?= money($it['line_total']) ?></td>
+        <td class="fw-600">
+          <?= money($it['line_total']) ?>
+          <?php
+          $rowNet  = $it['price'] * $it['qty'];
+          $rowVat  = $rowNet * ($it['vat_rate']/100);
+          ?>
+          <div style="font-size:10px;color:var(--text-muted);font-weight:400;margin-top:2px">
+            <?= money($rowNet) ?> + <?= money($rowVat) ?> KDV
+          </div>
+        </td>
         <td>
           <button type="button" onclick="removeItem(<?= $it['product_id'] ?>)"
                   title="Bu ürünü sepetten kaldır"

@@ -12,19 +12,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $act = $_POST['form_action'] ?? '';
 
     if ($act === 'save') {
+        // Fiyat girişi: form'dan gelen fiyat KDV dahil mi yoksa hariç mi?
+        // Sistem ayarı 'price_input_includes_vat' bu seçimi belirler.
+        // DB'ye HER ZAMAN net (KDV hariç) yazılır — Paraşüt ve raporlama uyumlu.
+        $vatRate = floatval($_POST['vat_rate'] ?? $_POST['tax_rate'] ?? 20);
+        $rawPrice = floatval($_POST['base_price']);
+        // Form içinden de override edilebilir: 'price_mode' = 'gross' | 'net'
+        $priceMode = $_POST['price_mode'] ?? setting('price_input_includes_vat', '0');
+        $priceMode = ($priceMode === 'gross' || $priceMode === '1') ? 'gross' : 'net';
+        $netPrice = $priceMode === 'gross'
+            ? round($rawPrice / (1 + $vatRate / 100), 4)  // KDV dahilse net'e çevir
+            : $rawPrice;
+
         $data = [
             'category_id'       => intval($_POST['category_id']) ?: null,
             'name'              => trim($_POST['name']),
             'sku'               => trim($_POST['sku']),
             'description'       => trim($_POST['description']),
             'short_description' => substr(trim($_POST['short_description'] ?? ''), 0, 100),
-            'base_price'        => floatval($_POST['base_price']),
+            'base_price'        => $netPrice,
             'unit'              => trim($_POST['unit']) ?: 'adet',
             'min_order_qty'     => intval($_POST['min_order_qty']) ?: 1,
             'max_order_qty'     => intval($_POST['max_order_qty']) ?: null,
             'stock'             => intval($_POST['stock']),
             'stock_critical'    => intval($_POST['stock_critical']),
-            'vat_rate'          => floatval($_POST['vat_rate'] ?? $_POST['tax_rate'] ?? 18),
+            'vat_rate'          => $vatRate,
             'parasut_product_id'=> trim($_POST['parasut_product_id']),
             'is_active'         => isset($_POST['is_active']) ? 1 : 0,
         ];
@@ -223,7 +235,21 @@ if ($action === 'list') {
         </td>
         <td class="mono text-sm"><?= h($p['sku']) ?></td>
         <td><?= h($p['cat_name'] ?? '—') ?></td>
-        <td><?= money($p['base_price']) ?></td>
+        <td>
+            <?php
+            $listMode = setting('price_input_includes_vat','0') === '1' ? 'gross' : 'net';
+            $listVat  = (float)$p['vat_rate'];
+            $netP     = (float)$p['base_price'];
+            $grossP   = $netP * (1 + $listVat/100);
+            ?>
+            <?php if ($listMode === 'gross'): ?>
+                <strong><?= money($grossP) ?></strong>
+                <div style="font-size:10px;color:var(--text-muted)">KDV dahil (Net: <?= money($netP) ?>)</div>
+            <?php else: ?>
+                <strong><?= money($netP) ?></strong>
+                <div style="font-size:10px;color:var(--text-muted)">+ %<?= (int)$listVat ?> KDV → <?= money($grossP) ?></div>
+            <?php endif; ?>
+        </td>
         <td><?= stockBadge($p['stock'], $p['stock_critical']) ?> <?= $p['stock'] ?> <?= h($p['unit']) ?></td>
         <td><?= $p['min_order_qty'] ?> <?= h($p['unit']) ?></td>
         <td>
@@ -264,7 +290,22 @@ $stockLog = dbRows("SELECT sl.*, COALESCE(a.name, 'Sistem') AS created_by_name F
 <?php if (!empty($error)):   ?><div class="alert alert-danger"><?= h($error) ?></div><?php endif; ?>
 
 <div class="grid grid-cols-4 gap-4 mb-6">
-    <div class="stat-card"><div class="stat-label">Taban Fiyat</div><div class="stat-value"><?= money($product['base_price']) ?></div></div>
+    <?php
+    $detailMode = setting('price_input_includes_vat','0') === '1' ? 'gross' : 'net';
+    $dNet   = (float)$product['base_price'];
+    $dVat   = (float)$product['vat_rate'];
+    $dGross = $dNet * (1 + $dVat/100);
+    ?>
+    <div class="stat-card">
+        <div class="stat-label">Taban Fiyat</div>
+        <?php if ($detailMode === 'gross'): ?>
+        <div class="stat-value"><?= money($dGross) ?></div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">KDV Dahil · Net: <?= money($dNet) ?></div>
+        <?php else: ?>
+        <div class="stat-value"><?= money($dNet) ?></div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">KDV Hariç · Brüt: <?= money($dGross) ?></div>
+        <?php endif; ?>
+    </div>
     <div class="stat-card"><div class="stat-label">Stok</div><div class="stat-value"><?= stockBadge($product['stock'],$product['stock_critical']) ?> <?= $product['stock'] ?></div></div>
     <div class="stat-card"><div class="stat-label">Kritik Stok</div><div class="stat-value"><?= $product['stock_critical'] ?></div></div>
     <div class="stat-card"><div class="stat-label">Min. Sipariş</div><div class="stat-value"><?= $product['min_order_qty'] ?> <?= h($product['unit']) ?></div></div>
@@ -362,15 +403,55 @@ $stockLog = dbRows("SELECT sl.*, COALESCE(a.name, 'Sistem') AS created_by_name F
                 <?php endforeach; ?>
             </select>
         </div>
-        <div class="form-group">
+        <?php
+        // Form aç: Sistem ayarına göre default mod (yeni üründe)
+        // Varolan ürün düzenlenirken: DB'deki net fiyatı oraya göre çevirip göster
+        $sysPriceMode = setting('price_input_includes_vat', '0') === '1' ? 'gross' : 'net';
+        $editingMode = $sysPriceMode; // Düzenlerken sistem ayarı kullanılır
+        $netStored = (float)($product['base_price'] ?? 0);
+        $vatStored = (float)($product['vat_rate'] ?? 20);
+        $displayPrice = $editingMode === 'gross'
+            ? round($netStored * (1 + $vatStored / 100), 2)
+            : $netStored;
+        ?>
+        <div class="form-group" style="grid-column: span 2">
             <label>Taban Fiyat (₺) *</label>
-            <input type="number" step="0.01" name="base_price" value="<?= $product['base_price']??0 ?>" class="form-control" required>
+            <div style="display:flex;gap:8px;align-items:stretch">
+                <input type="number" step="0.01" name="base_price" id="prod_price"
+                       value="<?= $displayPrice ?>" class="form-control"
+                       style="flex:1;font-weight:700;font-size:15px" required
+                       oninput="recalcPriceBreakdown()">
+                <select name="price_mode" id="price_mode" class="form-control"
+                        style="flex:0 0 auto;width:auto;min-width:140px;font-weight:600"
+                        onchange="onPriceModeChange()">
+                    <option value="net"   <?= $editingMode==='net'?'selected':'' ?>>KDV Hariç</option>
+                    <option value="gross" <?= $editingMode==='gross'?'selected':'' ?>>KDV Dahil</option>
+                </select>
+            </div>
+            <!-- Canlı önizleme — bayinin göreceği detay -->
+            <div id="price_breakdown" style="margin-top:10px;padding:10px 12px;background:linear-gradient(135deg,#f8fafc,#f1f5f9);border:1px solid var(--border);border-radius:8px;font-size:12px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="color:var(--text-2)">KDV Hariç (Net):</span>
+                    <strong id="pb_net" style="color:var(--text);font-family:ui-monospace,monospace">—</strong>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="color:var(--text-2)">KDV (<span id="pb_vat_rate">20</span>%):</span>
+                    <strong id="pb_vat" style="color:#d97706;font-family:ui-monospace,monospace">—</strong>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding-top:6px;border-top:1px dashed var(--border)">
+                    <span style="color:var(--text);font-weight:600">KDV Dahil (Brüt):</span>
+                    <strong id="pb_gross" style="color:var(--success,#16a34a);font-family:ui-monospace,monospace;font-size:14px">—</strong>
+                </div>
+                <div style="margin-top:6px;font-size:10px;color:var(--text-muted);font-style:italic">
+                    💡 Bayi tarafında "KDV dahil" fiyat görünür. DB'ye her zaman <strong>net</strong> kayıt edilir (Paraşüt uyumlu).
+                </div>
+            </div>
         </div>
         <div class="form-group">
             <label>KDV Oranı (%)</label>
-            <select name="vat_rate" class="form-control">
+            <select name="vat_rate" id="prod_vat_rate" class="form-control" onchange="recalcPriceBreakdown()">
                 <?php foreach ([0,1,8,10,18,20] as $t): ?>
-                <option value="<?= $t ?>" <?= ((int)($product['vat_rate']??18))===$t?'selected':'' ?>>%<?= $t ?></option>
+                <option value="<?= $t ?>" <?= ((int)($product['vat_rate']??20))===$t?'selected':'' ?>>%<?= $t ?></option>
                 <?php endforeach; ?>
             </select>
         </div>
@@ -417,6 +498,60 @@ $stockLog = dbRows("SELECT sl.*, COALESCE(a.name, 'Sistem') AS created_by_name F
         <a href="?page=products<?= $id?"&action=detail&id=$id":'' ?>" class="btn btn-ghost">İptal</a>
     </div>
 </form>
+
+<script>
+// ── Fiyat KDV Hesaplama (Canlı Önizleme) ───────────────────────
+function fmtTL(v) {
+    return new Intl.NumberFormat('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2}).format(v) + ' ₺';
+}
+function recalcPriceBreakdown() {
+    const priceInp = document.getElementById('prod_price');
+    const vatSel   = document.getElementById('prod_vat_rate');
+    const modeSel  = document.getElementById('price_mode');
+    if (!priceInp || !vatSel || !modeSel) return;
+    const raw  = parseFloat(priceInp.value) || 0;
+    const vat  = parseFloat(vatSel.value) || 0;
+    const mode = modeSel.value;
+    let net, vatAmt, gross;
+    if (mode === 'gross') {
+        // Form değeri KDV dahil (brüt) — netten ayır
+        gross  = raw;
+        net    = vat > 0 ? raw / (1 + vat/100) : raw;
+        vatAmt = gross - net;
+    } else {
+        // Form değeri KDV hariç (net)
+        net    = raw;
+        vatAmt = net * (vat/100);
+        gross  = net + vatAmt;
+    }
+    document.getElementById('pb_net').textContent      = fmtTL(net);
+    document.getElementById('pb_vat').textContent      = fmtTL(vatAmt);
+    document.getElementById('pb_gross').textContent    = fmtTL(gross);
+    document.getElementById('pb_vat_rate').textContent = vat;
+}
+function onPriceModeChange() {
+    // Mod değiştirildiğinde girilen değeri DOĞRU şekilde dönüştür
+    // (kullanıcı zaten "100" yazmışsa, KDV hariç → KDV dahil geçince "120" olmalı)
+    const priceInp = document.getElementById('prod_price');
+    const vatSel   = document.getElementById('prod_vat_rate');
+    const modeSel  = document.getElementById('price_mode');
+    const cur      = parseFloat(priceInp.value) || 0;
+    const vat      = parseFloat(vatSel.value) || 0;
+    const newMode  = modeSel.value;
+    // Önceki mod tersi olduğu için ona göre çevir
+    if (newMode === 'gross' && cur > 0) {
+        // Önceden net, şimdi gross
+        priceInp.value = (cur * (1 + vat/100)).toFixed(2);
+    } else if (newMode === 'net' && cur > 0) {
+        // Önceden gross, şimdi net
+        priceInp.value = vat > 0 ? (cur / (1 + vat/100)).toFixed(2) : cur.toFixed(2);
+    }
+    recalcPriceBreakdown();
+}
+// İlk yüklemede çalıştır
+document.addEventListener('DOMContentLoaded', recalcPriceBreakdown);
+recalcPriceBreakdown();
+</script>
 </div>
 </div>
 <?php endif; ?>

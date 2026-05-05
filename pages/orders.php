@@ -289,9 +289,9 @@ $curIdx = array_search($order['status'] ?? '', $steps);
           <tr>
             <th>Ürün</th>
             <th style="text-align:center">Adet</th>
-            <th style="text-align:right">Birim Fiyat</th>
+            <th style="text-align:right">Birim Fiyat<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">(KDV Hariç)</span></th>
             <th style="text-align:right">KDV</th>
-            <th style="text-align:right">Toplam</th>
+            <th style="text-align:right">Toplam<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">(KDV Dahil)</span></th>
           </tr>
         </thead>
         <tbody>

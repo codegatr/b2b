@@ -19,6 +19,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             foreach (['site_name','site_url','order_prefix','currency','timezone','admin_email'] as $f) {
                 settingSave($f, trim($_POST[$f] ?? ''));
             }
+            // Fiyat giriş modu: '1' = KDV dahil giriş, '0' = KDV hariç giriş
+            settingSave('price_input_includes_vat', isset($_POST['price_input_includes_vat']) ? '1' : '0');
             settingClearCache();
             $success = 'Genel ayarlar kaydedildi.';
         }
@@ -312,6 +314,24 @@ foreach ($tabs as $k => $v):
         <div class="form-group"><label class="form-label">Admin E-postası</label>
             <input type="email" name="admin_email" value="<?= htmlspecialchars(setting('admin_email')) ?>" class="form-control"></div>
     </div>
+
+    <!-- Fiyat giriş modu — tüm ürünlere etki eder -->
+    <div style="background:linear-gradient(135deg,#fef3c7,#fffbeb);border:1px solid #fcd34d;border-radius:8px;padding:14px 16px;margin-top:16px">
+        <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;margin:0">
+            <input type="checkbox" name="price_input_includes_vat" value="1"
+                   <?= setting('price_input_includes_vat','0')==='1'?'checked':'' ?>
+                   style="margin-top:3px;width:18px;height:18px;cursor:pointer">
+            <div style="flex:1">
+                <div style="font-weight:700;color:#92400e;margin-bottom:3px">💰 Ürün fiyatlarını KDV dahil olarak gir</div>
+                <div style="font-size:12px;color:#78350f;line-height:1.5">
+                    İşaretli: Ürün ekle/düzenle ekranında girdiğin fiyat <strong>KDV dahil (brüt)</strong> kabul edilir, sistem otomatik olarak net (KDV hariç) hesaplayıp DB'ye kaydeder.<br>
+                    İşaretsiz: Girdiğin fiyat <strong>KDV hariç (net)</strong> olur, KDV ayrıca eklenir.<br>
+                    <span style="opacity:.75"><strong>Önemli:</strong> Bu sadece giriş tarafını etkiler. DB ve Paraşüt'te fiyatlar her zaman net saklanır. Mevcut ürünlerde bir değişiklik olmaz.</span>
+                </div>
+            </div>
+        </label>
+    </div>
+
     <div class="form-actions"><button type="submit" class="btn btn-primary">Kaydet</button></div>
 </form>
 
