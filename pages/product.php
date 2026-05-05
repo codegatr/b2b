@@ -62,14 +62,12 @@ $related = dbRows("SELECT p.* FROM b2b_products p WHERE p.category_id=? AND p.id
                 SKU: <strong><?= htmlspecialchars($product['sku']) ?></strong>
             </div>
 
-            <!-- Fiyat -->
+            <!-- Fiyat — her zaman KDV Dahil -->
             <?php
-            $bayiPriceMode = setting('price_input_includes_vat', '0') === '1' ? 'gross' : 'net';
             $vat           = (float)$product['vat_rate'];
             $vatMul        = 1 + ($vat / 100);
-            $displayPrice  = $bayiPriceMode === 'gross' ? $price * $vatMul : $price;
-            $displayBase   = $bayiPriceMode === 'gross' ? $basePrice * $vatMul : $basePrice;
-            $vatLabel      = $bayiPriceMode === 'gross' ? 'KDV Dahil' : 'KDV Hariç';
+            $displayPrice  = $price * $vatMul;
+            $displayBase   = $basePrice * $vatMul;
             ?>
             <div style="margin-bottom:1.5rem">
                 <div style="font-size:2rem;font-weight:800;color:var(--primary)">
@@ -82,10 +80,8 @@ $related = dbRows("SELECT p.* FROM b2b_products p WHERE p.category_id=? AND p.id
                 </div>
                 <?php endif; ?>
                 <div style="font-size:.8rem;color:var(--text-muted);margin-top:.25rem">
-                    <?= $vatLabel ?> · KDV %<?= (int)$vat ?>
-                    <?php if ($bayiPriceMode === 'gross'): ?>
+                    KDV Dahil · KDV %<?= (int)$vat ?>
                     <span style="margin-left:8px;opacity:.7">(Net: <?= fmtPrice($price) ?> ₺ + KDV: <?= fmtPrice($price * $vat / 100) ?> ₺)</span>
-                    <?php endif; ?>
                 </div>
             </div>
 
@@ -143,7 +139,7 @@ $related = dbRows("SELECT p.* FROM b2b_products p WHERE p.category_id=? AND p.id
     <div class="product-grid">
         <?php foreach ($related as $r):
             $rdp = dealerPrice($r['id'], (int)($dealer['price_list_id'] ?? 0));
-                $rPrice = $rdp['price'];
+            $rPrice = $rdp['price'] * (1 + ((float)$r['vat_rate']) / 100);
         ?>
         <a href="?page=product&id=<?= $r['id'] ?>" class="product-card" style="text-decoration:none;color:inherit">
             <div class="product-img">

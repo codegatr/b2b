@@ -17,11 +17,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // DB'ye HER ZAMAN net (KDV hariç) yazılır — Paraşüt ve raporlama uyumlu.
         $vatRate = floatval($_POST['vat_rate'] ?? $_POST['tax_rate'] ?? 20);
         $rawPrice = floatval($_POST['base_price'] ?? 0);
-        // Form içinden de override edilebilir: 'price_mode' = 'gross' | 'net'
-        $priceMode = $_POST['price_mode'] ?? setting('price_input_includes_vat', '0');
+        // Form içindeki seçimi kullan, yoksa default 'gross' (sistem geneli KDV Dahil kuralı)
+        $priceMode = $_POST['price_mode'] ?? 'gross';
         $priceMode = ($priceMode === 'gross' || $priceMode === '1') ? 'gross' : 'net';
         // base_price kolonu DECIMAL(12,2) — 2 ondalığa yuvarlamak ZORUNLU
-        // (4 ondalık verirsek MariaDB strict mode'da fail eder)
         $netPrice = $priceMode === 'gross'
             ? round($rawPrice / (1 + $vatRate / 100), 2)
             : round($rawPrice, 2);
@@ -244,18 +243,12 @@ if ($action === 'list') {
         <td><?= h($p['cat_name'] ?? '—') ?></td>
         <td>
             <?php
-            $listMode = setting('price_input_includes_vat','0') === '1' ? 'gross' : 'net';
             $listVat  = (float)$p['vat_rate'];
             $netP     = (float)$p['base_price'];
             $grossP   = $netP * (1 + $listVat/100);
             ?>
-            <?php if ($listMode === 'gross'): ?>
-                <strong><?= money($grossP) ?></strong>
-                <div style="font-size:10px;color:var(--text-muted)">KDV dahil (Net: <?= money($netP) ?>)</div>
-            <?php else: ?>
-                <strong><?= money($netP) ?></strong>
-                <div style="font-size:10px;color:var(--text-muted)">+ %<?= (int)$listVat ?> KDV → <?= money($grossP) ?></div>
-            <?php endif; ?>
+            <strong><?= money($grossP) ?></strong>
+            <div style="font-size:10px;color:var(--text-muted)">KDV Dahil · Net: <?= money($netP) ?></div>
         </td>
         <td><?= stockBadge($p['stock'], $p['stock_critical']) ?> <?= $p['stock'] ?> <?= h($p['unit']) ?></td>
         <td><?= $p['min_order_qty'] ?> <?= h($p['unit']) ?></td>
@@ -298,20 +291,14 @@ $stockLog = dbRows("SELECT sl.*, COALESCE(a.name, 'Sistem') AS created_by_name F
 
 <div class="grid grid-cols-4 gap-4 mb-6">
     <?php
-    $detailMode = setting('price_input_includes_vat','0') === '1' ? 'gross' : 'net';
     $dNet   = (float)$product['base_price'];
     $dVat   = (float)$product['vat_rate'];
     $dGross = $dNet * (1 + $dVat/100);
     ?>
     <div class="stat-card">
         <div class="stat-label">Taban Fiyat</div>
-        <?php if ($detailMode === 'gross'): ?>
         <div class="stat-value"><?= money($dGross) ?></div>
         <div style="font-size:11px;color:var(--text-muted);margin-top:2px">KDV Dahil · Net: <?= money($dNet) ?></div>
-        <?php else: ?>
-        <div class="stat-value"><?= money($dNet) ?></div>
-        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">KDV Hariç · Brüt: <?= money($dGross) ?></div>
-        <?php endif; ?>
     </div>
     <div class="stat-card"><div class="stat-label">Stok</div><div class="stat-value"><?= stockBadge($product['stock'],$product['stock_critical']) ?> <?= $product['stock'] ?></div></div>
     <div class="stat-card"><div class="stat-label">Kritik Stok</div><div class="stat-value"><?= $product['stock_critical'] ?></div></div>
@@ -412,12 +399,10 @@ $stockLog = dbRows("SELECT sl.*, COALESCE(a.name, 'Sistem') AS created_by_name F
             </select>
         </div>
         <?php
-        // Form aç: Sistem ayarına göre default mod (yeni üründe)
-        // Varolan ürün düzenlenirken: DB'deki net fiyatı oraya göre çevirip göster.
-        // Kullanıcı son submit'te bir mod seçtiyse o korunur (sayfa yenilense bile).
-        $sysPriceMode = setting('price_input_includes_vat', '0') === '1' ? 'gross' : 'net';
-        $editingMode = $_POST['price_mode'] ?? $sysPriceMode;
-        if (!in_array($editingMode, ['gross','net'], true)) $editingMode = 'net';
+        // Form aç: HER ZAMAN 'KDV Dahil' modunda açılsın (sistem geneli kuralı).
+        // Kullanıcı son submit'te değiştirdiyse o korunur.
+        $editingMode = $_POST['price_mode'] ?? 'gross';
+        if (!in_array($editingMode, ['gross','net'], true)) $editingMode = 'gross';
         $netStored = (float)($product['base_price'] ?? 0);
         $vatStored = (float)($product['vat_rate'] ?? 20);
         $displayPrice = $editingMode === 'gross'

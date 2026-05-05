@@ -290,8 +290,7 @@ $grand = $subtotal + $vatTotal;
   </div>
   <div class="table-wrap">
     <table class="table">
-      <?php $bayiPriceMode = setting('price_input_includes_vat', '0') === '1' ? 'gross' : 'net'; ?>
-      <thead><tr><th>Ürün</th><th>Birim Fiyat<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">(<?= $bayiPriceMode === 'gross' ? 'KDV Dahil' : 'KDV Hariç' ?>)</span></th><th>Miktar</th><th>Toplam<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">(KDV Dahil)</span></th><th></th></tr></thead>
+      <thead><tr><th>Ürün</th><th>Birim Fiyat<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">(KDV Dahil)</span></th><th>Miktar</th><th>Toplam<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">(KDV Dahil)</span></th><th></th></tr></thead>
       <tbody>
       <?php foreach ($items as $it): ?>
       <tr id="row-<?= $it['product_id'] ?>">
@@ -302,13 +301,9 @@ $grand = $subtotal + $vatTotal;
           <?php if ($it['qty'] > $it['stock']): ?><span class="badge badge-danger">Stok yetersiz</span><?php endif; ?>
         </td>
         <td>
-          <?php
-          $unitDisplay = $bayiPriceMode === 'gross'
-              ? $it['price'] * (1 + $it['vat_rate']/100)
-              : $it['price'];
-          ?>
+          <?php $unitDisplay = $it['price'] * (1 + $it['vat_rate']/100); ?>
           <?= money($unitDisplay) ?>
-          <div style="font-size:11px;color:var(--text-muted)"><?= $bayiPriceMode === 'gross' ? 'KDV dahil' : 'KDV hariç · +%'.$it['vat_rate'] ?></div>
+          <div style="font-size:11px;color:var(--text-muted)">KDV dahil · %<?= $it['vat_rate'] ?> KDV</div>
         </td>
         <td>
           <div class="qty-spinner">

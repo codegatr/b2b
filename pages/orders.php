@@ -289,7 +289,7 @@ $curIdx = array_search($order['status'] ?? '', $steps);
           <tr>
             <th>Ürün</th>
             <th style="text-align:center">Adet</th>
-            <th style="text-align:right">Birim Fiyat<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">(KDV Hariç)</span></th>
+            <th style="text-align:right">Birim Fiyat<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">(KDV Dahil)</span></th>
             <th style="text-align:right">KDV</th>
             <th style="text-align:right">Toplam<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">(KDV Dahil)</span></th>
           </tr>
@@ -300,6 +300,7 @@ $curIdx = array_search($order['status'] ?? '', $steps);
             $qty       = (int)($it['qty'] ?? $it['quantity'] ?? 0);
             $unitPrice = (float)($it['unit_price'] ?? 0);
             $vatRate   = (float)($it['vat_rate'] ?? $it['tax_rate'] ?? 0);
+            $unitGross = $unitPrice * (1 + $vatRate/100);
             $lineNet   = $unitPrice * $qty;
             $lineTax   = $lineNet * ($vatRate / 100);
             $lineTotal = $lineNet + $lineTax;
@@ -315,7 +316,7 @@ $curIdx = array_search($order['status'] ?? '', $steps);
           <td style="text-align:center">
             <span style="font-weight:600"><?= $qty ?></span>
           </td>
-          <td style="text-align:right;font-size:13px"><?= money($unitPrice) ?></td>
+          <td style="text-align:right;font-size:13px"><?= money($unitGross) ?></td>
           <td style="text-align:right;font-size:12px;color:var(--text-muted)">%<?= (int)$vatRate ?></td>
           <td style="text-align:right;font-weight:700"><?= money($lineTotal) ?></td>
         </tr>

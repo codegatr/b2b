@@ -316,20 +316,14 @@ foreach ($tabs as $k => $v):
     </div>
 
     <!-- Fiyat giriş modu — tüm ürünlere etki eder -->
-    <div style="background:linear-gradient(135deg,#fef3c7,#fffbeb);border:1px solid #fcd34d;border-radius:8px;padding:14px 16px;margin-top:16px">
-        <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;margin:0">
-            <input type="checkbox" name="price_input_includes_vat" value="1"
-                   <?= setting('price_input_includes_vat','0')==='1'?'checked':'' ?>
-                   style="margin-top:3px;width:18px;height:18px;cursor:pointer">
-            <div style="flex:1">
-                <div style="font-weight:700;color:#92400e;margin-bottom:3px">💰 Ürün fiyatlarını KDV dahil olarak gir</div>
-                <div style="font-size:12px;color:#78350f;line-height:1.5">
-                    İşaretli: Ürün ekle/düzenle ekranında girdiğin fiyat <strong>KDV dahil (brüt)</strong> kabul edilir, sistem otomatik olarak net (KDV hariç) hesaplayıp DB'ye kaydeder.<br>
-                    İşaretsiz: Girdiğin fiyat <strong>KDV hariç (net)</strong> olur, KDV ayrıca eklenir.<br>
-                    <span style="opacity:.75"><strong>Önemli:</strong> Bu sadece giriş tarafını etkiler. DB ve Paraşüt'te fiyatlar her zaman net saklanır. Mevcut ürünlerde bir değişiklik olmaz.</span>
-                </div>
-            </div>
-        </label>
+    <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1px solid #86efac;border-radius:8px;padding:14px 16px;margin-top:16px">
+        <div style="font-weight:700;color:#166534;margin-bottom:6px">✓ KDV Dahil Görünüm Aktif</div>
+        <div style="font-size:12px;color:#14532d;line-height:1.5">
+            Tüm panellerde (admin + bayi) ürün fiyatları her zaman <strong>KDV Dahil</strong> görünür.
+            DB'ye fiyat <strong>net (KDV hariç)</strong> kaydedilir (Paraşüt uyumlu).
+            Ürün ekleme/düzenleme formunda da fiyat girişi default <strong>"KDV Dahil"</strong> modunda açılır,
+            kullanıcı isterse KDV Hariç moduna geçebilir.
+        </div>
     </div>
 
     <div class="form-actions"><button type="submit" class="btn btn-primary">Kaydet</button></div>

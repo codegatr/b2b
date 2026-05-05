@@ -602,12 +602,13 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
     <div class="card-header"><h3 class="card-title">Sipariş Kalemleri</h3></div>
     <div class="table-wrap">
     <table class="table">
-      <thead><tr><th>Ürün</th><th style="text-align:center">Adet</th><th style="text-align:right">Birim</th><th style="text-align:right">KDV%</th><th style="text-align:right">Toplam</th></tr></thead>
+      <thead><tr><th>Ürün</th><th style="text-align:center">Adet</th><th style="text-align:right">Birim<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">(KDV Dahil)</span></th><th style="text-align:right">KDV%</th><th style="text-align:right">Toplam<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">(KDV Dahil)</span></th></tr></thead>
       <tbody>
       <?php $sub=0; $vat=0; foreach ($orderItems as $it):
         $qty    = (int)($it['qty'] ?? $it['quantity'] ?? 0);
         $unit   = (float)($it['unit_price'] ?? 0);
         $vatr   = (float)($it['vat_rate'] ?? $it['tax_rate'] ?? 0);
+        $unitGross = $unit * (1 + $vatr/100);
         $lineNet= $unit * $qty;
         $lineTax= $lineNet * ($vatr/100);
         $sub += $lineNet; $vat += $lineTax;
@@ -615,7 +616,7 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
       <tr>
         <td><div class="fw-600" style="font-size:13px"><?= h($it['product_name']) ?></div><?php if ($it['product_sku']??''): ?><div style="font-size:11px;color:var(--text-muted)"><?= h($it['product_sku']) ?></div><?php endif; ?></td>
         <td style="text-align:center;font-weight:600"><?= $qty ?></td>
-        <td style="text-align:right;font-size:13px"><?= money($unit) ?></td>
+        <td style="text-align:right;font-size:13px"><?= money($unitGross) ?></td>
         <td style="text-align:right;font-size:12px;color:var(--text-muted)">%<?= (int)$vatr ?></td>
         <td style="text-align:right;font-weight:700"><?= money($lineNet+$lineTax) ?></td>
       </tr>
