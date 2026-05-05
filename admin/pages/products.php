@@ -40,11 +40,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'vat_rate'          => $vatRate,
             'parasut_product_id'=> trim($_POST['parasut_product_id'] ?? ''),
             'is_active'         => isset($_POST['is_active']) ? 1 : 0,
+            'is_featured'       => isset($_POST['is_featured']) ? 1 : 0,
         ];
 
         if (empty($data['name'])) { $error = 'Ürün adı zorunludur.'; }
         else {
             try {
+                // Defansif: is_featured kolonu eski DB'de yoksa data array'inden çıkar
+                try {
+                    dbVal("SELECT is_featured FROM b2b_products LIMIT 1");
+                } catch (\Throwable $e) {
+                    unset($data['is_featured']);
+                }
                 // Resim yükleme
                 if (!empty($_FILES['image']['name'])) {
                     $uploadDir = B2B_ROOT . '/uploads/products';
@@ -238,6 +245,7 @@ if ($action === 'list') {
         <td>
             <?php if ($p['image']): ?><img src="/uploads/products/<?= h($p['image']) ?>" style="width:32px;height:32px;object-fit:cover;border-radius:4px;margin-right:8px;vertical-align:middle"><?php endif; ?>
             <a href="?page=products&action=detail&id=<?= $p['id'] ?>"><?= h($p['name']) ?></a>
+            <?php if (!empty($p['is_featured'])): ?><span title="Kampanyalı ürün — bayi dashboard slider'ında görünür" style="display:inline-block;margin-left:6px;font-size:10px;background:#fef2f2;color:#c1272d;padding:1px 6px;border-radius:99px;font-weight:700;border:1px solid #fecaca">🔥 KAMPANYA</span><?php endif; ?>
         </td>
         <td class="mono text-sm"><?= h($p['sku']) ?></td>
         <td><?= h($p['cat_name'] ?? '—') ?></td>
@@ -489,6 +497,16 @@ $stockLog = dbRows("SELECT sl.*, COALESCE(a.name, 'Sistem') AS created_by_name F
         <label class="checkbox-label">
             <input type="checkbox" name="is_active" value="1" <?= ($product['is_active']??1)?'checked':'' ?>>
             Ürün aktif (bayilere görünür)
+        </label>
+    </div>
+
+    <div class="form-group" style="background:linear-gradient(135deg,#fff5f5,#fef2f2);border:1px solid #fecaca;border-radius:8px;padding:10px 14px">
+        <label class="checkbox-label" style="margin:0;display:flex;align-items:center;gap:10px;cursor:pointer">
+            <input type="checkbox" name="is_featured" value="1" <?= !empty($product['is_featured'])?'checked':'' ?> style="width:18px;height:18px;cursor:pointer">
+            <div>
+                <div style="font-weight:700;color:#991b1b">🔥 Kampanyalı Ürün</div>
+                <div style="font-size:11px;color:#7f1d1d;margin-top:2px">İşaretliyse bayi dashboard'undaki "Kampanyalı Ürünler" slider'ında gösterilir.</div>
+            </div>
         </label>
     </div>
 
