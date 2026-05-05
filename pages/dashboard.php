@@ -120,29 +120,29 @@ if (empty($announcements)) {
         $finalGross = $final * $vatM;
         $inStock = $p['stock'] > 0;
       ?>
-      <a href="?page=product&id=<?= $p['id'] ?>" class="camp-card" style="flex:0 0 auto;width:calc((100% - 36px) / 4);min-width:180px;background:linear-gradient(135deg,#fff5f5,#fff);border:1px solid #fecaca;border-radius:10px;padding:12px;position:relative;text-decoration:none;color:inherit;transition:.2s;cursor:pointer;display:block">
+      <a href="?page=product&id=<?= $p['id'] ?>" class="camp-card" style="flex:0 0 200px;width:200px;background:linear-gradient(135deg,#fff5f5,#fff);border:1px solid #fecaca;border-radius:10px;padding:10px;position:relative;text-decoration:none;color:inherit;transition:.2s;cursor:pointer;display:block">
         <?php if ($hasDisc): ?>
-        <div style="position:absolute;top:8px;right:8px;background:#c1272d;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.3px;z-index:2">%<?= number_format($p['discount'],0) ?></div>
+        <div style="position:absolute;top:6px;right:6px;background:#c1272d;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;letter-spacing:.3px;z-index:2">%<?= number_format($p['discount'],0) ?></div>
         <?php else: ?>
-        <div style="position:absolute;top:8px;right:8px;background:#16a34a;color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.3px;z-index:2">FIRSAT</div>
+        <div style="position:absolute;top:6px;right:6px;background:#16a34a;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;letter-spacing:.3px;z-index:2">FIRSAT</div>
         <?php endif; ?>
 
-        <div style="width:100%;aspect-ratio:16/10;background:#fee2e2;border-radius:6px;margin-bottom:8px;overflow:hidden;display:flex;align-items:center;justify-content:center">
+        <div style="width:100%;aspect-ratio:1/1;background:#fee2e2;border-radius:6px;margin-bottom:8px;overflow:hidden;display:flex;align-items:center;justify-content:center">
           <?php if (!empty($p['image'])): ?>
             <img src="/uploads/products/<?= h($p['image']) ?>" alt="" style="width:100%;height:100%;object-fit:cover">
           <?php else: ?>
-            <span style="font-size:28px;opacity:.5">📦</span>
+            <span style="font-size:24px;opacity:.5">📦</span>
           <?php endif; ?>
         </div>
 
-        <div style="font-size:12px;font-weight:600;line-height:1.3;margin-bottom:6px;min-height:32px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">
+        <div style="font-size:12px;font-weight:600;line-height:1.3;margin-bottom:4px;min-height:30px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">
           <?= h($p['name']) ?>
         </div>
 
         <?php if ($hasDisc): ?>
-        <div style="font-size:10px;color:#999;text-decoration:line-through;line-height:1"><?= money($baseGross) ?></div>
+        <div style="font-size:9px;color:#999;text-decoration:line-through;line-height:1"><?= money($baseGross) ?></div>
         <?php endif; ?>
-        <div style="font-size:14px;font-weight:800;color:#c1272d;line-height:1.2;margin-top:2px"><?= money($finalGross) ?></div>
+        <div style="font-size:13px;font-weight:800;color:#c1272d;line-height:1.2;margin-top:1px"><?= money($finalGross) ?></div>
         <div style="font-size:9px;color:var(--text-muted);margin-top:1px">KDV Dahil · <?= h($p['unit'] ?? 'adet') ?></div>
 
         <?php if (!$inStock): ?>
@@ -162,9 +162,6 @@ if (empty($announcements)) {
   #camp-prev:disabled, #camp-next:disabled { opacity: .35; cursor: not-allowed; }
   .camp-dot { width: 6px; height: 6px; border-radius: 50%; background: #ddd; border: none; cursor: pointer; padding: 0; transition: .2s; }
   .camp-dot.active { width: 18px; border-radius: 3px; background: #c1272d; }
-  @media (max-width: 1024px) { .camp-card { width: calc((100% - 24px) / 3) !important; } }
-  @media (max-width: 768px)  { .camp-card { width: calc((100% - 12px) / 2) !important; } }
-  @media (max-width: 480px)  { .camp-card { width: 100% !important; min-width: 100% !important; } }
 </style>
 
 <script>
@@ -182,11 +179,12 @@ if (empty($announcements)) {
   var autoTimer = null;
 
   function perPage() {
-    var w = window.innerWidth;
-    if (w <= 480) return 1;
-    if (w <= 768) return 2;
-    if (w <= 1024) return 3;
-    return 4;
+    if (!cards[0]) return 1;
+    var viewW = view.getBoundingClientRect().width;
+    var cardW = 200; // .camp-card sabit genişliği
+    var gap   = 12;
+    var n = Math.floor((viewW + gap) / (cardW + gap));
+    return Math.max(1, Math.min(n, total));
   }
 
   function pages() { return Math.max(1, Math.ceil(total / perPage())); }
