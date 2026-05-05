@@ -159,7 +159,10 @@ function renderCopy(array $order, array $items, string $copyType, array $cfg) {
 <meta charset="UTF-8">
 <title>İrsaliye <?= htmlspecialchars($order['order_no']) ?></title>
 <style>
-  @page { size: A4 portrait; margin: 6mm; }
+  /* @page margin'i 0 — kenar boşluklarını .page içinde yönetiyoruz.
+     Bu sayede tarayıcı kendi varsayılan margin'ini eklemiyor ve
+     iki nüsha üst üste binmiyor. */
+  @page { size: A4 portrait; margin: 0; }
 
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; color: #111; background: #f5f5f5; }
@@ -169,8 +172,9 @@ function renderCopy(array $order, array $items, string $copyType, array $cfg) {
   .page {
     width: 210mm; height: 297mm; max-width: 100%;
     margin: 0 auto; background: #fff;
-    padding: 6mm; display: flex; flex-direction: column; gap: 0;
+    padding: 8mm; display: flex; flex-direction: column; gap: 0;
     box-shadow: 0 0 8px rgba(0,0,0,.08);
+    overflow: hidden;
   }
 
   /* Tek nüsha — flex:1, ikisi sayfayı paylaşır */
@@ -256,8 +260,16 @@ function renderCopy(array $order, array $items, string $copyType, array $cfg) {
   .print-controls button:hover { opacity: .9; }
 
   @media print {
-    body { background: #fff; padding: 0; }
-    .page { box-shadow: none; padding: 0; height: auto; }
+    html, body { background: #fff !important; padding: 0 !important; margin: 0 !important; }
+    .page {
+      box-shadow: none !important;
+      width: 210mm !important;
+      height: 297mm !important;
+      padding: 8mm !important;
+      margin: 0 !important;
+      page-break-after: avoid;
+      page-break-inside: avoid;
+    }
     .print-controls { display: none !important; }
   }
 </style>
