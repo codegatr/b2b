@@ -384,6 +384,7 @@ $stockLog = dbRows("SELECT sl.*, COALESCE(a.name, 'Sistem') AS created_by_name F
     <a href="?page=products<?= $id?"&action=detail&id=$id":'' ?>" class="btn btn-ghost">← Geri</a>
 </div>
 <?php if (!empty($error)): ?><div class="alert alert-danger"><?= h($error) ?></div><?php endif; ?>
+<?php if (!empty($success)): ?><div class="alert alert-success" style="font-size:13px;line-height:1.5"><?= h($success) ?></div><?php endif; ?>
 
 <div class="card">
 <div class="card-body">
