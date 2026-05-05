@@ -417,10 +417,10 @@ $stockLog = dbRows("SELECT sl.*, COALESCE(a.name, 'Sistem') AS created_by_name F
                        style="flex:1;font-weight:700;font-size:15px" required
                        oninput="recalcPriceBreakdown()">
                 <select name="price_mode" id="price_mode" class="form-control"
-                        style="flex:0 0 auto;width:auto;min-width:140px;font-weight:600"
+                        style="flex:0 0 auto;width:auto;min-width:140px;font-weight:700;<?= $editingMode==='gross' ? 'background:#dcfce7;color:#166534;border-color:#86efac' : '' ?>"
                         onchange="onPriceModeChange()">
-                    <option value="net"   <?= $editingMode==='net'?'selected':'' ?>>KDV Hariç</option>
                     <option value="gross" <?= $editingMode==='gross'?'selected':'' ?>>KDV Dahil</option>
+                    <option value="net"   <?= $editingMode==='net'?'selected':'' ?>>KDV Hariç</option>
                 </select>
             </div>
             <!-- Canlı önizleme — bayinin göreceği detay -->
