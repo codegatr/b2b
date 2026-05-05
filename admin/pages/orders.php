@@ -6,9 +6,57 @@ $action   = $_GET['action'] ?? 'list';
 $id       = intval($_GET['id'] ?? 0);
 $dealerId = intval($_GET['dealer_id'] ?? 0);
 
+// ── PRINT/İRSALİYE ENDPOINT (layout'suz, doğrudan HTML çıktı) ──
+// admin/index.php'deki export intercept üzerinden gelir (?print=irsaliye)
+if (!empty($_GET['print']) && $_GET['print'] === 'irsaliye' && $id) {
+    $order = dbRow(
+        "SELECT o.*, d.company_name, d.first_name, d.last_name, d.phone, d.email,
+                d.address, d.city, d.tax_office, d.tax_number
+         FROM b2b_orders o
+         JOIN b2b_dealers d ON d.id=o.dealer_id
+         WHERE o.id=?", [$id]
+    );
+    if (!$order) { http_response_code(404); exit('Sipariş bulunamadı'); }
+    $items = dbRows("SELECT * FROM b2b_order_items WHERE order_id=? ORDER BY id", [$id]);
+    require __DIR__ . '/orders/_irsaliye.php';
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrfCheck();
     $act = $_POST['form_action'] ?? '';
+
+    // Teslim miktarlarını güncelle (her kalem için ayrı veya hepsi tek seferde)
+    if ($act === 'update_delivered_qty') {
+        $oid = intval($_POST['order_id'] ?? 0);
+        $qtyMap = $_POST['delivered_qty'] ?? []; // ['item_id' => 'qty', ...]
+        if ($oid && is_array($qtyMap)) {
+            foreach ($qtyMap as $itemId => $qty) {
+                $itemId = (int)$itemId;
+                $qty = $qty === '' ? null : (float)$qty;
+                // Önce kolonun var olduğundan emin ol (defansif)
+                try {
+                    if ($qty === null) {
+                        dbExec("UPDATE b2b_order_items SET delivered_qty=NULL WHERE id=? AND order_id=?", [$itemId, $oid]);
+                    } else {
+                        dbExec("UPDATE b2b_order_items SET delivered_qty=? WHERE id=? AND order_id=?", [$qty, $itemId, $oid]);
+                    }
+                } catch (\Throwable $e) {
+                    // delivered_qty kolonu yoksa migration koşmamış — kullanıcıya söyle
+                    $error = 'Teslim miktarı kolonu eksik. Lütfen güncellemeyi (migration_014) çalıştırın.';
+                    break;
+                }
+            }
+            if (empty($error)) {
+                auditLog('order_delivered_qty_updated', 'b2b_orders', $oid, ['count' => count($qtyMap)]);
+                $success = 'Teslim miktarları güncellendi.';
+            }
+        }
+        if (!empty($_POST['return_to_list'])) {
+            redirect('?page=orders');
+        }
+        $action = 'detail'; $id = $oid;
+    }
 
     // ── Sipariş Sil ───────────────────────────────────────────
     if ($act === 'delete_order') {
@@ -286,16 +334,33 @@ if ($action === 'detail' && $id) {
 }
 $orderItems = [];
 if ($order) {
-    $orderItems = dbRows(
-        "SELECT oi.id, oi.order_id, oi.product_id, oi.product_name,
-                oi.product_sku AS sku, oi.qty, oi.unit_price,
-                oi.vat_rate, oi.discount_percent, oi.line_total,
-                COALESCE(p.unit, 'adet') AS unit
-         FROM b2b_order_items oi
-         LEFT JOIN b2b_products p ON p.id=oi.product_id
-         WHERE oi.order_id=?",
-        [$order['id']]
-    );
+    // delivered_qty kolonu migration_014 ile geldi — eski DB'lerde yoksa fallback
+    try {
+        $orderItems = dbRows(
+            "SELECT oi.id, oi.order_id, oi.product_id, oi.product_name,
+                    oi.product_sku, oi.qty, oi.delivered_qty, oi.unit_price,
+                    oi.vat_rate, oi.discount_percent, oi.line_total,
+                    COALESCE(p.unit, 'adet') AS unit
+             FROM b2b_order_items oi
+             LEFT JOIN b2b_products p ON p.id=oi.product_id
+             WHERE oi.order_id=?",
+            [$order['id']]
+        );
+    } catch (\Throwable $e) {
+        // delivered_qty kolonu yok — eski sürüm
+        $orderItems = dbRows(
+            "SELECT oi.id, oi.order_id, oi.product_id, oi.product_name,
+                    oi.product_sku, oi.qty, oi.unit_price,
+                    oi.vat_rate, oi.discount_percent, oi.line_total,
+                    COALESCE(p.unit, 'adet') AS unit
+             FROM b2b_order_items oi
+             LEFT JOIN b2b_products p ON p.id=oi.product_id
+             WHERE oi.order_id=?",
+            [$order['id']]
+        );
+        // Manuel olarak delivered_qty=null ekle
+        foreach ($orderItems as $i => $row) $orderItems[$i]['delivered_qty'] = null;
+    }
 }
 
 // Liste
@@ -525,6 +590,7 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap">
     <a href="?page=orders" class="btn btn-ghost">← Geri</a>
+    <a href="?page=orders&action=detail&id=<?= (int)$order['id'] ?>&print=irsaliye" target="_blank" class="btn btn-secondary" style="background:#1f2937;border-color:#1f2937;color:#fff">🖨 İrsaliye Yazdır</a>
     <?php if ($order['status'] === 'bekliyor'): ?>
     <button class="btn btn-success" onclick="openModal('modal-approve')">✓ Onayla</button>
     <button class="btn btn-danger" onclick="openModal('modal-cancel')">✕ İptal</button>
@@ -599,12 +665,28 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
 
   <!-- Sipariş Kalemleri -->
   <div class="card" style="margin-bottom:16px">
-    <div class="card-header"><h3 class="card-title">Sipariş Kalemleri</h3></div>
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+      <h3 class="card-title" style="margin:0">Sipariş Kalemleri</h3>
+      <span style="font-size:11px;color:var(--text-muted)">Teslim miktarlarını güncelleyebilirsiniz</span>
+    </div>
+    <form method="post" id="delivered-qty-form">
+      <?= csrfField() ?>
+      <input type="hidden" name="form_action" value="update_delivered_qty">
+      <input type="hidden" name="order_id" value="<?= (int)$order['id'] ?>">
     <div class="table-wrap">
     <table class="table">
-      <thead><tr><th>Ürün</th><th style="text-align:center">Adet</th><th style="text-align:right">Birim<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">(KDV Dahil)</span></th><th style="text-align:right">KDV%</th><th style="text-align:right">Toplam<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">(KDV Dahil)</span></th></tr></thead>
+      <thead>
+        <tr>
+          <th>Ürün</th>
+          <th style="text-align:center;width:80px">Sipariş<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">Miktarı</span></th>
+          <th style="text-align:center;width:120px">Teslim<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">Miktarı</span></th>
+          <th style="text-align:right">Birim<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">(KDV Dahil)</span></th>
+          <th style="text-align:right">KDV%</th>
+          <th style="text-align:right">Toplam<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">(KDV Dahil)</span></th>
+        </tr>
+      </thead>
       <tbody>
-      <?php $sub=0; $vat=0; foreach ($orderItems as $it):
+      <?php $sub=0; $vat=0; $hasShortDelivery=false; foreach ($orderItems as $it):
         $qty    = (int)($it['qty'] ?? $it['quantity'] ?? 0);
         $unit   = (float)($it['unit_price'] ?? 0);
         $vatr   = (float)($it['vat_rate'] ?? $it['tax_rate'] ?? 0);
@@ -612,10 +694,23 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
         $lineNet= $unit * $qty;
         $lineTax= $lineNet * ($vatr/100);
         $sub += $lineNet; $vat += $lineTax;
+        $deliveredQty = $it['delivered_qty'] ?? null;
+        $isShort = $deliveredQty !== null && (float)$deliveredQty < $qty;
+        if ($isShort) $hasShortDelivery = true;
       ?>
-      <tr>
+      <tr<?= $isShort ? ' style="background:rgba(245,158,11,.05)"' : '' ?>>
         <td><div class="fw-600" style="font-size:13px"><?= h($it['product_name']) ?></div><?php if ($it['product_sku']??''): ?><div style="font-size:11px;color:var(--text-muted)"><?= h($it['product_sku']) ?></div><?php endif; ?></td>
-        <td style="text-align:center;font-weight:600"><?= $qty ?></td>
+        <td style="text-align:center;font-weight:600;font-size:14px"><?= $qty ?></td>
+        <td style="text-align:center">
+          <input type="number" name="delivered_qty[<?= (int)$it['id'] ?>]"
+                 value="<?= $deliveredQty !== null ? h($deliveredQty) : '' ?>"
+                 step="0.01" min="0" max="<?= $qty ?>"
+                 placeholder="<?= $qty ?>"
+                 style="width:80px;padding:5px 8px;border:1px solid <?= $isShort ? '#f59e0b' : 'var(--border-2)' ?>;border-radius:6px;text-align:center;font-size:13px;font-weight:600;<?= $isShort ? 'background:#fffbeb;color:#b45309' : '' ?>">
+          <?php if ($isShort): ?>
+          <div style="font-size:9px;color:#d97706;font-weight:700;margin-top:2px">EKSİK (-<?= ($qty - (float)$deliveredQty) ?>)</div>
+          <?php endif; ?>
+        </td>
         <td style="text-align:right;font-size:13px"><?= money($unitGross) ?></td>
         <td style="text-align:right;font-size:12px;color:var(--text-muted)">%<?= (int)$vatr ?></td>
         <td style="text-align:right;font-weight:700"><?= money($lineNet+$lineTax) ?></td>
@@ -623,12 +718,19 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
       <?php endforeach; ?>
       </tbody>
       <tfoot>
-        <tr style="background:var(--bg)"><td colspan="4" style="text-align:right;padding:8px 16px;font-size:13px;color:var(--text-2)">Ara Toplam</td><td style="text-align:right;padding:8px 16px"><?= money($sub) ?></td></tr>
-        <tr style="background:var(--bg)"><td colspan="4" style="text-align:right;padding:6px 16px;font-size:13px;color:var(--text-2)">KDV</td><td style="text-align:right;padding:6px 16px;font-size:13px"><?= money($vat) ?></td></tr>
-        <tr style="background:var(--bg);border-top:2px solid var(--border)"><td colspan="4" style="text-align:right;font-weight:700;font-size:15px;padding:12px 16px">Genel Toplam</td><td style="text-align:right;font-weight:800;font-size:16px;color:var(--red);padding:12px 16px"><?= money((float)$order['grand_total']) ?></td></tr>
+        <tr style="background:var(--bg)"><td colspan="5" style="text-align:right;padding:8px 16px;font-size:13px;color:var(--text-2)">Ara Toplam</td><td style="text-align:right;padding:8px 16px"><?= money($sub) ?></td></tr>
+        <tr style="background:var(--bg)"><td colspan="5" style="text-align:right;padding:6px 16px;font-size:13px;color:var(--text-2)">KDV</td><td style="text-align:right;padding:6px 16px;font-size:13px"><?= money($vat) ?></td></tr>
+        <tr style="background:var(--bg);border-top:2px solid var(--border)"><td colspan="5" style="text-align:right;font-weight:700;font-size:15px;padding:12px 16px">Genel Toplam</td><td style="text-align:right;font-weight:800;font-size:16px;color:var(--red);padding:12px 16px"><?= money((float)$order['grand_total']) ?></td></tr>
       </tfoot>
     </table>
     </div>
+    <div style="padding:10px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;border-top:1px solid var(--border)">
+      <div style="font-size:11px;color:var(--text-muted)">
+        💡 Teslim miktarı boş bırakılırsa "henüz teslim edilmedi" sayılır. Sipariş miktarına eşit ise tam teslim, küçükse eksik teslim.
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">💾 Teslim Miktarlarını Kaydet</button>
+    </div>
+    </form>
   </div>
 
   <!-- Admin Notu -->
