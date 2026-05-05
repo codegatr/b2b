@@ -16,13 +16,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Sistem ayarı 'price_input_includes_vat' bu seçimi belirler.
         // DB'ye HER ZAMAN net (KDV hariç) yazılır — Paraşüt ve raporlama uyumlu.
         $vatRate = floatval($_POST['vat_rate'] ?? $_POST['tax_rate'] ?? 20);
-        $rawPrice = floatval($_POST['base_price']);
+        $rawPrice = floatval($_POST['base_price'] ?? 0);
         // Form içinden de override edilebilir: 'price_mode' = 'gross' | 'net'
         $priceMode = $_POST['price_mode'] ?? setting('price_input_includes_vat', '0');
         $priceMode = ($priceMode === 'gross' || $priceMode === '1') ? 'gross' : 'net';
+        // base_price kolonu DECIMAL(12,2) — 2 ondalığa yuvarlamak ZORUNLU
+        // (4 ondalık verirsek MariaDB strict mode'da fail eder)
         $netPrice = $priceMode === 'gross'
-            ? round($rawPrice / (1 + $vatRate / 100), 4)  // KDV dahilse net'e çevir
-            : $rawPrice;
+            ? round($rawPrice / (1 + $vatRate / 100), 2)
+            : round($rawPrice, 2);
 
         $data = [
             'category_id'       => intval($_POST['category_id'] ?? 0) ?: null,
@@ -43,36 +45,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (empty($data['name'])) { $error = 'Ürün adı zorunludur.'; }
         else {
-            // Resim yükleme
-            if (!empty($_FILES['image']['name'])) {
-                $uploadDir = B2B_ROOT . '/uploads/products';
-                if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-                $file = $_FILES['image'];
-                $ext  = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-                $mime = ['jpg'=>'image/jpeg','jpeg'=>'image/jpeg','png'=>'image/png','webp'=>'image/webp'];
-                if (isset($mime[$ext])) $file['type'] = $mime[$ext];
-                $img = uploadFile($file, $uploadDir, ['image/jpeg','image/png','image/webp']);
-                if ($img) $data['image'] = $img;
-            }
-            if ($id) {
-                dbUpdateRow('b2b_products', $data, 'id', $id);
-                // Stok değişimi log
-                $old = dbRow("SELECT stock FROM b2b_products WHERE id=?", [$id]);
-                if ($old && $old['stock'] != $data['stock']) {
-                    $diff = $data['stock'] - $old['stock'];
-                    try { dbExec("INSERT INTO b2b_stock_log (product_id, change_type, qty_before, qty_change, qty_after, note, created_by, created_at) VALUES (?,?,?,?,?,?,?,NOW())",
-                        [$id, $diff>0?'giris':'cikis', $old['stock'], abs($diff), $data['stock'], 'Admin düzenlemesi', adminId()]); } catch (Exception $e) {}
+            try {
+                // Resim yükleme
+                if (!empty($_FILES['image']['name'])) {
+                    $uploadDir = B2B_ROOT . '/uploads/products';
+                    if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+                    $file = $_FILES['image'];
+                    $ext  = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+                    $mime = ['jpg'=>'image/jpeg','jpeg'=>'image/jpeg','png'=>'image/png','webp'=>'image/webp'];
+                    if (isset($mime[$ext])) $file['type'] = $mime[$ext];
+                    $img = uploadFile($file, $uploadDir, ['image/jpeg','image/png','image/webp']);
+                    if ($img) $data['image'] = $img;
                 }
-                auditLog('product_updated', 'b2b_products', $id, ['name'=>$data['name']]);
-                $success = 'Ürün güncellendi.';
-            } else {
-                $data['slug'] = preg_replace('/[^a-z0-9]+/','-',strtolower($data['name'])).'-'.time();
-                $data['created_at'] = date('Y-m-d H:i:s');
-                $newId = dbInsertRow('b2b_products', $data);
-                auditLog('product_created', 'b2b_products', $newId, ['name'=>$data['name']]);
-                $success = 'Ürün eklendi.';
-                $action = 'list';
-                $id = 0;
+                if ($id) {
+                    dbUpdateRow('b2b_products', $data, 'id', $id);
+                    // Stok değişimi log
+                    $old = dbRow("SELECT stock FROM b2b_products WHERE id=?", [$id]);
+                    if ($old && $old['stock'] != $data['stock']) {
+                        $diff = $data['stock'] - $old['stock'];
+                        try { dbExec("INSERT INTO b2b_stock_log (product_id, change_type, qty_before, qty_change, qty_after, note, created_by, created_at) VALUES (?,?,?,?,?,?,?,NOW())",
+                            [$id, $diff>0?'giris':'cikis', $old['stock'], abs($diff), $data['stock'], 'Admin düzenlemesi', adminId()]); } catch (\Throwable $e) {}
+                    }
+                    auditLog('product_updated', 'b2b_products', $id, ['name'=>$data['name']]);
+                    $success = 'Ürün güncellendi.';
+                } else {
+                    $data['slug'] = preg_replace('/[^a-z0-9]+/','-',strtolower($data['name'])).'-'.time();
+                    $data['created_at'] = date('Y-m-d H:i:s');
+                    $newId = dbInsertRow('b2b_products', $data);
+                    auditLog('product_created', 'b2b_products', $newId, ['name'=>$data['name']]);
+                    $success = 'Ürün eklendi.';
+                    $action = 'list';
+                    $id = 0;
+                }
+            } catch (\Throwable $e) {
+                error_log('product save error: ' . $e->getMessage());
+                $error = 'Ürün kaydedilemedi: ' . $e->getMessage();
             }
         }
     }
