@@ -11,6 +11,210 @@ $offset   = ($curPage - 1) * $perPage;
 $success = ''; $error = '';
 
 // ── PDF Export ───────────────────────────────────────────────
+// ── BAKİYELER LİSTESİ PDF (tüm bayiler) ──
+if (isset($_GET['export']) && $_GET['export'] === 'balances_pdf') {
+    $rows = dbRows(
+        "SELECT d.id, d.dealer_code, d.company_name,
+            COALESCE(SUM(CASE WHEN l.type='borc'   AND l.is_closed=0 THEN l.amount ELSE 0 END),0) AS toplam_borc,
+            COALESCE(SUM(CASE WHEN l.type='alacak' AND l.is_closed=0 THEN l.amount ELSE 0 END),0) AS toplam_alacak,
+            COALESCE(SUM(CASE WHEN l.is_closed=0 AND l.type='borc' THEN l.amount WHEN l.is_closed=0 AND l.type='alacak' THEN -l.amount ELSE 0 END),0) AS net_bakiye
+         FROM b2b_dealers d
+         LEFT JOIN b2b_ledger l ON l.dealer_id=d.id
+         WHERE d.is_active=1
+         GROUP BY d.id, d.dealer_code, d.company_name
+         HAVING ABS(net_bakiye) > 0.005
+         ORDER BY d.company_name"
+    );
+
+    // Logo + firma bilgileri
+    $siteName  = setting('site_name', 'B2B Bayi Portalı');
+    $logoFile  = setting('login_image', '');
+    $logoUrl   = $logoFile ? rtrim(setting('site_url',''), '/') . '/uploads/logo/' . $logoFile : '';
+    $adminEmail = setting('admin_email', '');
+
+    // Toplam hesapla
+    $totalBorc   = 0; $totalAlacak = 0; $totalBalance = 0;
+    foreach ($rows as $r) {
+        $totalBorc   += (float)$r['toplam_borc'];
+        $totalAlacak += (float)$r['toplam_alacak'];
+        $totalBalance += (float)$r['net_bakiye'];
+    }
+
+    header('Content-Type: text/html; charset=utf-8');
+    ?>
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>Bakiyeler Listesi — <?= date('d.m.Y') ?></title>
+<style>
+  @page { size: A4 portrait; margin: 10mm 8mm; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 9px; margin: 0; padding: 12px; color: #111; background: #f5f5f5; }
+
+  .doc { width: 210mm; max-width: 100%; margin: 0 auto; background: #fff; padding: 8mm; box-shadow: 0 0 8px rgba(0,0,0,.08); }
+
+  /* Header */
+  .doc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6mm; padding-bottom: 4mm; border-bottom: 2px solid #c1272d; }
+  .firm-info img.logo { max-height: 16mm; max-width: 60mm; display: block; margin-bottom: 2mm; }
+  .firm-name { font-size: 14px; font-weight: 700; color: #c1272d; }
+  .firm-detail { font-size: 9px; color: #666; line-height: 1.5; margin-top: 1.5mm; }
+  .doc-info { text-align: right; }
+  .doc-title { font-size: 14px; font-weight: 700; }
+  .doc-date  { font-size: 10px; color: #666; margin-top: 1mm; }
+
+  /* Tablo */
+  table { width: 100%; border-collapse: collapse; margin-top: 4mm; font-size: 9px; }
+  thead th { background: #2c2c2c; color: #fff; padding: 2mm; text-align: center; font-weight: 600; font-size: 8.5px; letter-spacing: .3px; }
+  thead th.left { text-align: left; }
+  thead th.right { text-align: right; }
+  tbody td { padding: 1.4mm 2mm; border-bottom: 0.3px solid #eee; }
+  tbody tr:nth-child(even) { background: #fafafa; }
+  td.code   { font-family: ui-monospace, 'Courier New', monospace; color: #555; font-size: 8.5px; white-space: nowrap; }
+  td.name   { font-size: 9px; }
+  td.amount { text-align: right; font-family: ui-monospace, 'Courier New', monospace; white-space: nowrap; }
+  td.balance { text-align: right; font-weight: 700; font-family: ui-monospace, 'Courier New', monospace; white-space: nowrap; }
+  td.borc   { color: #dc2626; }
+  td.alacak { color: #16a34a; }
+  td.kpb    { text-align: center; font-weight: 700; font-size: 9px; }
+
+  /* Toplam satırı */
+  tfoot td { background: #2c2c2c; color: #fff; padding: 2.5mm; font-weight: 700; }
+  tfoot td.label { font-size: 9.5px; }
+  tfoot td.amount { font-family: ui-monospace, 'Courier New', monospace; font-size: 10px; }
+
+  /* Özet kutu */
+  .summary { margin-top: 6mm; padding: 4mm 5mm; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 3px; }
+  .summary-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4mm; }
+  .summary-cell { text-align: center; }
+  .summary-label { font-size: 8.5px; color: #92400e; letter-spacing: .3px; margin-bottom: 1mm; }
+  .summary-value { font-family: ui-monospace, 'Courier New', monospace; font-size: 12px; font-weight: 700; }
+  .summary-value.borc   { color: #dc2626; }
+  .summary-value.alacak { color: #16a34a; }
+  .summary-value.net    { color: #2c2c2c; font-size: 14px; }
+
+  /* Footer */
+  .footer { margin-top: 6mm; padding-top: 3mm; border-top: 0.5px dashed #ccc; font-size: 8px; color: #888; display: flex; justify-content: space-between; }
+
+  /* Print kontrolleri */
+  .controls { position: fixed; top: 12px; right: 12px; z-index: 9999; display: flex; gap: 8px; }
+  .controls button { background: #c1272d; color: #fff; border: none; padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  .controls button.secondary { background: #fff; color: #333; border: 1px solid #ccc; }
+
+  @media print { body { background: #fff; padding: 0; } .doc { box-shadow: none; padding: 0; } .controls { display: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <button onclick="window.print()">🖨 Yazdır</button>
+  <button class="secondary" onclick="window.close()">Kapat</button>
+</div>
+
+<div class="doc">
+  <div class="doc-header">
+    <div class="firm-info">
+      <?php if ($logoUrl): ?>
+        <img src="<?= htmlspecialchars($logoUrl) ?>" class="logo" alt="">
+      <?php endif; ?>
+      <div class="firm-name"><?= htmlspecialchars(strtoupper($siteName)) ?></div>
+      <?php if ($adminEmail): ?>
+      <div class="firm-detail">E-posta: <?= htmlspecialchars($adminEmail) ?></div>
+      <?php endif; ?>
+    </div>
+    <div class="doc-info">
+      <div class="doc-title">BAKİYELER LİSTESİ</div>
+      <div class="doc-date">Rapor Tarihi: <?= date('d.m.Y H:i') ?></div>
+      <div class="doc-date">Toplam Cari: <?= count($rows) ?></div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:6mm">#</th>
+        <th class="left" style="width:24mm">CARİ KODU</th>
+        <th class="left">TİCARİ ÜNVANI</th>
+        <th class="right" style="width:28mm">TOPLAM BORÇ</th>
+        <th class="right" style="width:28mm">TOPLAM ALACAK</th>
+        <th class="right" style="width:28mm">BAKİYE</th>
+        <th style="width:14mm">B/A/S</th>
+      </tr>
+    </thead>
+    <tbody>
+      <?php $i = 0; foreach ($rows as $r):
+        $net = (float)$r['net_bakiye'];
+        $bas = $net > 0.005 ? 'B' : ($net < -0.005 ? 'A' : 'S');
+        $basLabel = $bas === 'B' ? 'Borç' : ($bas === 'A' ? 'Alacak' : 'Sıfır');
+        $basColor = $bas === 'B' ? '#dc2626' : ($bas === 'A' ? '#16a34a' : '#888');
+        $i++;
+      ?>
+      <tr>
+        <td class="amount"><?= $i ?></td>
+        <td class="code"><?= htmlspecialchars($r['dealer_code'] ?? '—') ?></td>
+        <td class="name"><?= htmlspecialchars($r['company_name']) ?></td>
+        <td class="amount"><?= number_format((float)$r['toplam_borc'], 4, ',', '.') ?></td>
+        <td class="amount"><?= number_format((float)$r['toplam_alacak'], 4, ',', '.') ?></td>
+        <td class="balance" style="color:<?= $basColor ?>"><?= number_format(abs($net), 4, ',', '.') ?></td>
+        <td class="kpb" style="color:<?= $basColor ?>"><?= $basLabel ?></td>
+      </tr>
+      <?php endforeach; ?>
+      <?php if (empty($rows)): ?>
+      <tr><td colspan="7" style="text-align:center;padding:6mm;color:#888;font-style:italic">Aktif bakiyeli cari bulunamadı.</td></tr>
+      <?php endif; ?>
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="3" class="label">CARİ TOPLAMI</td>
+        <td class="amount"><?= number_format($totalBorc, 4, ',', '.') ?></td>
+        <td class="amount"><?= number_format($totalAlacak, 4, ',', '.') ?></td>
+        <td class="amount"><?= number_format(abs($totalBalance), 4, ',', '.') ?></td>
+        <td class="kpb"><?= $totalBalance > 0 ? 'Borç' : ($totalBalance < 0 ? 'Alacak' : 'Sıfır') ?></td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <!-- Özet kutu -->
+  <div class="summary">
+    <div class="summary-grid">
+      <div class="summary-cell">
+        <div class="summary-label">TOPLAM BORÇ</div>
+        <div class="summary-value borc"><?= number_format($totalBorc, 2, ',', '.') ?> ₺</div>
+      </div>
+      <div class="summary-cell">
+        <div class="summary-label">TOPLAM ALACAK</div>
+        <div class="summary-value alacak"><?= number_format($totalAlacak, 2, ',', '.') ?> ₺</div>
+      </div>
+      <div class="summary-cell">
+        <div class="summary-label">NET BAKİYE</div>
+        <div class="summary-value net" style="color:<?= $totalBalance > 0 ? '#dc2626' : ($totalBalance < 0 ? '#16a34a' : '#888') ?>">
+          <?= number_format(abs($totalBalance), 2, ',', '.') ?> ₺
+          <span style="font-size:10px;font-weight:600">(<?= $totalBalance > 0 ? 'Borç' : ($totalBalance < 0 ? 'Alacak' : 'Sıfır') ?>)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <span>Sayfa No: 1</span>
+    <span><?= htmlspecialchars($siteName) ?> — Bakiyeler Listesi · <?= date('d.m.Y H:i:s') ?></span>
+  </div>
+</div>
+
+<script>
+  setTimeout(function() {
+    if (window.matchMedia && window.matchMedia('(min-width: 600px)').matches) {
+      window.print();
+    }
+  }, 400);
+</script>
+
+</body>
+</html>
+    <?php
+    exit;
+}
+
 if (isset($_GET['export']) && $_GET['export'] === 'pdf' && $dealerId) {
     $dlr     = dbRow("SELECT * FROM b2b_dealers WHERE id=?", [$dealerId]);
     $bal     = (float)dbVal("SELECT COALESCE(SUM(CASE WHEN type='borc' THEN amount ELSE -amount END),0) FROM b2b_ledger WHERE dealer_id=? AND is_closed=0", [$dealerId]);
@@ -222,6 +426,10 @@ $genelAlacak = array_sum(array_column($cariList, 'toplam_alacak'));
   <div style="display:flex;gap:8px;flex-wrap:wrap">
     <?php if ($dealerId): ?>
     <a href="?page=ledger" class="btn btn-ghost">← Tümü</a>
+    <?php else: ?>
+    <a href="?page=ledger&export=balances_pdf" target="_blank" class="btn btn-secondary" style="background:#1f2937;border-color:#1f2937;color:#fff">
+      📄 Bakiyeler Raporu
+    </a>
     <?php endif; ?>
     <!-- Tahsilat -->
     <button class="btn btn-primary" onclick="openModal('modal-tahsilat')"
@@ -272,6 +480,8 @@ $genelAlacak = array_sum(array_column($cariList, 'toplam_alacak'));
   <tr style="background:#f4f5f7">
     <th style="width:90px;font-size:11px;letter-spacing:.4px">CARİ KODU</th>
     <th style="font-size:11px;letter-spacing:.4px">TİCARİ ÜNVANI</th>
+    <th style="width:130px;text-align:right;font-size:11px;letter-spacing:.4px">TOPLAM BORÇ</th>
+    <th style="width:130px;text-align:right;font-size:11px;letter-spacing:.4px">TOPLAM ALACAK</th>
     <th style="width:130px;text-align:right;font-size:11px;letter-spacing:.4px">BAKİYE</th>
     <th style="width:60px;text-align:center;font-size:11px;letter-spacing:.4px">B/A/S</th>
     <th style="width:110px;text-align:center;font-size:11px;letter-spacing:.4px">SON VADE</th>
@@ -315,7 +525,9 @@ $genelAlacak = array_sum(array_column($cariList, 'toplam_alacak'));
   <td style="font-weight:500;font-size:13px;padding:9px 12px;cursor:pointer" onclick="location='?page=ledger&dealer_id=<?= $row['id'] ?>'">
     <a href="?page=ledger&dealer_id=<?= $row['id'] ?>" style="color:var(--text);text-decoration:none"><?= h($row['company_name']) ?></a>
   </td>
-  <td style="text-align:right;font-weight:700;font-size:13px;color:<?= $valCol ?>;padding:9px 12px;cursor:pointer" onclick="location='?page=ledger&dealer_id=<?= $row['id'] ?>'"><?= number_format(abs($net),4,',','.') ?></td>
+  <td style="text-align:right;font-size:12px;padding:9px 12px;color:#6b7280;font-family:ui-monospace,monospace;cursor:pointer" onclick="location='?page=ledger&dealer_id=<?= $row['id'] ?>'"><?= number_format((float)$row['toplam_borc'],4,',','.') ?></td>
+  <td style="text-align:right;font-size:12px;padding:9px 12px;color:#6b7280;font-family:ui-monospace,monospace;cursor:pointer" onclick="location='?page=ledger&dealer_id=<?= $row['id'] ?>'"><?= number_format((float)$row['toplam_alacak'],4,',','.') ?></td>
+  <td style="text-align:right;font-weight:700;font-size:13px;color:<?= $valCol ?>;padding:9px 12px;cursor:pointer;font-family:ui-monospace,monospace" onclick="location='?page=ledger&dealer_id=<?= $row['id'] ?>'"><?= number_format(abs($net),4,',','.') ?></td>
   <td style="text-align:center;padding:9px 8px;cursor:pointer" onclick="location='?page=ledger&dealer_id=<?= $row['id'] ?>'">
     <span style="<?= $badgeSt ?>;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700"><?= $bas ?></span>
   </td>
