@@ -150,6 +150,121 @@ function ledgerAdd(int $dealerId, string $type, float $amount, string $desc, str
     );
 }
 
+/**
+ * Sipariş için cari borç kaydını uygular — TESLİM EDİLDİ anında çağrılır.
+ *
+ * Idempotent: Bu sipariş için zaten 'borc' kaydı varsa tekrar eklemez.
+ * Tutar: Sipariş kalemlerindeki delivered_qty'ye göre yeniden hesaplanır
+ *        (eksik teslim varsa borç da o kadar olur). delivered_qty NULL ise
+ *        sipariş edilen miktar (qty) varsayılır (tam teslim sayılır).
+ * Vade: Bayinin payment_term_days kadar sonrası, teslim tarihinden itibaren.
+ *
+ * Returns: ledger insert ID, veya 0 (zaten varsa)
+ */
+function applyOrderLedger(int $orderId, int $createdBy = 0): int {
+    $order = dbRow("SELECT * FROM b2b_orders WHERE id=?", [$orderId]);
+    if (!$order) return 0;
+
+    // Idempotent kontrol: bu sipariş için zaten borç kaydı var mı?
+    $exists = dbVal(
+        "SELECT id FROM b2b_ledger
+         WHERE reference_type='order' AND reference_id=? AND type='borc'
+         LIMIT 1",
+        [$orderId]
+    );
+    if ($exists) return 0;
+
+    // Teslim edilen miktarlardan gerçek borç tutarını hesapla
+    $items = dbRows(
+        "SELECT qty, delivered_qty, unit_price, vat_rate FROM b2b_order_items WHERE order_id=?",
+        [$orderId]
+    );
+    $deliveredAmount = 0.0;
+    foreach ($items as $it) {
+        // delivered_qty NULL ise tam teslim sayılır (geriye uyumlu)
+        $effectiveQty = isset($it['delivered_qty']) && $it['delivered_qty'] !== null
+            ? (float)$it['delivered_qty']
+            : (float)$it['qty'];
+        $unit = (float)$it['unit_price'];
+        $vat  = (float)$it['vat_rate'];
+        $deliveredAmount += $effectiveQty * $unit * (1 + $vat / 100);
+    }
+    $deliveredAmount = round($deliveredAmount, 2);
+    if ($deliveredAmount <= 0) return 0;
+
+    // Vade: teslim tarihinden itibaren bayi vade günü kadar sonra
+    $dealer = dbRow("SELECT payment_term_days FROM b2b_dealers WHERE id=?", [$order['dealer_id']]);
+    $termDays = (int)($dealer['payment_term_days'] ?? 30);
+    $dueDate  = date('Y-m-d', strtotime("+{$termDays} days"));
+
+    // Sipariş edilen ile teslim edilen aynıysa basit açıklama, eksikse not düş
+    $orderTotal = (float)$order['grand_total'];
+    $desc = "Sipariş: {$order['order_no']}";
+    if (abs($deliveredAmount - $orderTotal) > 0.5) {
+        $desc .= " (eksik teslim — sipariş " . number_format($orderTotal, 2, ',', '.')
+              . " ₺, teslim " . number_format($deliveredAmount, 2, ',', '.') . " ₺)";
+    }
+
+    return ledgerAdd(
+        (int)$order['dealer_id'],
+        'borc',
+        $deliveredAmount,
+        $desc,
+        'order',
+        $orderId,
+        $dueDate,
+        $createdBy
+    );
+}
+
+/**
+ * Sipariş için borç kaydını geri alır — teslim_edildi'den geri dönüşte çağrılır.
+ *
+ * Bu sipariş için ödeme alındıysa (payment_status='odendi'/'kismi_odeme'),
+ * geri alma daha karmaşık olabilir — bu durumda admin manuel düzeltsin diye
+ * silmek yerine ters bir 'alacak' satırı ekleriz, böylece tarihsel iz korunur.
+ * Henüz hiç ödenmediyse ledger'dan kaydı doğrudan sileriz.
+ *
+ * Returns: 'deleted' | 'reversed' | 'none'
+ */
+function reverseOrderLedger(int $orderId, int $createdBy = 0): string {
+    $order  = dbRow("SELECT * FROM b2b_orders WHERE id=?", [$orderId]);
+    if (!$order) return 'none';
+
+    $ledger = dbRow(
+        "SELECT * FROM b2b_ledger
+         WHERE reference_type='order' AND reference_id=? AND type='borc'
+         ORDER BY id DESC LIMIT 1",
+        [$orderId]
+    );
+    if (!$ledger) return 'none';
+
+    // Bu siparişe ait ödeme var mı?
+    $paid = (float)dbVal(
+        "SELECT COALESCE(SUM(amount),0) FROM b2b_payments WHERE order_id=?",
+        [$orderId]
+    );
+
+    if ($paid > 0) {
+        // Ödeme alınmış — silmek yerine ters kayıt at (audit trail korunsun)
+        ledgerAdd(
+            (int)$order['dealer_id'],
+            'alacak',
+            (float)$ledger['amount'],
+            "Sipariş geri alma: {$order['order_no']} (teslim statüsü değişti)",
+            'order',
+            $orderId,
+            null,
+            $createdBy
+        );
+        return 'reversed';
+    }
+
+    // Ödeme yoksa direkt sil
+    dbExec("DELETE FROM b2b_ledger WHERE id=?", [$ledger['id']]);
+    return 'deleted';
+}
+
 // ──────────────────────────────────────────────────────────────
 // STOK
 // ──────────────────────────────────────────────────────────────

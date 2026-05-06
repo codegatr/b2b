@@ -201,11 +201,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
             dbExec("UPDATE b2b_products SET stock=stock-? WHERE id=?", [$ci['qty'], $ci['product_id']]);
         }
 
-        // Cari borç — sadece otomatik onaylı siparişlerde
-        if ($status === 'onaylandi') {
-            $dueDate = date('Y-m-d', strtotime('+' . (int)($dealer['payment_term_days'] ?? 30) . ' days'));
-            ledgerAdd($dealer['id'], 'borc', $grand, "Sipariş: $orderNo", 'order', $orderId, $dueDate);
-        }
+        // Cari borç — TESLİM EDİLDİ anında applyOrderLedger() ile eklenir,
+        // burada eklenmez. (Eski mantık: onay anında borçlandırma yapıyordu;
+        // yeni mantık: gerçek teslim olunca borç işler, eksik teslim varsa
+        // borç da o kadar olur.)
 
         // Sepet temizle
         dbExec("DELETE FROM b2b_cart WHERE dealer_id=?", [$dealer['id']]);

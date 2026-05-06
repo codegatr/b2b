@@ -49,6 +49,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             if (empty($error)) {
                 auditLog('order_delivered_qty_updated', 'b2b_orders', $oid, ['count' => count($qtyMap)]);
+
+                // Eğer sipariş zaten 'teslim_edildi' statüsündeyse ve daha önce
+                // ledger borç kaydı oluşturulmuşsa, yeni teslim miktarlarına göre
+                // borç tutarını GÜNCELLE. Aksi halde ledger eski toplamla kalır.
+                $ord = dbRow("SELECT status FROM b2b_orders WHERE id=?", [$oid]);
+                if ($ord && $ord['status'] === 'teslim_edildi') {
+                    $existing = dbRow(
+                        "SELECT id FROM b2b_ledger
+                         WHERE reference_type='order' AND reference_id=? AND type='borc'
+                         ORDER BY id DESC LIMIT 1",
+                        [$oid]
+                    );
+                    if ($existing) {
+                        // Yeniden hesapla: kalemlerden delivered_qty toplamı
+                        $items = dbRows(
+                            "SELECT qty, delivered_qty, unit_price, vat_rate FROM b2b_order_items WHERE order_id=?",
+                            [$oid]
+                        );
+                        $newTotal = 0.0;
+                        foreach ($items as $it) {
+                            $effQty = isset($it['delivered_qty']) && $it['delivered_qty'] !== null
+                                ? (float)$it['delivered_qty']
+                                : (float)$it['qty'];
+                            $newTotal += $effQty * (float)$it['unit_price'] * (1 + ((float)$it['vat_rate'])/100);
+                        }
+                        $newTotal = round($newTotal, 2);
+                        if ($newTotal > 0) {
+                            dbExec("UPDATE b2b_ledger SET amount=? WHERE id=?", [$newTotal, $existing['id']]);
+                            auditLog('order_ledger_recalculated', 'b2b_orders', $oid, ['ledger_id'=>$existing['id'], 'new_amount'=>$newTotal]);
+                        }
+                    }
+                }
+
                 $success = 'Teslim miktarları güncellendi.';
             }
         }
@@ -139,10 +172,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             foreach ($items as $it) {
                 stockUpdate($it['product_id'], -$it['qty'], 'siparis', 'order', $oid);
             }
-            // Cari kayıt
-            $dealer = dbRow("SELECT * FROM b2b_dealers WHERE id=?", [$order['dealer_id']]);
-            $dueDate = date('Y-m-d', strtotime("+{$dealer['payment_term_days']} days"));
-            ledgerAdd($order['dealer_id'], 'borc', (float)$order['grand_total'], "Sipariş: {$order['order_no']}", 'order', $oid, $dueDate);
+            // NOT: Cari borç ARTIK ONAY anında EKLENMEZ. 'Teslim Edildi'
+            // statüsüne geçişte applyOrderLedger() ile eklenir
+            // (eksik teslim olursa o kadar borçlandırma için).
             // Paraşüt fatura
             try { parasut()->syncInvoice($oid); } catch (\Throwable $e) {}
             // Bildirim + e-posta
@@ -191,21 +223,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $oldStatus = $oldOrder['status'] ?? '';
 
             // ÖZEL TRANSITION: bekliyor → onaylandi (ilk onay)
-            // Stok düşür + ledger ekle + parasut faturayı yansıt + mail gönder.
-            // 'approve' action'ının mantığı buraya da yansıtılıyor ki listing'den
-            // inline değiştirmek de aynı sonucu versin.
+            // Stok düşür + paraşüt faturayı yansıt + mail gönder.
+            // NOT: Cari borç ARTIK ONAY anında EKLENMEZ. Aşağıda
+            // teslim_edildi geçişinde applyOrderLedger() çağrılır.
             if ($oldStatus === 'bekliyor' && $status === 'onaylandi') {
                 dbExec("UPDATE b2b_orders SET status='onaylandi', approved_by=?, approved_at=NOW() WHERE id=?", [adminId(), $oid]);
-                // Stok düş — kart akışında zaten cart.php'de düşmüş ama
-                // havale/açık hesap akışında order_created'da düşmemiş.
-                // Çift düşmemesi için payment_method kontrol edilmiyor; cart.php
-                // her zaman stoğu düşürdüğü için burada yine düşürmüyoruz.
-                // (Eski 'approve' action'ı stockUpdate çağırıyordu — bu doğru değildi
-                //  çünkü cart.php zaten düşürüyor. O bug burada DA tekrar etmesin.)
-                $dealer  = dbRow("SELECT * FROM b2b_dealers WHERE id=?", [$oldOrder['dealer_id']]);
-                $dueDate = date('Y-m-d', strtotime("+" . (int)($dealer['payment_term_days'] ?? 0) . " days"));
-                ledgerAdd($oldOrder['dealer_id'], 'borc', (float)$oldOrder['grand_total'],
-                    "Sipariş: {$oldOrder['order_no']}", 'order', $oid, $dueDate);
                 try { parasut()->syncInvoice($oid); } catch (\Throwable $e) {}
                 notifyDealer($oldOrder['dealer_id'], 'order', 'Siparişiniz Onaylandı',
                     "#{$oldOrder['order_no']} numaralı siparişiniz onaylandı.",
@@ -221,12 +243,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     dbExec("UPDATE b2b_orders SET status=? WHERE id=?", [$status, $oid]);
                 }
-                // delivered_at: yalnızca teslim_edildi'ye ilk girişte set, geri dönüşlerde NULL
+
+                // ── Teslim Edildi geçişinde CARİ BORÇLANDIRMA ──
+                // X → teslim_edildi: borç eklenir (idempotent, eksik teslim hesaba katılır)
                 if ($status === 'teslim_edildi' && $oldStatus !== 'teslim_edildi') {
                     dbExec("UPDATE b2b_orders SET delivered_at=NOW() WHERE id=?", [$oid]);
-                } elseif ($oldStatus === 'teslim_edildi' && $status !== 'teslim_edildi') {
-                    dbExec("UPDATE b2b_orders SET delivered_at=NULL WHERE id=?", [$oid]);
+                    $ledgerId = applyOrderLedger($oid, adminId());
+                    if ($ledgerId > 0) {
+                        auditLog('order_delivered_ledger_added', 'b2b_orders', $oid, ['ledger_id' => $ledgerId]);
+                    }
                 }
+                // teslim_edildi → X: borç geri alınır
+                elseif ($oldStatus === 'teslim_edildi' && $status !== 'teslim_edildi') {
+                    dbExec("UPDATE b2b_orders SET delivered_at=NULL WHERE id=?", [$oid]);
+                    $reverseResult = reverseOrderLedger($oid, adminId());
+                    auditLog('order_delivery_reverted', 'b2b_orders', $oid, ['ledger_action' => $reverseResult]);
+                }
+
                 // bekliyor'a geri dönüş: onay zincirini sıfırla
                 if ($status === 'bekliyor' && $oldStatus !== 'bekliyor') {
                     dbExec("UPDATE b2b_orders SET approved_by=NULL, approved_at=NULL WHERE id=?", [$oid]);

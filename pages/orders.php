@@ -338,6 +338,16 @@ $curIdx = array_search($order['status'] ?? '', $steps);
         </tfoot>
       </table>
     </div>
+    <?php if (!in_array($order['status'], ['teslim_edildi','iptal','iade'])): ?>
+    <div style="padding:10px 16px;background:#eff6ff;border-top:1px solid #dbeafe;font-size:12px;color:#1e40af;display:flex;gap:8px;align-items:flex-start">
+      <span style="font-size:14px;flex-shrink:0">ℹ️</span>
+      <div>
+        <strong>Cari hesabınız henüz borçlandırılmadı.</strong>
+        Sipariş tutarı, ürünler size <strong>teslim edildiğinde</strong> cari hesabınıza işlenir.
+        Eksik teslim olması durumunda yalnızca teslim alınan ürünler için ücret alınır.
+      </div>
+    </div>
+    <?php endif; ?>
   </div>
 
   <?php if ($order['notes'] ?? ''): ?>
