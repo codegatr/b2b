@@ -187,10 +187,11 @@ $plId = (int)($dealer['price_list_id'] ?? 0);
   <!-- Kısa Açıklama -->
   <td style="font-size:12px;color:var(--text-2);max-width:160px">
     <?php
-    $desc = $p['short_description'] ?? $p['description'] ?? '';
+    // short_description boşsa description'a fallback.
+    // ?? sadece NULL için çalışır, boş string için '' ?: kullanmak gerekir.
+    $desc = !empty($p['short_description']) ? $p['short_description'] : ($p['description'] ?? '');
     // İlk satır veya max 80 karakter
-    $firstLine = trim(explode("
-", strip_tags($desc))[0]);
+    $firstLine = trim(explode("\n", strip_tags($desc))[0]);
     echo h(mb_strlen($firstLine) > 80 ? mb_substr($firstLine, 0, 78).'…' : $firstLine);
     ?>
   </td>
