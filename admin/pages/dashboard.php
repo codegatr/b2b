@@ -29,6 +29,26 @@ $recentPayments = dbRows(
 ?>
 <div class="page-body">
 
+<!-- Selamlama Header -->
+<?php
+$adminName = trim(($admin['full_name'] ?? '') ?: ($admin['username'] ?? 'Yönetici'));
+$hour = (int)date('H');
+$greeting = $hour < 6 ? 'İyi geceler' : ($hour < 12 ? 'Günaydın' : ($hour < 18 ? 'İyi günler' : 'İyi akşamlar'));
+$trMonths = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+$trDays   = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
+$trDate   = date('j') . ' ' . $trMonths[(int)date('n')-1] . ' ' . date('Y') . ', ' . $trDays[(int)date('w')];
+?>
+<div class="page-header" style="margin-bottom:14px">
+  <div>
+    <h1 class="page-title" style="margin:0">
+      <?= h($greeting) ?>, <?= h($adminName) ?> 👋
+    </h1>
+    <p class="page-sub" style="margin:4px 0 0">
+      <?= h($trDate) ?> · <span style="color:var(--text-muted)">İşletmenizi yönetin</span>
+    </p>
+  </div>
+</div>
+
 <!-- İstatistikler -->
 <div class="stats-grid">
   <div class="stat-card">

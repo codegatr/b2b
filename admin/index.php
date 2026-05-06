@@ -476,6 +476,34 @@ function renderAdminPage(string $page, array $vars = []): void {
   </div>
 </div>
 
+<!-- ════════════════════ MOBİL BOTTOM NAV ════════════════════ -->
+<nav class="mobile-bottom-nav" aria-label="Hızlı menü">
+  <div class="mobile-bottom-nav-inner">
+    <a href="?page=dashboard" class="<?= $page==='dashboard'?'active':'' ?>">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      <span>Anasayfa</span>
+    </a>
+    <a href="?page=orders" class="<?= $page==='orders'?'active':'' ?>">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+      <span>Siparişler</span>
+      <?php if (!empty($pendingOrders)): ?><span class="nav-badge"><?= $pendingOrders ?></span><?php endif; ?>
+    </a>
+    <a href="?page=stock-scan" class="<?= $page==='stock-scan'?'active':'' ?>">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>
+      <span>QR Tara</span>
+    </a>
+    <a href="?page=stock" class="<?= $page==='stock'?'active':'' ?>">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+      <span>Stok</span>
+      <?php if (!empty($lowStock)): ?><span class="nav-badge"><?= $lowStock ?></span><?php endif; ?>
+    </a>
+    <a href="?page=ledger" class="<?= $page==='ledger'?'active':'' ?>">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+      <span>Cari</span>
+    </a>
+  </div>
+</nav>
+
 <script src="<?= B2B_URL ?>/assets/js/main.js?v=<?= assetVersion('assets/js/main.js') ?>"></script>
 </body>
 </html>
