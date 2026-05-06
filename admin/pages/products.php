@@ -29,6 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'category_id'       => intval($_POST['category_id'] ?? 0) ?: null,
             'name'              => trim($_POST['name'] ?? ''),
             'sku'               => trim($_POST['sku'] ?? ''),
+            'barcode'           => trim($_POST['barcode'] ?? '') ?: null,
             'description'       => trim($_POST['description'] ?? ''),
             'short_description' => substr(trim($_POST['short_description'] ?? ''), 0, 100),
             'base_price'        => $netPrice,
@@ -46,11 +47,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($data['name'])) { $error = 'Ürün adı zorunludur.'; }
         else {
             try {
-                // Defansif: is_featured kolonu eski DB'de yoksa data array'inden çıkar
+                // Defansif: is_featured ve barcode kolonu eski DB'de yoksa data array'inden çıkar
                 try {
                     dbVal("SELECT is_featured FROM b2b_products LIMIT 1");
                 } catch (\Throwable $e) {
                     unset($data['is_featured']);
+                }
+                try {
+                    dbVal("SELECT barcode FROM b2b_products LIMIT 1");
+                } catch (\Throwable $e) {
+                    unset($data['barcode']);
                 }
                 // Resim yükleme
                 if (!empty($_FILES['image']['name'])) {
@@ -449,6 +455,34 @@ $stockLog = dbRows("SELECT sl.*, COALESCE(a.name, 'Sistem') AS created_by_name F
             <label>SKU (Stok Kodu)</label>
             <input type="text" name="sku" value="<?= h($product['sku']??'') ?>" class="form-control">
         </div>
+        <div class="form-group">
+            <label>
+                Barkod (QR/EAN)
+                <span style="font-size:11px;color:var(--text-muted);font-weight:400">— tarama için kullanılır</span>
+            </label>
+            <div style="display:flex;gap:6px">
+                <input type="text" name="barcode" id="prod_barcode" value="<?= h($product['barcode']??'') ?>"
+                       class="form-control" style="flex:1;font-family:ui-monospace,monospace"
+                       placeholder="EAN-13, UPC, manuel kod vb.">
+                <button type="button" class="btn btn-ghost btn-sm" onclick="generateBarcode()" title="Otomatik kod üret"
+                        style="white-space:nowrap;font-size:12px">⚙ Otomatik</button>
+            </div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:3px">
+                Boş bırakılırsa SKU veya ID ile tarama yapılır.
+            </div>
+        </div>
+        <script>
+        function generateBarcode() {
+            // Basit kod: BBC + tarih + random 4 hane (toplam ~14 karakter, EAN benzeri uzunluk)
+            const dt = new Date();
+            const yy = String(dt.getFullYear()).slice(-2);
+            const mm = String(dt.getMonth()+1).padStart(2, '0');
+            const dd = String(dt.getDate()).padStart(2, '0');
+            const rnd = String(Math.floor(Math.random()*10000)).padStart(4, '0');
+            const skuFragment = (document.querySelector('input[name="sku"]').value || 'P').replace(/\W+/g,'').slice(0,4).toUpperCase().padEnd(4, '0');
+            document.getElementById('prod_barcode').value = `${skuFragment}${yy}${mm}${dd}${rnd}`;
+        }
+        </script>
         <div class="form-group">
             <label>Kategori</label>
             <select name="category_id" class="form-control">
