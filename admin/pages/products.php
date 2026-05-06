@@ -124,6 +124,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         dbExec("UPDATE b2b_products SET is_active=? WHERE id=?", [$cur?0:1, $pid]);
         redirect('?page=products');
     }
+
+    // ── Ürün Sil ───────────────────────────────────────────────
+    if ($act === 'delete_product') {
+        $pid = intval($_POST['product_id'] ?? 0);
+        if ($pid) {
+            $prod = dbRow("SELECT id, name, image FROM b2b_products WHERE id=?", [$pid]);
+            if (!$prod) {
+                $error = 'Ürün bulunamadı.';
+            } else {
+                // Geçmiş siparişlerde kullanıldıysa silme — pasif yapmaya yönlendir.
+                $usedInOrders = (int)dbVal("SELECT COUNT(*) FROM b2b_order_items WHERE product_id=?", [$pid]);
+                if ($usedInOrders > 0) {
+                    $error = "Bu ürün $usedInOrders sipariş kaleminde kullanıldığı için silinemez. " .
+                             "Sipariş geçmişinin bütünlüğü için kayıt korunur. " .
+                             "Bayilere göstermek istemiyorsanız 'Pasif' yapabilirsiniz.";
+                } else {
+                    try {
+                        // Bağlı veriyi de temizle (geçmiş sipariş yoksa güvenli)
+                        try { dbExec("DELETE FROM b2b_stock_log WHERE product_id=?", [$pid]); } catch (\Throwable $e) {}
+                        try { dbExec("DELETE FROM b2b_price_list_items WHERE product_id=?", [$pid]); } catch (\Throwable $e) {}
+                        try { dbExec("DELETE FROM b2b_cart_items WHERE product_id=?", [$pid]); } catch (\Throwable $e) {}
+                        dbExec("DELETE FROM b2b_products WHERE id=?", [$pid]);
+
+                        // Resim dosyası varsa sil
+                        if (!empty($prod['image'])) {
+                            $imgPath = B2B_ROOT . '/uploads/products/' . $prod['image'];
+                            if (file_exists($imgPath)) @unlink($imgPath);
+                        }
+                        auditLog('product_deleted', 'b2b_products', $pid, ['name' => $prod['name']]);
+                        $_SESSION['flash_success'] = 'Ürün kalıcı olarak silindi: ' . $prod['name'];
+                    } catch (\Throwable $e) {
+                        $error = 'Ürün silinemedi: ' . $e->getMessage();
+                    }
+                }
+            }
+            if (empty($error)) redirect('?page=products');
+            // Hata varsa $action='list' ile aşağıda render edilecek
+            $action = 'list'; $id = 0;
+        }
+    }
 }
 
 $product = null;
@@ -169,6 +209,13 @@ if ($action === 'list') {
 ?>
 
 <?php if ($action === 'list'): ?>
+<?php
+// Session flash mesajını oku (delete sonrası redirect ile gelir)
+if (!empty($_SESSION['flash_success'])) {
+    $success = $_SESSION['flash_success'];
+    unset($_SESSION['flash_success']);
+}
+?>
 <div class="page-header">
     <div>
         <h1 class="page-title">Ürünler</h1>
@@ -180,6 +227,7 @@ if ($action === 'list') {
     </div>
 </div>
 <?php if (!empty($success)): ?><div class="alert alert-success"><?= h($success) ?></div><?php endif; ?>
+<?php if (!empty($error)):   ?><div class="alert alert-danger"><?= h($error) ?></div><?php endif; ?>
 
 <!-- Stok Hızlı Filtreler -->
 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
@@ -271,6 +319,12 @@ if ($action === 'list') {
         <td class="text-right">
             <a href="?page=products&action=detail&id=<?= $p['id'] ?>" class="btn btn-xs btn-ghost">Detay</a>
             <a href="?page=products&action=edit&id=<?= $p['id'] ?>"   class="btn btn-xs btn-secondary">Düzenle</a>
+            <form method="post" style="display:inline" onsubmit="return confirm('&#34;<?= h(addslashes($p['name'])) ?>&#34; ürününü kalıcı olarak silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz. Eğer ürün geçmiş siparişlerde kullanıldıysa silme işlemi reddedilir.');">
+                <?= csrfField() ?>
+                <input type="hidden" name="form_action" value="delete_product">
+                <input type="hidden" name="product_id" value="<?= $p['id'] ?>">
+                <button type="submit" class="btn btn-xs" style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;font-weight:600" title="Sil">🗑</button>
+            </form>
         </td>
     </tr>
     <?php endforeach; ?>
@@ -292,6 +346,12 @@ $stockLog = dbRows("SELECT sl.*, COALESCE(a.name, 'Sistem') AS created_by_name F
     <div class="btn-group">
         <a href="?page=products" class="btn btn-ghost">← Geri</a>
         <a href="?page=products&action=edit&id=<?= $id ?>" class="btn btn-secondary">Düzenle</a>
+        <form method="post" style="display:inline" onsubmit="return confirm('&#34;<?= h(addslashes($product['name'])) ?>&#34; ürününü kalıcı olarak silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz. Eğer ürün geçmiş siparişlerde kullanıldıysa silme işlemi reddedilir.');">
+            <?= csrfField() ?>
+            <input type="hidden" name="form_action" value="delete_product">
+            <input type="hidden" name="product_id" value="<?= $id ?>">
+            <button type="submit" class="btn" style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;font-weight:600">🗑 Sil</button>
+        </form>
     </div>
 </div>
 <?php if (!empty($success)): ?><div class="alert alert-success"><?= h($success) ?></div><?php endif; ?>
