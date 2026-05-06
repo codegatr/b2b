@@ -39,12 +39,13 @@ $trDays   = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumart
 $trDate   = date('j') . ' ' . $trMonths[(int)date('n')-1] . ' ' . date('Y') . ', ' . $trDays[(int)date('w')];
 ?>
 <div class="page-header" style="margin-bottom:14px">
-  <div>
-    <h1 class="page-title" style="margin:0">
+  <div style="min-width:0;flex:1">
+    <h1 class="page-title" style="margin:0;line-height:1.25;word-wrap:break-word">
       <?= h($greeting) ?>, <?= h($adminName) ?> 👋
     </h1>
-    <p class="page-sub" style="margin:4px 0 0">
-      <?= h($trDate) ?> · <span style="color:var(--text-muted)">İşletmenizi yönetin</span>
+    <p class="page-sub" style="margin:4px 0 0;line-height:1.4;word-wrap:break-word">
+      <?= h($trDate) ?>
+      <span class="hide-on-narrow"> · <span style="color:var(--text-muted)">İşletmenizi yönetin</span></span>
     </p>
   </div>
 </div>
@@ -110,7 +111,7 @@ $trDate   = date('j') . ' ' . $trMonths[(int)date('n')-1] . ' ' . date('Y') . ',
     <a href="?page=orders" class="btn btn-secondary btn-sm">Tümünü Gör</a>
   </div>
   <div class="table-wrap">
-    <table>
+    <table class="table table-mobile-cards">
       <thead>
         <tr>
           <th>Sipariş No</th><th>Bayi</th><th>Tutar</th><th>Durum</th><th>Tarih</th><th></th>
@@ -121,12 +122,12 @@ $trDate   = date('j') . ' ' . $trMonths[(int)date('n')-1] . ' ' . date('Y') . ',
           $dn = $o['type']==='kurumsal' ? $o['company_name'] : trim($o['first_name'].' '.$o['last_name']);
         ?>
         <tr>
-          <td class="fw-600"><?= h($o['order_no']) ?></td>
-          <td><?= h($dn) ?></td>
-          <td><?= money((float)$o['grand_total']) ?></td>
-          <td><?= orderStatusLabel($o['status']) ?></td>
-          <td class="text-muted fs-12"><?= fmtDateTime($o['created_at']) ?></td>
-          <td><a href="?page=orders&action=detail&id=<?= $o['id'] ?>" class="btn btn-ghost btn-sm">Detay</a></td>
+          <td class="fw-600" data-label="No"><?= h($o['order_no']) ?></td>
+          <td data-label="Bayi"><?= h($dn) ?></td>
+          <td data-label="Tutar"><?= money((float)$o['grand_total']) ?></td>
+          <td data-label="Durum"><?= orderStatusLabel($o['status']) ?></td>
+          <td class="text-muted fs-12" data-label="Tarih"><?= fmtDateTime($o['created_at']) ?></td>
+          <td><a href="?page=orders&action=detail&id=<?= $o['id'] ?>" class="btn btn-ghost btn-sm" style="display:block;text-align:center">Detay →</a></td>
         </tr>
         <?php endforeach; ?>
         <?php if (empty($recentOrders)): ?>
