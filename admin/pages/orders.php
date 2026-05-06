@@ -10,8 +10,8 @@ $dealerId = intval($_GET['dealer_id'] ?? 0);
 // admin/index.php'deki export intercept üzerinden gelir (?print=irsaliye)
 if (!empty($_GET['print']) && $_GET['print'] === 'irsaliye' && $id) {
     $order = dbRow(
-        "SELECT o.*, d.company_name, d.first_name, d.last_name, d.phone, d.email,
-                d.address, d.city, d.tax_office, d.tax_number
+        "SELECT o.*, d.company_name, d.first_name, d.last_name, d.phone, d.mobile, d.email,
+                d.address, d.city, d.district, d.zip, d.tax_office, d.tax_number
          FROM b2b_orders o
          JOIN b2b_dealers d ON d.id=o.dealer_id
          WHERE o.id=?", [$id]

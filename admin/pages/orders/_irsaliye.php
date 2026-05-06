@@ -7,7 +7,8 @@
  */
 $siteName     = setting('site_name', 'B2B Bayi Portalı');
 $companyTitle = strtoupper($siteName);
-$companySub   = parse_url(setting('site_url', ''), PHP_URL_HOST) ?: 'bayi.lemondedutacos.com';
+// Logo altındaki metin: domain yerine kurumsal isim
+$companySub   = 'Le Monde Du Tacos';
 
 // Logo: settings.php'den yüklenmiş login_image kullanılır
 $logoFile = setting('login_image', '');
@@ -65,13 +66,41 @@ function renderCopy(array $order, array $items, string $copyType, array $cfg) {
         </div>
       </div>
 
-      <?php if (!empty($order['phone']) || !empty($order['city']) || !empty($order['tax_office'])): ?>
+      <?php
+        // Telefon formatı: '05070051993' → '0 507 005 19 93' (sevkiyat için kolay okuma)
+        $rawPhone = preg_replace('/\D+/', '', ($order['mobile'] ?? '') ?: ($order['phone'] ?? ''));
+        $fmtPhone = '';
+        if (strlen($rawPhone) === 11 && $rawPhone[0] === '0') {
+            $fmtPhone = $rawPhone[0] . ' ' . substr($rawPhone,1,3) . ' ' . substr($rawPhone,4,3) . ' ' . substr($rawPhone,7,2) . ' ' . substr($rawPhone,9,2);
+        } elseif (strlen($rawPhone) === 10) {
+            $fmtPhone = '0 ' . substr($rawPhone,0,3) . ' ' . substr($rawPhone,3,3) . ' ' . substr($rawPhone,6,2) . ' ' . substr($rawPhone,8,2);
+        } else {
+            $fmtPhone = $rawPhone;
+        }
+
+        // Vergi bilgisi
+        $vergi = '';
+        if (!empty($order['tax_office']) || !empty($order['tax_number'])) {
+            $vergi = trim(($order['tax_office'] ?? '') . ' / ' . ($order['tax_number'] ?? ''), ' /');
+        }
+
+        // Teslimat adresi: o.shipping_address > d.address fallback
+        $deliveryAddress = trim($order['shipping_address'] ?? '') ?: trim($order['address'] ?? '');
+      ?>
+      <!-- 1. Satır: İrtibat - İlçe - Şehir - Vergi -->
+      <?php if ($fmtPhone || !empty($order['district']) || !empty($order['city']) || $vergi): ?>
       <div class="contact-row">
-        <?php if (!empty($order['phone'])): ?><span><strong>İrtibat:</strong> <?= htmlspecialchars($order['phone']) ?></span><?php endif; ?>
-        <?php if (!empty($order['city'])):  ?><span><strong>Şehir:</strong> <?= htmlspecialchars($order['city']) ?></span><?php endif; ?>
-        <?php if (!empty($order['tax_office']) || !empty($order['tax_number'])): ?>
-        <span><strong>Vergi:</strong> <?= htmlspecialchars($order['tax_office'] ?? '') ?> / <?= htmlspecialchars($order['tax_number'] ?? '') ?></span>
-        <?php endif; ?>
+        <?php if ($fmtPhone): ?><span><strong>İrtibat:</strong> <span class="mono"><?= htmlspecialchars($fmtPhone) ?></span></span><?php endif; ?>
+        <?php if (!empty($order['district'])): ?><span><strong>İlçe:</strong> <?= htmlspecialchars($order['district']) ?></span><?php endif; ?>
+        <?php if (!empty($order['city'])):     ?><span><strong>Şehir:</strong> <?= htmlspecialchars($order['city']) ?></span><?php endif; ?>
+        <?php if ($vergi):                      ?><span><strong>Vergi:</strong> <?= htmlspecialchars($vergi) ?></span><?php endif; ?>
+      </div>
+      <?php endif; ?>
+
+      <!-- 2. Satır: Teslimat Adresi (tam metin) -->
+      <?php if (!empty($deliveryAddress)): ?>
+      <div class="address-row">
+        <strong>Teslimat Adresi:</strong> <?= htmlspecialchars($deliveryAddress) ?>
       </div>
       <?php endif; ?>
 
@@ -205,6 +234,11 @@ function renderCopy(array $order, array $items, string $copyType, array $cfg) {
 
   .contact-row { font-size: 8px; color: #555; padding: 1.5mm 0; display: flex; gap: 8px; flex-wrap: wrap; border-bottom: 0.5px dashed #ddd; margin-bottom: 1.5mm; }
   .contact-row strong { color: #333; }
+  .contact-row .mono { font-family: ui-monospace, 'Courier New', monospace; font-weight: 600; letter-spacing: .3px; color: #111; }
+
+  /* Teslimat Adresi — vurgulu satır */
+  .address-row { font-size: 8.5px; color: #1f2937; padding: 1.5mm 2.5mm; background: #fef3c7; border-left: 2px solid #f59e0b; border-radius: 0 3px 3px 0; margin-bottom: 1.5mm; line-height: 1.35; }
+  .address-row strong { color: #92400e; }
 
   /* Kalem tablosu — kompakt */
   table.items { width: 100%; border-collapse: collapse; font-size: 9px; margin-bottom: 1.5mm; }
