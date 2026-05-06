@@ -12,6 +12,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Genel
     if ($tab === 'general') {
+        // Sipariş bildirimi e-posta testi
+        if (!empty($_POST['do_test_admin_notify'])) {
+            $adminEmailRaw = trim($_POST['admin_email'] ?? setting('admin_email', ''));
+            $recipients = array_filter(array_map('trim', explode(',', $adminEmailRaw)), function($e) {
+                return filter_var($e, FILTER_VALIDATE_EMAIL);
+            });
+            if (empty($recipients)) {
+                $_SESSION['flash_admin'] = ['type'=>'danger','msg'=>'Geçerli bir e-posta adresi yok. Lütfen önce kaydedin.'];
+            } else {
+                $body = mailTemplate('Sipariş Bildirimi Testi',
+                    '<p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.7">'.
+                    'Bu bir <strong>sipariş bildirimi test maili</strong>dir. Bu maili aldıysanız, '.
+                    'bayilerinizden yeni bir sipariş geldiğinde aynı şekilde bilgilendirileceksiniz. ✓</p>'.
+                    '<p style="margin:0 0 8px;font-size:13px;color:#374151">Hedef adres(ler):</p>'.
+                    '<ul style="margin:0 0 16px;padding-left:20px;font-size:13px;color:#111;font-family:monospace">'.
+                    implode('', array_map(function($e){ return '<li>'.htmlspecialchars($e).'</li>'; }, $recipients)).
+                    '</ul>'.
+                    '<p style="margin:0;font-size:12px;color:#9ca3af">Tarih: '.date('d.m.Y H:i').'</p>'
+                );
+                $okCount = 0;
+                foreach ($recipients as $email) {
+                    if (sendMail($email, '[Test] Sipariş Bildirimi Testi', $body)) $okCount++;
+                }
+                $_SESSION['flash_admin'] = $okCount > 0
+                    ? ['type'=>'success','msg'=>"Test maili gönderildi: $okCount alıcıya başarıyla iletildi."]
+                    : ['type'=>'danger','msg'=>"Mail gönderilemedi. SMTP ayarlarınızı kontrol edin."];
+            }
+            redirect('?page=settings&tab=general');
+        }
+
         $isUpload = !empty($_FILES['login_image']['name']);
         $isRemove = !empty($_POST['remove_login_image']);
 
@@ -311,8 +341,24 @@ foreach ($tabs as $k => $v):
                 <option value="<?= $tz ?>" <?= setting('timezone','Europe/Istanbul')===$tz?'selected':'' ?>><?= $tz ?></option>
                 <?php endforeach; ?>
             </select></div>
-        <div class="form-group"><label class="form-label">Admin E-postası</label>
-            <input type="email" name="admin_email" value="<?= htmlspecialchars(setting('admin_email')) ?>" class="form-control"></div>
+        <div class="form-group" style="grid-column:span 2">
+            <label class="form-label">Admin Bildirim E-postası</label>
+            <input type="text" name="admin_email" value="<?= htmlspecialchars(setting('admin_email')) ?>"
+                   class="form-control"
+                   placeholder="ornek@firma.com  veya  yonetici@firma.com, depo@firma.com">
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.4">
+                💌 Yeni sipariş geldiğinde bu adres(ler)e bildirim e-postası gönderilir.
+                Birden fazla adres için <strong>virgülle</strong> ayırın
+                (ör: <code>tacosgida@gmail.com, depo@firma.com</code>).
+            </div>
+            <div style="margin-top:8px">
+                <button type="submit" name="do_test_admin_notify" value="1" class="btn btn-sm"
+                        style="background:#0ea5e9;color:#fff;border:none;font-size:12px"
+                        onclick="return confirm('Yukarıda yazdığınız e-posta adresine test maili gönderilsin mi?\n\n(Önce form alanını kaydetmeden direkt test eder.)');">
+                    📤 Bu Adres(ler)e Test Maili Gönder
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- Fiyat giriş modu — tüm ürünlere etki eder -->

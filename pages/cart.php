@@ -217,6 +217,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
         auditLog('order_created', 'b2b_orders', $orderId, ['order_no'=>$orderNo, 'method'=>$methodChoice]);
         // Bayiye sipariş alındı / onaylandı mailı (status'e göre uygun şablon)
         sendOrderStatusEmail($orderId, $status === 'onaylandi' ? 'onaylandi' : 'bekliyor');
+
+        // Admin'e yeni sipariş bildirimi (e-posta + uygulama içi notification)
+        try { notifyNewOrderToAdmin($orderId); } catch (\Throwable $e) { error_log('admin order notify: ' . $e->getMessage()); }
+        notifyAdmin('new_order', '🛒 Yeni Sipariş #' . $orderNo,
+            $dealer['company_name'] . ' — ' . number_format($grand, 2, ',', '.') . ' ₺',
+            '?page=orders&action=detail&id=' . $orderId);
+
         $_SESSION['flash'] = ['type'=>'success','msg'=>"Sipariş #$orderNo oluşturuldu."];
 
         $redirectUrl = '?page=orders&action=detail&id=' . $orderId . '&ordered=1';

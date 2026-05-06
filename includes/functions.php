@@ -987,3 +987,143 @@ function sendOrderStatusEmail(int $orderId, string $newStatus, string $extra = '
         return false;
     }
 }
+
+/**
+ * Yeni sipariş geldiğinde admin'e (ve birden fazla admin varsa hepsine)
+ * bildirim e-postası gönderir. settings.admin_email alanından virgülle
+ * ayrılmış birden fazla adres okur.
+ *
+ * @return int Başarılı gönderim sayısı
+ */
+function notifyNewOrderToAdmin(int $orderId): int {
+    $adminEmailRaw = trim(setting('admin_email', ''));
+    if ($adminEmailRaw === '') return 0;
+
+    // Virgülle ayrılmış birden fazla adres olabilir
+    $recipients = array_filter(array_map('trim', explode(',', $adminEmailRaw)), function($e) {
+        return filter_var($e, FILTER_VALIDATE_EMAIL);
+    });
+    if (empty($recipients)) return 0;
+
+    $order = dbRow(
+        "SELECT o.*, d.company_name, d.first_name, d.last_name, d.phone, d.mobile, d.email AS dealer_email
+         FROM b2b_orders o
+         JOIN b2b_dealers d ON d.id=o.dealer_id
+         WHERE o.id=?", [$orderId]
+    );
+    if (!$order) return 0;
+
+    $items = dbRows(
+        "SELECT product_name, product_sku, qty, unit_price, vat_rate
+         FROM b2b_order_items WHERE order_id=?", [$orderId]
+    );
+
+    $siteName  = setting('site_name', 'B2B Portal');
+    $siteUrl   = rtrim(setting('site_url', ''), '/');
+    $logoFile  = setting('login_image', '');
+    $logoUrl   = $logoFile ? $siteUrl . '/uploads/logo/' . $logoFile : '';
+    $orderUrl  = $siteUrl . '/admin/?page=orders&action=detail&id=' . $orderId;
+
+    $customerName = trim(($order['first_name'] ?? '') . ' ' . ($order['last_name'] ?? '')) ?: ($order['company_name'] ?? '—');
+    $orderDate    = date('d.m.Y H:i', strtotime($order['created_at']));
+    $statusLabel  = orderStatusText($order['status']);
+    $paymentLabel = paymentMethodLabel($order['payment_method'] ?? '');
+
+    // Telefon formatı
+    $rawPhone = preg_replace('/\D+/', '', ($order['mobile'] ?? '') ?: ($order['phone'] ?? ''));
+    $fmtPhone = $rawPhone;
+    if (strlen($rawPhone) === 11 && $rawPhone[0] === '0') {
+        $fmtPhone = $rawPhone[0] . ' ' . substr($rawPhone,1,3) . ' ' . substr($rawPhone,4,3) . ' ' . substr($rawPhone,7,2) . ' ' . substr($rawPhone,9,2);
+    }
+
+    // Kalem listesi HTML
+    $itemRows = '';
+    foreach ($items as $it) {
+        $qty   = (int)$it['qty'];
+        $unit  = (float)$it['unit_price'];
+        $vat   = (float)$it['vat_rate'];
+        $gross = $unit * $qty * (1 + $vat/100);
+        $itemRows .= '<tr>
+            <td style="padding:8px;border-bottom:1px solid #eee;font-size:13px">' . htmlspecialchars($it['product_name']) .
+            ($it['product_sku'] ? '<br><span style="color:#888;font-size:11px">' . htmlspecialchars($it['product_sku']) . '</span>' : '') . '</td>
+            <td style="padding:8px;border-bottom:1px solid #eee;text-align:center;font-weight:600">' . $qty . '</td>
+            <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;font-family:monospace;font-size:13px">' . number_format($gross, 2, ',', '.') . ' ₺</td>
+        </tr>';
+    }
+
+    $subject = '🛒 Yeni Sipariş #' . $order['order_no'] . ' — ' . $customerName;
+    $logoHtml = $logoUrl ? '<img src="' . htmlspecialchars($logoUrl) . '" alt="" style="max-height:50px;max-width:200px;display:block;margin-bottom:10px">' : '';
+
+    $html = '<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Yeni Sipariş</title></head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,sans-serif;color:#111">
+<div style="max-width:680px;margin:20px auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)">
+
+  <div style="background:linear-gradient(135deg,#c1272d,#9c1d22);padding:24px 28px;color:#fff">
+    ' . $logoHtml . '
+    <div style="font-size:18px;font-weight:700;letter-spacing:.3px">🛒 YENİ SİPARİŞ ALINDI</div>
+    <div style="font-size:13px;opacity:.95;margin-top:4px">Sipariş No: <strong>' . htmlspecialchars($order['order_no']) . '</strong></div>
+  </div>
+
+  <div style="padding:22px 28px">
+
+    <div style="background:#f9fafb;border:1px solid #e4e6ea;border-radius:6px;padding:14px 16px;margin-bottom:18px">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <tr>
+          <td style="padding:4px 0;color:#666;width:35%">Müşteri:</td>
+          <td style="padding:4px 0;font-weight:700">' . htmlspecialchars($customerName) . '</td>
+        </tr>' .
+        ($order['company_name'] && $order['company_name'] !== $customerName ? '
+        <tr><td style="padding:4px 0;color:#666">Firma:</td><td style="padding:4px 0">' . htmlspecialchars($order['company_name']) . '</td></tr>' : '') .
+        ($fmtPhone ? '
+        <tr><td style="padding:4px 0;color:#666">Telefon:</td><td style="padding:4px 0;font-family:monospace;font-weight:600">' . htmlspecialchars($fmtPhone) . '</td></tr>' : '') .
+        ($order['dealer_email'] ? '
+        <tr><td style="padding:4px 0;color:#666">E-posta:</td><td style="padding:4px 0">' . htmlspecialchars($order['dealer_email']) . '</td></tr>' : '') . '
+        <tr><td style="padding:4px 0;color:#666">Tarih:</td><td style="padding:4px 0">' . $orderDate . '</td></tr>
+        <tr><td style="padding:4px 0;color:#666">Ödeme:</td><td style="padding:4px 0">' . htmlspecialchars($paymentLabel) . '</td></tr>
+        <tr><td style="padding:4px 0;color:#666">Durum:</td><td style="padding:4px 0"><span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700">' . htmlspecialchars($statusLabel) . '</span></td></tr>
+      </table>
+    </div>
+
+    <h3 style="font-size:14px;color:#111;margin:18px 0 8px">Sipariş Kalemleri</h3>
+    <table style="width:100%;border-collapse:collapse;border:1px solid #e4e6ea;border-radius:4px;overflow:hidden">
+      <thead>
+        <tr style="background:#2c2c2c;color:#fff">
+          <th style="padding:8px;text-align:left;font-size:11px;letter-spacing:.3px">ÜRÜN</th>
+          <th style="padding:8px;text-align:center;font-size:11px;letter-spacing:.3px;width:60px">ADET</th>
+          <th style="padding:8px;text-align:right;font-size:11px;letter-spacing:.3px;width:100px">TOPLAM</th>
+        </tr>
+      </thead>
+      <tbody>' . $itemRows . '
+      </tbody>
+      <tfoot>
+        <tr style="background:#fef3c7">
+          <td colspan="2" style="padding:12px;text-align:right;font-weight:700;font-size:14px">GENEL TOPLAM (KDV Dahil)</td>
+          <td style="padding:12px;text-align:right;font-weight:700;font-size:15px;color:#c1272d;font-family:monospace">' . number_format((float)$order['grand_total'], 2, ',', '.') . ' ₺</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <div style="margin-top:24px;text-align:center">
+      <a href="' . htmlspecialchars($orderUrl) . '" style="display:inline-block;background:#c1272d;color:#fff;text-decoration:none;padding:12px 28px;border-radius:6px;font-weight:700;font-size:14px">📋 Siparişi Görüntüle</a>
+    </div>
+
+    <p style="font-size:11px;color:#888;text-align:center;margin-top:20px;line-height:1.5">
+      Bu e-posta ' . htmlspecialchars($siteName) . ' bayi portalından otomatik gönderildi.<br>
+      Bildirim adresini değiştirmek için Sistem Ayarları → Genel sekmesini ziyaret edin.
+    </p>
+
+  </div>
+</div>
+</body></html>';
+
+    // Her alıcıya ayrı ayrı gönder (sendMail tek alıcı kabul ediyor)
+    $okCount = 0;
+    foreach ($recipients as $email) {
+        try {
+            if (sendMail($email, $subject, $html)) $okCount++;
+        } catch (\Throwable $e) {
+            error_log('notifyNewOrderToAdmin: ' . $email . ' → ' . $e->getMessage());
+        }
+    }
+    return $okCount;
+}
