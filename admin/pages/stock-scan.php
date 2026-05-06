@@ -1,5 +1,5 @@
 <?php
-// admin/pages/stock_scan.php — QR/Barkod ile Stok Giriş/Çıkış/Sayım
+// admin/pages/stock-scan.php — QR/Barkod ile Stok Giriş/Çıkış/Sayım
 requireAdmin();
 
 $action = $_GET['action'] ?? 'scan';
@@ -101,7 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['flash_admin'] = $errors
             ? ['type'=>'warning', 'msg'=>"$count başarılı, " . count($errors) . " hata: " . implode('; ', $errors)]
             : ['type'=>'success', 'msg'=>"$count ürün için stok hareketi kaydedildi."];
-        redirect('?page=stock_scan');
+        redirect('?page=stock-scan');
     }
 }
 
@@ -135,7 +135,7 @@ if ($action === 'labels') {
         foreach ($products as $i => $row) $products[$i]['barcode'] = null;
     }
 
-    require __DIR__ . '/stock_scan/_labels.php';
+    require __DIR__ . '/stock-scan/_labels.php';
     exit;
 }
 
@@ -278,7 +278,7 @@ if ($action === 'labels') {
     <p class="page-sub">Telefonun kamerasıyla ürün QR/barkodunu tarayın, stok girişi/çıkışı yapın.</p>
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap">
-    <a href="?page=stock_scan&action=labels" target="_blank" class="btn btn-secondary" style="background:#1f2937;border-color:#1f2937;color:#fff">📄 QR Etiketler Yazdır</a>
+    <a href="?page=stock-scan&action=labels" target="_blank" class="btn btn-secondary" style="background:#1f2937;border-color:#1f2937;color:#fff">📄 QR Etiketler Yazdır</a>
     <a href="?page=stock" class="btn btn-ghost">Stok Yönetimi</a>
   </div>
 </div>
@@ -481,7 +481,7 @@ async function onCodeDetected(code, suffix) {
   lastScan[suffix] = { code, time: now };
 
   try {
-    const res  = await fetch('?page=stock_scan&action=lookup&code=' + encodeURIComponent(code));
+    const res  = await fetch('?page=stock-scan&action=lookup&code=' + encodeURIComponent(code));
     const data = await res.json();
     if (!data.ok) { toast(data.message || 'Bulunamadı', 'error'); return; }
 
@@ -562,7 +562,7 @@ async function applyQuick(productId, type) {
   fd.append('change_type', type);
 
   try {
-    const res = await fetch('?page=stock_scan', { method: 'POST', body: fd });
+    const res = await fetch('?page=stock-scan', { method: 'POST', body: fd });
     const data = await res.json();
     if (data.ok) {
       toast(`✓ ${data.product} — Yeni stok: ${data.new_stock}`, 'success');

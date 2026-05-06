@@ -1,7 +1,7 @@
 <?php
 /**
  * QR Stok Etiketleri — A4 dikey, grid (3 sütun × 8 satır = 24 etiket/sayfa)
- * admin/pages/stock_scan.php?action=labels
+ * admin/pages/stock-scan.php?action=labels
  *
  * Beklenen değişkenler:
  *   $products — ürün listesi (id, name, sku, barcode, unit, stock, cat_name)
@@ -95,7 +95,7 @@ function qrPayload(array $p): string {
 
 <div class="controls">
   <button onclick="window.print()">🖨 Yazdır</button>
-  <a href="?page=stock_scan" class="secondary">← Tarama</a>
+  <a href="?page=stock-scan" class="secondary">← Tarama</a>
 </div>
 
 <div class="doc">

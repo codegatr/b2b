@@ -80,7 +80,7 @@ $parasutEnabled = !empty(setting('parasut_email')) && !empty(setting('parasut_co
 <div class="page-header">
   <div><h1 class="page-title">Stok Yönetimi</h1></div>
   <div style="display:flex;gap:8px;flex-wrap:wrap">
-    <a href="?page=stock_scan" class="btn btn-primary" style="background:#c1272d;border-color:#c1272d">📷 QR/Barkod Tara</a>
+    <a href="?page=stock-scan" class="btn btn-primary" style="background:#c1272d;border-color:#c1272d">📷 QR/Barkod Tara</a>
     <?php if ($parasutEnabled): ?>
     <a href="?page=stock&parasut_sync=1"
        onclick="return confirm('Paraşüt\'ten stok bilgisi çekilecek. Devam edilsin mi?')"

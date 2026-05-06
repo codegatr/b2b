@@ -109,12 +109,12 @@ if ($page === 'logout') {
 // ── PRINT/PDF/EXPORT ENDPOINT'LERİ ─────────────────────────────
 // Bu çıktılar kendi HTML/PDF response'unu üretir; admin layout YÜKLENMEZ.
 // Header kullandıkları için layout HTML'inden ÖNCE intercept edilmeli.
-$labelExport  = ($page === 'stock_scan' && ($_GET['action'] ?? '') === 'labels');
-$ajaxLookup   = ($page === 'stock_scan' && ($_GET['action'] ?? '') === 'lookup');
-$batchAjax    = ($page === 'stock_scan' && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form_action'] ?? '') === 'apply_single');
+$labelExport  = ($page === 'stock-scan' && ($_GET['action'] ?? '') === 'labels');
+$ajaxLookup   = ($page === 'stock-scan' && ($_GET['action'] ?? '') === 'lookup');
+$batchAjax    = ($page === 'stock-scan' && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form_action'] ?? '') === 'apply_single');
 if (!empty($_GET['export']) || !empty($_GET['print']) || $labelExport || $ajaxLookup || $batchAjax) {
     // İzinli sayfaların tümünü buraya alın — örn. ledger PDF, raporlar PDF
-    $allowedExportPages = ['ledger', 'reports', 'dealers', 'orders', 'stock_scan'];
+    $allowedExportPages = ['ledger', 'reports', 'dealers', 'orders', 'stock-scan'];
     if (in_array($page, $allowedExportPages, true)) {
         $pageFile = __DIR__ . "/pages/$page.php";
         if (file_exists($pageFile)) {
@@ -168,7 +168,7 @@ $pageTitle = match($page) {
     'ledger'       => 'Cari Hesap',
     'applications' => 'Bayilik Başvuruları',
     'stock'        => 'Stok Yönetimi',
-    'stock_scan'   => 'QR/Barkod Stok Tarama',
+    'stock-scan'   => 'QR/Barkod Stok Tarama',
     'parasut'      => 'Paraşüt Entegrasyonu',
     'update'       => 'Güncelleme Merkezi',
     'settings'     => 'Sistem Ayarları',
@@ -358,7 +358,7 @@ function renderAdminPage(string $page, array $vars = []): void {
           Stok
           <?php if ($lowStock): ?><span class="nav-badge warn"><?= $lowStock ?></span><?php endif; ?>
         </a>
-        <a href="?page=stock_scan" class="nav-item <?= $page==='stock_scan'?'active':'' ?>">
+        <a href="?page=stock-scan" class="nav-item <?= $page==='stock-scan'?'active':'' ?>">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>
           QR Stok Tarama
         </a>
