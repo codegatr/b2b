@@ -483,7 +483,7 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
       'bekliyor'     => ['label'=>'Sipariş Alındı', 'color'=>'#d97706', 'bg'=>'#fef3c7'],
       'onaylandi'    => ['label'=>'Onaylandı',      'color'=>'#0369a1', 'bg'=>'#dbeafe'],
       'hazirlaniyor' => ['label'=>'Hazırlanıyor',   'color'=>'#b45309', 'bg'=>'#fed7aa'],
-      'kargoda'      => ['label'=>'Teslimata Hazır','color'=>'#0e7490', 'bg'=>'#cffafe'],
+      'kargoda'      => ['label'=>'Teslimata Çıktı','color'=>'#0e7490', 'bg'=>'#cffafe'],
       'teslim_edildi'=> ['label'=>'Teslim Edildi',  'color'=>'#15803d', 'bg'=>'#d1fae5'],
       'iptal'        => ['label'=>'İptal',          'color'=>'#b91c1c', 'bg'=>'#fee2e2'],
   ];
@@ -521,7 +521,7 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
       'bekliyor'      => 'Sipariş Alındı',
       'onaylandi'     => 'Onaylandı',
       'hazirlaniyor'  => 'Hazırlanıyor',
-      'kargoda'       => 'Teslimata Hazır',
+      'kargoda'       => 'Teslimata Çıktı',
       'teslim_edildi' => 'Teslim Edildi',
   ];
   ?>
@@ -848,7 +848,7 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
     <form method="post" id="form-status"><?= csrfField() ?><input type="hidden" name="form_action" value="update_status"><input type="hidden" name="order_id" value="<?= $order['id'] ?>">
       <div class="form-group"><label class="form-label">Yeni Durum</label>
         <select name="new_status" class="form-control">
-          <?php foreach (['bekliyor'=>'Sipariş Alındı','onaylandi'=>'Onaylandı','hazirlaniyor'=>'Hazırlanıyor','kargoda'=>'Teslimata Hazır','teslim_edildi'=>'Teslim Edildi'] as $v=>$l): ?>
+          <?php foreach (['bekliyor'=>'Sipariş Alındı','onaylandi'=>'Onaylandı','hazirlaniyor'=>'Hazırlanıyor','kargoda'=>'Teslimata Çıktı','teslim_edildi'=>'Teslim Edildi'] as $v=>$l): ?>
           <option value="<?= $v ?>" <?= ($order['status']??'')===$v?'selected':'' ?>><?= $l ?></option>
           <?php endforeach; ?>
         </select>
