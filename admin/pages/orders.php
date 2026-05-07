@@ -316,6 +316,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = 'archive_list';
     }
 
+    // ── Tamamlanmış (teslim/iptal/iade) tüm siparişleri toplu arşivle ──
+    if ($act === 'archive_completed_bulk') {
+        $count = (int)dbVal(
+            "SELECT COUNT(*) FROM b2b_orders
+             WHERE status IN ('teslim_edildi','iptal','iade') AND is_archived=0"
+        );
+        if ($count > 0) {
+            dbExec(
+                "UPDATE b2b_orders
+                 SET is_archived=1, archived_by=?, archived_at=NOW()
+                 WHERE status IN ('teslim_edildi','iptal','iade') AND is_archived=0",
+                [adminId()]
+            );
+            auditLog('orders_bulk_archived', 'b2b_orders', 0, ['count'=>$count]);
+            $success = "$count tamamlanmış sipariş arşive kaldırıldı.";
+        } else {
+            $error = 'Arşivlenecek tamamlanmış sipariş yok.';
+        }
+        $action = 'list';
+    }
+
     // ── İptal edilen siparişi yeniden işleme al ───────────────
     if ($act === 'reactivate') {
         $order = dbRow("SELECT * FROM b2b_orders WHERE id=?", [$oid]);
@@ -451,14 +472,32 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
 ?>
 
 <?php if ($action === 'list'): ?>
+<?php
+// Tamamlanmış (teslim/iptal/iade) ama arşivlenmemiş sipariş sayısı
+$completedNotArchived = (int)dbVal(
+    "SELECT COUNT(*) FROM b2b_orders
+     WHERE status IN ('teslim_edildi','iptal','iade') AND is_archived=0"
+);
+?>
 <div class="page-header">
   <div>
     <h1 class="page-title">Siparişler<?php if ($pendingCount): ?> <span class="badge badge-yellow"><?= $pendingCount ?> bekliyor</span><?php endif; ?></h1>
     <p class="page-sub">Toplam <?= $total ?? 0 ?> sipariş</p>
   </div>
-  <a href="?page=orders&action=archive_list" class="btn btn-ghost">
-    🗄 Arşiv<?php if ($archiveCount): ?> <span class="badge badge-gray"><?= $archiveCount ?></span><?php endif; ?>
-  </a>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <?php if ($completedNotArchived > 0): ?>
+    <form method="post" style="display:inline" onsubmit="return confirm('<?= $completedNotArchived ?> tamamlanmış sipariş (Teslim Edildi / İptal / İade) toplu olarak arşive kaldırılacak.\n\nDevam etmek istiyor musunuz?');">
+      <?= csrfField() ?>
+      <input type="hidden" name="form_action" value="archive_completed_bulk">
+      <button type="submit" class="btn" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;font-weight:600">
+        📦 Tamamlananları Arşivle (<?= $completedNotArchived ?>)
+      </button>
+    </form>
+    <?php endif; ?>
+    <a href="?page=orders&action=archive_list" class="btn btn-ghost">
+      🗄 Arşiv<?php if ($archiveCount): ?> <span class="badge badge-gray"><?= $archiveCount ?></span><?php endif; ?>
+    </a>
+  </div>
 </div>
 
 <?php if (!empty($success)): ?><div class="alert alert-success"><?= h($success) ?></div><?php endif; ?>
@@ -567,12 +606,17 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
       <span class="badge badge-<?= $pstyle ?>"><?= $plabel ?></span>
       <div style="font-size:10px;color:var(--text-muted);margin-top:2px"><?= h(paymentMethodLabel($o['payment_method'] ?? '')) ?></div>
     </td>
-    <td><a href="?page=orders&action=detail&id=<?= $o['id'] ?>" class="btn btn-ghost btn-sm">Detay →</a></td>
-  </tr>
-  <?php endforeach; ?>
-  <?php if (empty($orders)): ?><tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-muted)">Sipariş bulunamadı.</td></tr><?php endif; ?>
-  </tbody>
-</table>
+    <td style="white-space:nowrap">
+      <a href="?page=orders&action=detail&id=<?= $o['id'] ?>" class="btn btn-ghost btn-sm">Detay →</a>
+      <?php if (in_array($o['status'], ['teslim_edildi','iptal','iade'])): ?>
+        <form method="post" style="display:inline" onsubmit="return confirm('Bu siparişi arşive kaldırmak istediğinize emin misiniz?');">
+          <?= csrfField() ?>
+          <input type="hidden" name="form_action" value="archive">
+          <input type="hidden" name="order_id" value="<?= (int)$o['id'] ?>">
+          <button type="submit" class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;font-size:11px;padding:4px 8px" title="Arşivle">📦</button>
+        </form>
+      <?php endif; ?>
+    </td>
 </div>
 </div>
 <?php if (!empty($pager)): ?><div style="margin-top:16px"><?= $pager ?></div><?php endif; ?>
@@ -595,7 +639,15 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
     <td style="font-size:12px;color:var(--text-muted)"><?= fmtDate($o['created_at']) ?></td>
     <td style="text-align:right;font-weight:600"><?= money($o['grand_total']) ?></td>
     <td><?= orderStatusLabel($o['status']) ?></td>
-    <td><a href="?page=orders&action=detail&id=<?= $o['id'] ?>" class="btn btn-ghost btn-sm">Detay →</a></td>
+    <td style="white-space:nowrap">
+      <a href="?page=orders&action=detail&id=<?= $o['id'] ?>" class="btn btn-ghost btn-sm">Detay →</a>
+      <form method="post" style="display:inline">
+        <?= csrfField() ?>
+        <input type="hidden" name="form_action" value="unarchive">
+        <input type="hidden" name="order_id" value="<?= (int)$o['id'] ?>">
+        <button type="submit" class="btn btn-sm" style="background:#fff;color:#0e7490;border:1px solid #67e8f9;font-size:11px;padding:4px 8px" title="Arşivden Çıkar">📤</button>
+      </form>
+    </td>
   </tr>
   <?php endforeach; ?>
   <?php if (empty($archivedOrders)): ?><tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-muted)">Arşiv boş.</td></tr><?php endif; ?>
@@ -633,6 +685,28 @@ $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','ip
     <?php elseif ($order['status'] === 'iptal'): ?>
     <button class="btn btn-warning" onclick="openModal('modal-reactivate')" style="background:#f59e0b;border-color:#f59e0b;color:#fff">🔄 Yeniden İşleme Al</button>
     <?php endif; ?>
+
+    <?php
+    // Arşivle / Arşivden Çıkar — sadece tamamlanmış (teslim/iptal/iade) siparişlerde göster
+    $isCompleted = in_array($order['status'], ['teslim_edildi','iptal','iade']);
+    $isArchived  = !empty($order['is_archived']);
+    ?>
+    <?php if ($isCompleted && !$isArchived): ?>
+      <form method="post" style="display:inline" onsubmit="return confirm('Bu siparişi arşive kaldırmak istediğinize emin misiniz?\n\nAna listeden gizlenecek ama silinmeyecek. İstediğin zaman Arşiv menüsünden geri çıkarabilirsiniz.');">
+        <?= csrfField() ?>
+        <input type="hidden" name="form_action" value="archive">
+        <input type="hidden" name="order_id" value="<?= (int)$order['id'] ?>">
+        <button type="submit" class="btn" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;font-weight:600">📦 Arşivle</button>
+      </form>
+    <?php elseif ($isArchived): ?>
+      <form method="post" style="display:inline">
+        <?= csrfField() ?>
+        <input type="hidden" name="form_action" value="unarchive">
+        <input type="hidden" name="order_id" value="<?= (int)$order['id'] ?>">
+        <button type="submit" class="btn" style="background:#fff;color:#0e7490;border:1px solid #67e8f9;font-weight:600">📤 Arşivden Çıkar</button>
+      </form>
+    <?php endif; ?>
+
     <button class="btn btn-danger" onclick="openModal('modal-delete-order')">🗑 Sil</button>
   </div>
 </div>
