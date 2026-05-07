@@ -617,6 +617,11 @@ $completedNotArchived = (int)dbVal(
         </form>
       <?php endif; ?>
     </td>
+  </tr>
+  <?php endforeach; ?>
+  <?php if (empty($orders)): ?><tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-muted)">Sipariş bulunamadı.</td></tr><?php endif; ?>
+  </tbody>
+</table>
 </div>
 </div>
 <?php if (!empty($pager)): ?><div style="margin-top:16px"><?= $pager ?></div><?php endif; ?>
