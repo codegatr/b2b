@@ -37,7 +37,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 $_SESSION['flash_admin'] = $okCount > 0
                     ? ['type'=>'success','msg'=>"Test maili gönderildi: $okCount alıcıya başarıyla iletildi."]
-                    : ['type'=>'danger','msg'=>"Mail gönderilemedi. SMTP ayarlarınızı kontrol edin."];
+                    : ['type'=>'danger','msg'=>"Mail gönderilemedi. SMTP ayarlarınızı ve Son Mail Logları bölümünü kontrol edin."];
+            }
+            redirect('?page=settings&tab=general');
+        }
+
+        // SON SİPARİŞİ TEKRAR BİLDİR — debug için
+        if (!empty($_POST['do_resend_last_order'])) {
+            $lastOrder = dbRow("SELECT id, order_no FROM b2b_orders ORDER BY id DESC LIMIT 1");
+            if (!$lastOrder) {
+                $_SESSION['flash_admin'] = ['type'=>'danger','msg'=>'Sistemde hiç sipariş yok.'];
+            } else {
+                try {
+                    $sent = notifyNewOrderToAdmin((int)$lastOrder['id']);
+                    if ($sent > 0) {
+                        $_SESSION['flash_admin'] = ['type'=>'success','msg'=>"Son sipariş (#{$lastOrder['order_no']}) için $sent alıcıya bildirim maili gönderildi."];
+                    } else {
+                        $_SESSION['flash_admin'] = ['type'=>'warning','msg'=>"notifyNewOrderToAdmin() 0 mail gönderdi. SMTP veya admin_email ayarlarını kontrol edin. Son Mail Logları bölümüne bakın."];
+                    }
+                } catch (\Throwable $e) {
+                    $_SESSION['flash_admin'] = ['type'=>'danger','msg'=>'Hata: '.$e->getMessage()];
+                }
             }
             redirect('?page=settings&tab=general');
         }
@@ -351,11 +371,16 @@ foreach ($tabs as $k => $v):
                 Birden fazla adres için <strong>virgülle</strong> ayırın
                 (ör: <code>tacosgida@gmail.com, depo@firma.com</code>).
             </div>
-            <div style="margin-top:8px">
+            <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
                 <button type="submit" name="do_test_admin_notify" value="1" class="btn btn-sm"
                         style="background:#0ea5e9;color:#fff;border:none;font-size:12px"
                         onclick="return confirm('Yukarıda yazdığınız e-posta adresine test maili gönderilsin mi?\n\n(Önce form alanını kaydetmeden direkt test eder.)');">
                     📤 Bu Adres(ler)e Test Maili Gönder
+                </button>
+                <button type="submit" name="do_resend_last_order" value="1" class="btn btn-sm"
+                        style="background:#7c3aed;color:#fff;border:none;font-size:12px"
+                        onclick="return confirm('Son siparişin bildirim maili tekrar gönderilsin mi?\n\n(Mail gerçekten gidiyor mu görmek için.)');">
+                    🔁 Son Siparişi Tekrar Bildir (Debug)
                 </button>
             </div>
         </div>
