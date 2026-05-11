@@ -93,34 +93,34 @@ if (empty($announcements)) {
     <a href="?page=products" class="btn btn-primary">🛒 Sipariş Ver</a>
 </div>
 
-<!-- ════════════════════ KAMPANYA SLİDER ════════════════════ -->
+<!-- ════════════════════ KAMPANYA SLİDER — Sürekli kayan akış ════════════════════ -->
 <?php if (!empty($featuredProducts)): ?>
-<div class="campaign-slider" style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px 18px 16px;margin-bottom:20px">
+<div class="campaign-slider" style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px 18px 16px;margin-bottom:20px;overflow:hidden">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
     <div style="display:flex;align-items:center;gap:8px">
       <span style="font-size:18px">🔥</span>
       <strong style="font-size:14px;color:var(--text)">Kampanyalı Ürünler</strong>
       <span style="background:#fef2f2;color:#c1272d;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px"><?= count($featuredProducts) ?></span>
     </div>
-    <div style="display:flex;gap:6px">
-      <button type="button" id="camp-prev" aria-label="Önceki" style="width:32px;height:32px;border-radius:50%;border:1px solid var(--border-2);background:#fff;cursor:pointer;font-size:16px;font-weight:700;color:var(--text-2);display:flex;align-items:center;justify-content:center;transition:.15s">‹</button>
-      <button type="button" id="camp-next" aria-label="Sonraki" style="width:32px;height:32px;border-radius:50%;border:1px solid var(--border-2);background:#fff;cursor:pointer;font-size:16px;font-weight:700;color:var(--text-2);display:flex;align-items:center;justify-content:center;transition:.15s">›</button>
-    </div>
+    <div style="font-size:11px;color:var(--text-muted)">Durdurmak için fareyi üzerinde tutun</div>
   </div>
 
-  <div id="camp-viewport" style="position:relative;overflow:hidden;padding:2px">
-    <div id="camp-track" style="display:flex;gap:12px;transition:transform .45s cubic-bezier(.4,0,.2,1);will-change:transform">
-      <?php foreach ($featuredProducts as $p):
-        $vat   = (float)$p['vat_rate'];
-        $vatM  = 1 + $vat/100;
-        $base  = (float)$p['base_price'];
-        $final = (float)$p['final_price'];
-        $hasDisc = $p['discount'] > 0;
-        $baseGross  = $base * $vatM;
-        $finalGross = $final * $vatM;
-        $inStock = $p['stock'] > 0;
+  <div class="camp-viewport" id="camp-viewport">
+    <div class="camp-track" id="camp-track">
+      <?php
+      // Akıcı sonsuz kayma için kartları İKİ KERE render et — döngü kesintisiz görünsün
+      for ($repeat = 0; $repeat < 2; $repeat++):
+        foreach ($featuredProducts as $p):
+          $vat   = (float)$p['vat_rate'];
+          $vatM  = 1 + $vat/100;
+          $base  = (float)$p['base_price'];
+          $final = (float)$p['final_price'];
+          $hasDisc = $p['discount'] > 0;
+          $baseGross  = $base * $vatM;
+          $finalGross = $final * $vatM;
+          $inStock = $p['stock'] > 0;
       ?>
-      <a href="?page=product&id=<?= $p['id'] ?>" class="camp-card" style="flex:0 0 200px;width:200px;background:linear-gradient(135deg,#fff5f5,#fff);border:1px solid #fecaca;border-radius:10px;padding:10px;position:relative;text-decoration:none;color:inherit;transition:.2s;cursor:pointer;display:block">
+      <a href="?page=product&id=<?= $p['id'] ?>" class="camp-card" aria-hidden="<?= $repeat === 1 ? 'true' : 'false' ?>" style="flex:0 0 200px;width:200px;background:linear-gradient(135deg,#fff5f5,#fff);border:1px solid #fecaca;border-radius:10px;padding:10px;position:relative;text-decoration:none;color:inherit;transition:.2s;cursor:pointer;display:block">
         <?php if ($hasDisc): ?>
         <div style="position:absolute;top:6px;right:6px;background:#c1272d;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;letter-spacing:.3px;z-index:2">%<?= number_format($p['discount'],0) ?></div>
         <?php else: ?>
@@ -149,171 +149,55 @@ if (empty($announcements)) {
         <div style="position:absolute;inset:0;background:rgba(255,255,255,.85);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#dc2626">TÜKENDİ</div>
         <?php endif; ?>
       </a>
-      <?php endforeach; ?>
+      <?php endforeach; endfor; ?>
     </div>
   </div>
-
-  <div id="camp-dots" style="display:flex;justify-content:center;gap:5px;margin-top:12px"></div>
 </div>
 
 <style>
+  /* Sürekli kayan marquee animasyonu — soldan sağa */
+  .camp-viewport { position: relative; overflow: hidden; padding: 2px;
+    /* Kenarlarda yumuşak fade — kartların aniden kesilmesini önler */
+    mask-image: linear-gradient(to right, transparent 0, #000 30px, #000 calc(100% - 30px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 30px, #000 calc(100% - 30px), transparent 100%);
+  }
+  .camp-track {
+    display: flex;
+    gap: 12px;
+    width: max-content;  /* İçeriği doğal genişlikte sar (animasyon için gerekli) */
+    animation: campScroll var(--camp-duration, 30s) linear infinite;
+    will-change: transform;
+  }
+  .camp-track:hover { animation-play-state: paused; }
+
+  /* %50'de yarıya gel — kartlar 2x render edildi, %50 = orijinal listenin sonu = başlangıç pozisyonu (kesintisiz loop) */
+  @keyframes campScroll {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
   .camp-card:hover { transform: translateY(-2px); border-color: #f87171 !important; box-shadow: 0 4px 14px rgba(193,39,45,.12); }
-  #camp-prev:hover, #camp-next:hover { background: #fef2f2 !important; border-color: #f87171 !important; color: #c1272d !important; }
-  #camp-prev:disabled, #camp-next:disabled { opacity: .35; cursor: not-allowed; }
-  .camp-dot { width: 6px; height: 6px; border-radius: 50%; background: #ddd; border: none; cursor: pointer; padding: 0; transition: .2s; }
-  .camp-dot.active { width: 18px; border-radius: 3px; background: #c1272d; }
+
+  /* Hareketi azaltma tercihi (erişilebilirlik) */
+  @media (prefers-reduced-motion: reduce) {
+    .camp-track { animation: none; }
+  }
 </style>
 
 <script>
 (function() {
-  var track  = document.getElementById('camp-track');
-  var view   = document.getElementById('camp-viewport');
-  var prev   = document.getElementById('camp-prev');
-  var next   = document.getElementById('camp-next');
-  var dots   = document.getElementById('camp-dots');
-  if (!track || !view) return;
-
+  var track = document.getElementById('camp-track');
+  if (!track) return;
+  // Kart sayısına göre animasyon hızını ayarla — daha çok kart, daha uzun süre (her kart ~3sn)
   var cards = track.querySelectorAll('.camp-card');
-  var total = cards.length;
-  var page  = 0;
-  var autoTimer = null;
-
-  function perPage() {
-    if (!cards[0]) return 1;
-    var viewW = view.getBoundingClientRect().width;
-    var cardW = 200; // .camp-card sabit genişliği
-    var gap   = 12;
-    var n = Math.floor((viewW + gap) / (cardW + gap));
-    return Math.max(1, Math.min(n, total));
-  }
-
-  function pages() { return Math.max(1, Math.ceil(total / perPage())); }
-
-  function buildDots() {
-    dots.innerHTML = '';
-    var n = pages();
-    if (n <= 1) return;
-    for (var i = 0; i < n; i++) {
-      var d = document.createElement('button');
-      d.type = 'button';
-      d.className = 'camp-dot' + (i === page ? ' active' : '');
-      d.setAttribute('aria-label', 'Sayfa ' + (i+1));
-      (function(idx) {
-        d.addEventListener('click', function() { page = idx; render(); resetAuto(); });
-      })(i);
-      dots.appendChild(d);
-    }
-  }
-
-  function render() {
-    var pp = perPage();
-    var maxPage = Math.max(0, pages() - 1);
-    if (page > maxPage) page = maxPage;
-    var offset = page * pp;
-    if (offset >= total) offset = Math.max(0, total - pp);
-    if (cards[0]) {
-      var cardW = cards[0].getBoundingClientRect().width;
-      var gap = 12;
-      track.style.transform = 'translateX(' + (-(cardW + gap) * offset) + 'px)';
-    }
-    var ds = dots.querySelectorAll('.camp-dot');
-    ds.forEach(function(d, i) { d.classList.toggle('active', i === page); });
-    prev.disabled = page === 0;
-    next.disabled = page >= maxPage;
-  }
-
-  function go(dir) {
-    var maxPage = pages() - 1;
-    page += dir;
-    if (page > maxPage) page = 0;       // sona gelince başa döner (loop)
-    if (page < 0) page = maxPage;       // başa gelince sona döner
-    render();
-  }
-
-  function startAuto() {
-    if (pages() <= 1) return;
-    autoTimer = setInterval(function() { go(1); }, 5000);
-  }
-  function stopAuto() { if (autoTimer) clearInterval(autoTimer); autoTimer = null; }
-  function resetAuto() { stopAuto(); startAuto(); }
-
-  prev.addEventListener('click', function() { go(-1); resetAuto(); });
-  next.addEventListener('click', function() { go(1);  resetAuto(); });
-
-  // Hover'da otomatik kayma durur
-  view.addEventListener('mouseenter', stopAuto);
-  view.addEventListener('mouseleave', startAuto);
-
-  // Touch swipe (mobil)
-  var startX = 0, dx = 0;
-  view.addEventListener('touchstart', function(e) {
-    if (e.touches.length === 1) { startX = e.touches[0].clientX; dx = 0; stopAuto(); }
-  }, {passive:true});
-  view.addEventListener('touchmove', function(e) {
-    if (e.touches.length === 1) dx = e.touches[0].clientX - startX;
-  }, {passive:true});
-  view.addEventListener('touchend', function() {
-    if (Math.abs(dx) > 50) { go(dx < 0 ? 1 : -1); }
-    startAuto();
-  });
-
-  // Resize ile yeniden hesaplama
-  var resizeTimer;
-  window.addEventListener('resize', function() {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(function() { buildDots(); render(); }, 150);
-  });
-
-  // İlk yükleme
-  buildDots();
-  setTimeout(render, 50);  // CSS yüklenmesini bekle
-  startAuto();
+  var unique = cards.length / 2; // 2x render edildi
+  var duration = Math.max(15, unique * 3.5); // min 15 saniye
+  track.style.setProperty('--camp-duration', duration + 's');
 })();
 </script>
 <?php endif; ?>
 
-<!-- Duyurular -->
-<?php if (!empty($announcements)): ?>
-<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:0;margin-bottom:20px;overflow:hidden">
-  <div style="background:linear-gradient(135deg,#1e3a5f,#2c5282);padding:14px 20px;display:flex;align-items:center;gap:10px;color:#fff">
-    <span style="font-size:18px">📢</span>
-    <strong style="font-size:14px">Duyurular</strong>
-    <span style="background:rgba(255,255,255,.2);color:#fff;font-size:11px;font-weight:700;padding:2px 9px;border-radius:99px;margin-left:6px"><?= count($announcements) ?></span>
-    <a href="?page=announcements" style="margin-left:auto;color:#fff;font-size:12px;font-weight:600;text-decoration:none;opacity:.9">Tümü →</a>
-  </div>
-  <div>
-    <?php foreach ($announcements as $i => $ann):
-      $type = $ann['type'] ?? 'bilgi';
-      $cfg = match($type) {
-          'onemli' => ['icon'=>'🔴', 'badge'=>'ÖNEMLİ',  'color'=>'#dc2626', 'bg'=>'#fef2f2'],
-          'uyari'  => ['icon'=>'⚠️', 'badge'=>'UYARI',   'color'=>'#d97706', 'bg'=>'#fffbeb'],
-          default  => ['icon'=>'ℹ️', 'badge'=>'BİLGİ',   'color'=>'#0369a1', 'bg'=>'#eff6ff'],
-      };
-      $isUnread = empty($ann['is_read']);
-    ?>
-    <div style="padding:14px 20px;border-top:1px solid var(--border);<?= $isUnread ? 'background:'.$cfg['bg'] : '' ?>;display:flex;gap:14px;align-items:flex-start">
-      <div style="font-size:20px;line-height:1.2;flex:0 0 auto;margin-top:2px"><?= $cfg['icon'] ?></div>
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
-          <span style="font-size:10px;font-weight:700;color:<?= $cfg['color'] ?>;background:#fff;border:1px solid <?= $cfg['color'] ?>40;padding:2px 7px;border-radius:4px;letter-spacing:.4px"><?= $cfg['badge'] ?></span>
-          <strong style="font-size:13px;color:var(--text)"><?= h($ann['title']) ?></strong>
-          <?php if ($isUnread): ?><span style="width:6px;height:6px;background:<?= $cfg['color'] ?>;border-radius:50%"></span><?php endif; ?>
-        </div>
-        <?php if (!empty($ann['content'])): ?>
-        <div style="font-size:12px;color:var(--text-2);line-height:1.6;margin-bottom:6px"><?= nl2br(h(mb_substr($ann['content'], 0, 200))) ?><?= mb_strlen($ann['content']) > 200 ? '...' : '' ?></div>
-        <?php endif; ?>
-        <div style="font-size:11px;color:var(--text-muted)">
-          <?= fmtDate($ann['created_at']) ?>
-          <?php if (!empty($ann['ends_at'])): ?>
-          · <span style="color:#d97706"><?= date('d.m.Y', strtotime($ann['ends_at'])) ?>'e kadar</span>
-          <?php endif; ?>
-        </div>
-      </div>
-    </div>
-    <?php endforeach; ?>
-  </div>
-</div>
-<?php endif; ?>
+<!-- Duyurular bloğu kaldırıldı — sidebar'da "Duyurular" linkinde rozet olarak görünür. -->
 
 <!-- Stat Kartları — modern, ikonlu, kompakt -->
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:20px">
