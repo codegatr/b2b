@@ -93,108 +93,62 @@ if (empty($announcements)) {
     <a href="?page=products" class="btn btn-primary">🛒 Sipariş Ver</a>
 </div>
 
-<!-- ════════════════════ KAMPANYA SLİDER — Sürekli kayan akış ════════════════════ -->
+<!-- ════════════════════ KAMPANYALI ÜRÜNLER — Düz grid ════════════════════ -->
 <?php if (!empty($featuredProducts)): ?>
-<div class="campaign-slider" style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px 18px 16px;margin-bottom:20px;overflow:hidden">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
-    <div style="display:flex;align-items:center;gap:8px">
-      <span style="font-size:18px">🔥</span>
-      <strong style="font-size:14px;color:var(--text)">Kampanyalı Ürünler</strong>
-      <span style="background:#fef2f2;color:#c1272d;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px"><?= count($featuredProducts) ?></span>
-    </div>
-    <div style="font-size:11px;color:var(--text-muted)">Durdurmak için fareyi üzerinde tutun</div>
+<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px 18px 16px;margin-bottom:20px">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <span style="font-size:18px">🔥</span>
+    <strong style="font-size:14px;color:var(--text)">Kampanyalı Ürünler</strong>
+    <span style="background:#fef2f2;color:#c1272d;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px"><?= count($featuredProducts) ?></span>
   </div>
 
-  <div class="camp-viewport" id="camp-viewport">
-    <div class="camp-track" id="camp-track">
-      <?php
-      // Akıcı sonsuz kayma için kartları İKİ KERE render et — döngü kesintisiz görünsün
-      for ($repeat = 0; $repeat < 2; $repeat++):
-        foreach ($featuredProducts as $p):
-          $vat   = (float)$p['vat_rate'];
-          $vatM  = 1 + $vat/100;
-          $base  = (float)$p['base_price'];
-          $final = (float)$p['final_price'];
-          $hasDisc = $p['discount'] > 0;
-          $baseGross  = $base * $vatM;
-          $finalGross = $final * $vatM;
-          $inStock = $p['stock'] > 0;
-      ?>
-      <a href="?page=product&id=<?= $p['id'] ?>" class="camp-card" aria-hidden="<?= $repeat === 1 ? 'true' : 'false' ?>" style="flex:0 0 200px;width:200px;background:linear-gradient(135deg,#fff5f5,#fff);border:1px solid #fecaca;border-radius:10px;padding:10px;position:relative;text-decoration:none;color:inherit;transition:.2s;cursor:pointer;display:block">
-        <?php if ($hasDisc): ?>
-        <div style="position:absolute;top:6px;right:6px;background:#c1272d;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;letter-spacing:.3px;z-index:2">%<?= number_format($p['discount'],0) ?></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px">
+    <?php foreach ($featuredProducts as $p):
+      $vat   = (float)$p['vat_rate'];
+      $vatM  = 1 + $vat/100;
+      $base  = (float)$p['base_price'];
+      $final = (float)$p['final_price'];
+      $hasDisc = $p['discount'] > 0;
+      $baseGross  = $base * $vatM;
+      $finalGross = $final * $vatM;
+      $inStock = $p['stock'] > 0;
+    ?>
+    <a href="?page=product&id=<?= $p['id'] ?>" class="camp-card" style="background:linear-gradient(135deg,#fff5f5,#fff);border:1px solid #fecaca;border-radius:10px;padding:10px;position:relative;text-decoration:none;color:inherit;transition:.2s;cursor:pointer;display:block">
+      <?php if ($hasDisc): ?>
+      <div style="position:absolute;top:6px;right:6px;background:#c1272d;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;letter-spacing:.3px;z-index:2">%<?= number_format($p['discount'],0) ?></div>
+      <?php else: ?>
+      <div style="position:absolute;top:6px;right:6px;background:#16a34a;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;letter-spacing:.3px;z-index:2">FIRSAT</div>
+      <?php endif; ?>
+
+      <div style="width:100%;aspect-ratio:1/1;background:#fee2e2;border-radius:6px;margin-bottom:8px;overflow:hidden;display:flex;align-items:center;justify-content:center">
+        <?php if (!empty($p['image'])): ?>
+          <img src="/uploads/products/<?= h($p['image']) ?>" alt="" style="width:100%;height:100%;object-fit:cover">
         <?php else: ?>
-        <div style="position:absolute;top:6px;right:6px;background:#16a34a;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;letter-spacing:.3px;z-index:2">FIRSAT</div>
+          <span style="font-size:24px;opacity:.5">📦</span>
         <?php endif; ?>
+      </div>
 
-        <div style="width:100%;aspect-ratio:1/1;background:#fee2e2;border-radius:6px;margin-bottom:8px;overflow:hidden;display:flex;align-items:center;justify-content:center">
-          <?php if (!empty($p['image'])): ?>
-            <img src="/uploads/products/<?= h($p['image']) ?>" alt="" style="width:100%;height:100%;object-fit:cover">
-          <?php else: ?>
-            <span style="font-size:24px;opacity:.5">📦</span>
-          <?php endif; ?>
-        </div>
+      <div style="font-size:12px;font-weight:600;line-height:1.3;margin-bottom:4px;min-height:30px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">
+        <?= h($p['name']) ?>
+      </div>
 
-        <div style="font-size:12px;font-weight:600;line-height:1.3;margin-bottom:4px;min-height:30px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">
-          <?= h($p['name']) ?>
-        </div>
+      <?php if ($hasDisc): ?>
+      <div style="font-size:9px;color:#999;text-decoration:line-through;line-height:1"><?= money($baseGross) ?></div>
+      <?php endif; ?>
+      <div style="font-size:13px;font-weight:800;color:#c1272d;line-height:1.2;margin-top:1px"><?= money($finalGross) ?></div>
+      <div style="font-size:9px;color:var(--text-muted);margin-top:1px">KDV Dahil · <?= h($p['unit'] ?? 'adet') ?></div>
 
-        <?php if ($hasDisc): ?>
-        <div style="font-size:9px;color:#999;text-decoration:line-through;line-height:1"><?= money($baseGross) ?></div>
-        <?php endif; ?>
-        <div style="font-size:13px;font-weight:800;color:#c1272d;line-height:1.2;margin-top:1px"><?= money($finalGross) ?></div>
-        <div style="font-size:9px;color:var(--text-muted);margin-top:1px">KDV Dahil · <?= h($p['unit'] ?? 'adet') ?></div>
-
-        <?php if (!$inStock): ?>
-        <div style="position:absolute;inset:0;background:rgba(255,255,255,.85);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#dc2626">TÜKENDİ</div>
-        <?php endif; ?>
-      </a>
-      <?php endforeach; endfor; ?>
-    </div>
+      <?php if (!$inStock): ?>
+      <div style="position:absolute;inset:0;background:rgba(255,255,255,.85);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#dc2626">TÜKENDİ</div>
+      <?php endif; ?>
+    </a>
+    <?php endforeach; ?>
   </div>
 </div>
 
 <style>
-  /* Sürekli kayan marquee animasyonu — soldan sağa */
-  .camp-viewport { position: relative; overflow: hidden; padding: 2px;
-    /* Kenarlarda yumuşak fade — kartların aniden kesilmesini önler */
-    mask-image: linear-gradient(to right, transparent 0, #000 30px, #000 calc(100% - 30px), transparent 100%);
-    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 30px, #000 calc(100% - 30px), transparent 100%);
-  }
-  .camp-track {
-    display: flex;
-    gap: 12px;
-    width: max-content;  /* İçeriği doğal genişlikte sar (animasyon için gerekli) */
-    animation: campScroll var(--camp-duration, 30s) linear infinite;
-    will-change: transform;
-  }
-  .camp-track:hover { animation-play-state: paused; }
-
-  /* %50'de yarıya gel — kartlar 2x render edildi, %50 = orijinal listenin sonu = başlangıç pozisyonu (kesintisiz loop) */
-  @keyframes campScroll {
-    0%   { transform: translateX(0); }
-    100% { transform: translateX(-50%); }
-  }
-
   .camp-card:hover { transform: translateY(-2px); border-color: #f87171 !important; box-shadow: 0 4px 14px rgba(193,39,45,.12); }
-
-  /* Hareketi azaltma tercihi (erişilebilirlik) */
-  @media (prefers-reduced-motion: reduce) {
-    .camp-track { animation: none; }
-  }
 </style>
-
-<script>
-(function() {
-  var track = document.getElementById('camp-track');
-  if (!track) return;
-  // Kart sayısına göre animasyon hızını ayarla — daha çok kart, daha uzun süre (her kart ~3sn)
-  var cards = track.querySelectorAll('.camp-card');
-  var unique = cards.length / 2; // 2x render edildi
-  var duration = Math.max(15, unique * 3.5); // min 15 saniye
-  track.style.setProperty('--camp-duration', duration + 's');
-})();
-</script>
 <?php endif; ?>
 
 <!-- Duyurular bloğu kaldırıldı — sidebar'da "Duyurular" linkinde rozet olarak görünür. -->
