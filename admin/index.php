@@ -112,9 +112,10 @@ if ($page === 'logout') {
 $labelExport  = ($page === 'stock-scan' && ($_GET['action'] ?? '') === 'labels');
 $ajaxLookup   = ($page === 'stock-scan' && ($_GET['action'] ?? '') === 'lookup');
 $batchAjax    = ($page === 'stock-scan' && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form_action'] ?? '') === 'apply_single');
-if (!empty($_GET['export']) || !empty($_GET['print']) || $labelExport || $ajaxLookup || $batchAjax) {
+$paymentsAjax = ($page === 'payments' && ($_GET['action'] ?? '') === 'dealer_orders');
+if (!empty($_GET['export']) || !empty($_GET['print']) || $labelExport || $ajaxLookup || $batchAjax || $paymentsAjax) {
     // İzinli sayfaların tümünü buraya alın — örn. ledger PDF, raporlar PDF
-    $allowedExportPages = ['ledger', 'reports', 'dealers', 'orders', 'stock-scan'];
+    $allowedExportPages = ['ledger', 'reports', 'dealers', 'orders', 'stock-scan', 'payments'];
     if (in_array($page, $allowedExportPages, true)) {
         $pageFile = __DIR__ . "/pages/$page.php";
         if (file_exists($pageFile)) {

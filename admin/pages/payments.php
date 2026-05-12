@@ -6,6 +6,59 @@ $action   = $_GET['action'] ?? 'list';
 $id       = intval($_GET['id'] ?? 0);
 $dealerId = intval($_GET['dealer_id'] ?? 0);
 
+// ── AJAX: Bayinin açık (ödenmemiş) siparişlerini JSON döndür ──
+if ($action === 'dealer_orders') {
+    header('Content-Type: application/json');
+    $did = intval($_GET['dealer_id'] ?? 0);
+    if (!$did) {
+        echo json_encode(['ok' => false, 'orders' => []]);
+        exit;
+    }
+
+    $orders = dbRows(
+        "SELECT o.id, o.order_no, o.grand_total, o.status, o.payment_status,
+                COALESCE(SUM(CASE WHEN p.status='onaylandi' THEN p.amount ELSE 0 END), 0) AS paid
+         FROM b2b_orders o
+         LEFT JOIN b2b_payments p ON p.order_id=o.id
+         WHERE o.dealer_id=?
+           AND o.status NOT IN ('iptal','iade')
+           AND o.payment_status IN ('odenmedi','kismi_odeme')
+         GROUP BY o.id
+         ORDER BY o.created_at DESC
+         LIMIT 50",
+        [$did]
+    );
+
+    $statusMap = [
+        'bekliyor'      => 'Sipariş Alındı',
+        'onaylandi'     => 'Onaylandı',
+        'hazirlaniyor'  => 'Hazırlanıyor',
+        'kargoda'       => 'Teslimata Çıktı',
+        'teslim_edildi' => 'Teslim Edildi',
+    ];
+
+    $result = [];
+    foreach ($orders as $o) {
+        $total   = (float)$o['grand_total'];
+        $paid    = (float)$o['paid'];
+        $balance = round($total - $paid, 2);
+        if ($balance <= 0.01) continue; // Tamamen ödenmiş, atla
+        $result[] = [
+            'id'                => (int)$o['id'],
+            'order_no'          => $o['order_no'],
+            'grand_total'       => $total,
+            'paid'              => $paid,
+            'balance'           => $balance,
+            'balance_formatted' => 'Kalan: ' . number_format($balance, 2, ',', '.') . ' ₺',
+            'status'            => $o['status'],
+            'status_label'      => $statusMap[$o['status']] ?? $o['status'],
+        ];
+    }
+
+    echo json_encode(['ok' => true, 'orders' => $result]);
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrfCheck();
     $act = $_POST['form_action'] ?? '';
@@ -99,6 +152,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Manuel tahsilat girişi
     if ($act === 'manual') {
         $did    = intval($_POST['dealer_id']);
+        $orderId = intval($_POST['order_id'] ?? 0);
         $amount = floatval($_POST['amount']);
         $method = $_POST['type'] ?? 'nakit';
         $note   = trim($_POST['note']);
@@ -106,6 +160,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($did > 0 && $amount > 0) {
             $newId = dbInsertRow('b2b_payments', [
                 'dealer_id'      => $did,
+                'order_id'       => $orderId ?: null,
                 'amount'         => $amount,
                 'type'           => $method,
                 'payment_date'   => $date,
@@ -115,9 +170,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'approved_at'    => date('Y-m-d H:i:s'),
                 'created_at'     => date('Y-m-d H:i:s'),
             ]);
-            ledgerAdd($did, 'alacak', $amount, "Manuel tahsilat: $note", 'payment', $newId);
-            auditLog('payment_manual', 'b2b_payments', $newId, ['dealer_id'=>$did,'amount'=>$amount]);
-            $success = 'Manuel tahsilat kaydedildi.';
+            // Sipariş referansı varsa açıklamayı zenginleştir
+            $ledgerDesc = $orderId
+                ? "Manuel tahsilat — Sipariş #" . dbVal("SELECT order_no FROM b2b_orders WHERE id=?", [$orderId]) . ($note ? " ($note)" : "")
+                : "Manuel tahsilat" . ($note ? ": $note" : "");
+            ledgerAdd($did, 'alacak', $amount, $ledgerDesc, 'payment', $newId);
+
+            // Sipariş ödeme durumunu güncelle (sipariş bazlı hesap)
+            if ($orderId) {
+                $order = dbRow("SELECT grand_total FROM b2b_orders WHERE id=?", [$orderId]);
+                if ($order) {
+                    $totalPaid = (float)dbVal(
+                        "SELECT COALESCE(SUM(amount),0) FROM b2b_payments
+                         WHERE order_id=? AND status='onaylandi'",
+                        [$orderId]
+                    );
+                    $orderTotal = (float)$order['grand_total'];
+                    if ($totalPaid >= $orderTotal - 0.01) {
+                        dbExec("UPDATE b2b_orders SET payment_status='odendi' WHERE id=?", [$orderId]);
+                    } elseif ($totalPaid > 0) {
+                        dbExec("UPDATE b2b_orders SET payment_status='kismi_odeme' WHERE id=?", [$orderId]);
+                    }
+                }
+            }
+
+            auditLog('payment_manual', 'b2b_payments', $newId, ['dealer_id'=>$did,'order_id'=>$orderId,'amount'=>$amount]);
+            $success = 'Manuel tahsilat kaydedildi' . ($orderId ? ' ve sipariş ödeme durumu güncellendi.' : '.');
         } else { $error = 'Bayi ve tutar zorunludur.'; }
     }
 }
@@ -242,7 +320,7 @@ $_tabs = ['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','reddedildi'=>'Reddedi
             <input type="hidden" name="form_action" value="manual">
             <div class="form-group">
                 <label>Bayi *</label>
-                <select name="dealer_id" class="form-control" required>
+                <select name="dealer_id" id="manual-dealer-select" class="form-control" required onchange="loadDealerOrders(this.value)">
                     <option value="">— Bayi Seç —</option>
                     <?php foreach ($dealers ?? [] as $d): ?>
                     <option value="<?= $d['id'] ?>" <?= $dealerId==$d['id']?'selected':'' ?>><?= h($d['company_name']) ?></option>
@@ -250,13 +328,23 @@ $_tabs = ['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','reddedildi'=>'Reddedi
                 </select>
             </div>
             <div class="form-group">
+                <label>
+                    Hangi Siparişe?
+                    <span style="font-size:11px;color:var(--text-muted);font-weight:400">— sipariş seçilirse o siparişin ödeme durumu otomatik güncellenir</span>
+                </label>
+                <select name="order_id" id="manual-order-select" class="form-control">
+                    <option value="">— Genel tahsilat (siparişe bağlı değil) —</option>
+                </select>
+                <div id="manual-order-loading" style="display:none;font-size:11px;color:var(--text-muted);margin-top:4px">Siparişler yükleniyor…</div>
+            </div>
+            <div class="form-group">
                 <label>Tutar (₺) *</label>
-                <input type="number" step="0.01" name="amount" class="form-control" required placeholder="0.00">
+                <input type="number" step="0.01" name="amount" id="manual-amount" class="form-control" required placeholder="0.00">
             </div>
             <div class="form-group">
                 <label>Ödeme Yöntemi</label>
                 <select name="type" class="form-control">
-                    <option value="havale">Havale/EFT</option>
+                    <option value="havale_eft">Havale/EFT</option>
                     <option value="nakit">Nakit</option>
                     <option value="kredi_karti">Kredi Kartı</option>
                     <option value="cek">Çek</option>
@@ -279,6 +367,45 @@ $_tabs = ['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','reddedildi'=>'Reddedi
     </div>
 </div>
 </div>
+
+<script>
+// Bayi seçildiğinde o bayinin ödenmemiş siparişlerini getir
+async function loadDealerOrders(dealerId) {
+    const sel = document.getElementById('manual-order-select');
+    const loading = document.getElementById('manual-order-loading');
+    sel.innerHTML = '<option value="">— Genel tahsilat (siparişe bağlı değil) —</option>';
+    if (!dealerId) return;
+
+    loading.style.display = 'block';
+    try {
+        const res = await fetch('?page=payments&action=dealer_orders&dealer_id=' + dealerId);
+        const data = await res.json();
+        if (data.ok && Array.isArray(data.orders)) {
+            data.orders.forEach(o => {
+                const opt = document.createElement('option');
+                opt.value = o.id;
+                opt.dataset.balance = o.balance;
+                opt.textContent = `${o.order_no} — ${o.balance_formatted} (${o.status_label})`;
+                sel.appendChild(opt);
+            });
+        }
+    } catch (e) { console.error(e); }
+    loading.style.display = 'none';
+}
+
+// Sipariş seçildiğinde tutarı otomatik doldur (kalan bakiye)
+document.getElementById('manual-order-select').addEventListener('change', function() {
+    const opt = this.selectedOptions[0];
+    if (opt && opt.dataset.balance) {
+        document.getElementById('manual-amount').value = opt.dataset.balance;
+    }
+});
+
+// Eğer URL'de dealer_id ile geldiyse otomatik aç
+<?php if ($dealerId > 0): ?>
+loadDealerOrders(<?= $dealerId ?>);
+<?php endif; ?>
+</script>
 
 <!-- Modal: Reddet -->
 <div id="modal-reject" class="modal-overlay">
