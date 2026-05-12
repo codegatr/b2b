@@ -184,6 +184,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
             );
         }
 
+        if ($methodChoice === 'havale_eft') {
+            dbInsertRow('b2b_payments', [
+                'dealer_id'    => $dealer['id'],
+                'order_id'     => $orderId,
+                'type'         => 'havale',
+                'amount'       => $grand,
+                'payment_date' => date('Y-m-d'),
+                'status'       => 'bekliyor',
+                'dealer_note'  => 'Siparis sirasinda Havale / EFT secildi.',
+                'created_at'   => date('Y-m-d H:i:s'),
+            ]);
+        }
+
         foreach ($cartItems as $ci) {
             $dp = dealerPrice($ci['product_id'], (int)$dealer['price_list_id']);
             dbInsertRow('b2b_order_items', [
