@@ -84,6 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($totalPaid >= $orderTotal - 0.01) {
                         // Tamamen ödendi (yarım kuruş tolerans)
                         dbExec("UPDATE b2b_orders SET payment_status='odendi' WHERE id=?", [$p['order_id']]);
+                        closeOrderLedgerIfPaid((int)$p['order_id']);
                     } elseif ($totalPaid > 0) {
                         // Kısmi ödeme
                         dbExec("UPDATE b2b_orders SET payment_status='kismi_odeme' WHERE id=?", [$p['order_id']]);
@@ -188,6 +189,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $orderTotal = (float)$order['grand_total'];
                     if ($totalPaid >= $orderTotal - 0.01) {
                         dbExec("UPDATE b2b_orders SET payment_status='odendi' WHERE id=?", [$orderId]);
+                        closeOrderLedgerIfPaid((int)$orderId);
                     } elseif ($totalPaid > 0) {
                         dbExec("UPDATE b2b_orders SET payment_status='kismi_odeme' WHERE id=?", [$orderId]);
                     }

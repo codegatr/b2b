@@ -150,6 +150,48 @@ function ledgerAdd(int $dealerId, string $type, float $amount, string $desc, str
     );
 }
 
+function ledgerMarkClosed(string $whereSql, array $params = []): int {
+    try {
+        return dbExec("UPDATE b2b_ledger SET is_closed=1, closed_at=COALESCE(closed_at,NOW()) WHERE $whereSql", $params);
+    } catch (\Throwable $e) {
+        return dbExec("UPDATE b2b_ledger SET is_closed=1 WHERE $whereSql", $params);
+    }
+}
+
+function closeOrderLedgerIfPaid(int $orderId): bool {
+    $debt = (float)dbVal(
+        "SELECT COALESCE(SUM(amount),0) FROM b2b_ledger
+         WHERE reference_type='order' AND reference_id=? AND type='borc'",
+        [$orderId]
+    );
+    if ($debt <= 0) return false;
+
+    $paid = (float)dbVal(
+        "SELECT COALESCE(SUM(amount),0) FROM b2b_payments
+         WHERE order_id=? AND status='onaylandi'",
+        [$orderId]
+    );
+    if ($paid < $debt - 0.01) return false;
+
+    ledgerMarkClosed(
+        "reference_type='order' AND reference_id=? AND type='borc' AND is_closed=0",
+        [$orderId]
+    );
+
+    $paymentIds = dbRows(
+        "SELECT id FROM b2b_payments WHERE order_id=? AND status='onaylandi'",
+        [$orderId]
+    );
+    foreach ($paymentIds as $p) {
+        ledgerMarkClosed(
+            "reference_type='payment' AND reference_id=? AND type='alacak' AND is_closed=0",
+            [(int)$p['id']]
+        );
+    }
+
+    return true;
+}
+
 /**
  * Sipariş için cari borç kaydını uygular — TESLİM EDİLDİ anında çağrılır.
  *
@@ -205,7 +247,7 @@ function applyOrderLedger(int $orderId, int $createdBy = 0): int {
               . " ₺, teslim " . number_format($deliveredAmount, 2, ',', '.') . " ₺)";
     }
 
-    return ledgerAdd(
+    $ledgerId = ledgerAdd(
         (int)$order['dealer_id'],
         'borc',
         $deliveredAmount,
@@ -215,6 +257,9 @@ function applyOrderLedger(int $orderId, int $createdBy = 0): int {
         $dueDate,
         $createdBy
     );
+
+    closeOrderLedgerIfPaid($orderId);
+    return $ledgerId;
 }
 
 /**

@@ -250,6 +250,7 @@ if ($step === 'callback' && isset($_POST['ThreeDSessionId'])) {
                         'payment', $paymentId);
                     // Sipariş ödeme durumu
                     dbExec("UPDATE b2b_orders SET payment_status='odendi' WHERE id=?", [$orderId]);
+                    closeOrderLedgerIfPaid($orderId);
 
                     // Aynı sipariş için bekleyen havale/EFT/diğer bildirimleri otomatik reddet
                     dbExec(
