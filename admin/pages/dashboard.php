@@ -7,6 +7,7 @@ $stats = [
     'orders_today'  => (int)dbVal("SELECT COUNT(*) FROM b2b_orders WHERE DATE(created_at)=CURDATE()"),
     'pending_orders'=> (int)dbVal("SELECT COUNT(*) FROM b2b_orders WHERE status='bekliyor'"),
     'pending_pay'   => (int)dbVal("SELECT COUNT(*) FROM b2b_payments WHERE status='bekliyor'"),
+    'revenue_today' => (float)dbVal("SELECT COALESCE(SUM(grand_total),0) FROM b2b_orders WHERE DATE(created_at)=CURDATE() AND status NOT IN('iptal','iade')"),
     'revenue_month' => (float)dbVal("SELECT COALESCE(SUM(grand_total),0) FROM b2b_orders WHERE MONTH(created_at)=MONTH(CURDATE()) AND YEAR(created_at)=YEAR(CURDATE()) AND status NOT IN('iptal','iade')"),
     'products'      => (int)dbVal("SELECT COUNT(*) FROM b2b_products WHERE is_active=1"),
     'low_stock'     => (int)dbVal("SELECT COUNT(*) FROM b2b_products WHERE stock <= stock_critical AND stock > 0 AND is_active=1"),
@@ -84,6 +85,13 @@ $trDate   = date('j') . ' ' . $trMonths[(int)date('n')-1] . ' ' . date('Y') . ',
       <div class="stat-value"><?= $stats['pending_orders'] ?></div>
       <div class="stat-label">Bekleyen Sipariş</div>
       <?php if ($stats['orders_today']): ?><div class="stat-change up">+<?= $stats['orders_today'] ?> bugün</div><?php endif; ?>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg></div>
+    <div class="stat-info">
+      <div class="stat-value"><?= money($stats['revenue_today']) ?></div>
+      <div class="stat-label">Bugün Yapılan Ciro</div>
     </div>
   </div>
   <div class="stat-card">
