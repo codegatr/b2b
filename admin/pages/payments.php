@@ -92,7 +92,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
             // Paraşüt ödeme
-            try { parasut()->createPayment($pid); } catch (Exception $e) {}
+            if (!empty($p['order_id']) && function_exists('parasut')) {
+                try {
+                    $order = dbRow("SELECT id, parasut_invoice_id FROM b2b_orders WHERE id=?", [(int)$p['order_id']]);
+                    $invoiceId = $order['parasut_invoice_id'] ?? null;
+                    if (!$invoiceId) {
+                        $invoiceId = parasut()->syncInvoice((int)$p['order_id']);
+                        if ($invoiceId) {
+                            dbExec("UPDATE b2b_orders SET parasut_invoice_id=? WHERE id=?", [$invoiceId, (int)$p['order_id']]);
+                        }
+                    }
+                    if ($invoiceId) {
+                        $parasutPaymentId = parasut()->createPayment(
+                            $invoiceId,
+                            (float)$p['amount'],
+                            $p['payment_date'] ?: date('Y-m-d'),
+                            paymentMethodLabel($p["type"] ?? "") . ' tahsilati'
+                        );
+                        if ($parasutPaymentId) {
+                            dbExec("UPDATE b2b_payments SET parasut_payment_id=? WHERE id=?", [$parasutPaymentId, $pid]);
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    error_log('Parasut payment sync error: ' . $e->getMessage());
+                }
+            }
             notifyDealer($p['dealer_id'], 'payment', 'Ödemeniz Onaylandı', money($p['amount']).' tutarındaki ödemeniz sisteme işlendi.', '?page=payments');
             auditLog('payment_approved', 'b2b_payments', $pid, ['amount'=>$p['amount']]);
             $success = 'Ödeme onaylandı ve cari hesaba işlendi.';
