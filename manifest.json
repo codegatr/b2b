@@ -1,5 +1,5 @@
 {
-  "version": "1.1.32",
+  "version": "1.1.33",
   "release_date": "2026-05-12",
   "min_php": "8.3",
   "files": [
@@ -41,6 +41,7 @@
     "admin/pages/update.php",
     "admin/pages/admins.php",
     "admin/pages/reports.php",
+    "admin/pages/logs.php",
     "api/cart.php",
     "api/notifications.php",
     "api/rubikpara-installments.php",

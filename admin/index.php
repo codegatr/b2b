@@ -178,6 +178,7 @@ $pageTitle = match($page) {
     'tickets'       => 'Destek Talepleri',
     'announcements' => 'Duyuru Yönetimi',
     'notifications' => 'Bildirimler',
+    'logs'          => 'Log Kaydı',
     'login'        => 'Admin Girişi',
     default        => ucfirst($page),
 };
@@ -427,6 +428,12 @@ function renderAdminPage(string $page, array $vars = []): void {
            style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:12px;color:var(--text-2);text-decoration:none">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           Bayi Portalı
+        </a>
+
+        <a href="?page=logs" title="Log Kaydı"
+           style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:12px;color:var(--text-2);text-decoration:none">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+          Log Kaydı
         </a>
 
         <!-- Bildirimler -->
