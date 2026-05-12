@@ -59,6 +59,10 @@ if ($action === 'dealer_orders') {
     exit;
 }
 
+if ($action !== 'list') {
+    $action = 'list';
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrfCheck();
     $act = $_POST['form_action'] ?? '';

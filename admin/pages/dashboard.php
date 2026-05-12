@@ -174,7 +174,7 @@ $trDate   = date('j') . ' ' . $trMonths[(int)date('n')-1] . ' ' . date('Y') . ',
       </div>
       <div style="text-align:right">
         <div class="fw-600" style="color:var(--success)"><?= money((float)$p['amount']) ?></div>
-        <a href="?page=payments&action=approve&id=<?= $p['id'] ?>" class="btn btn-success btn-sm" style="margin-top:4px">Onayla</a>
+        <a href="?page=payments&status=bekliyor" class="btn btn-success btn-sm" style="margin-top:4px">İncele</a>
       </div>
     </div>
     <?php endforeach; ?>
