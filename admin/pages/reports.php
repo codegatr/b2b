@@ -50,7 +50,7 @@ $s = dbRow("SELECT COUNT(*) as order_count,
         COUNT(DISTINCT dealer_id) as dealer_count
     FROM b2b_orders
     WHERE DATE(created_at) BETWEEN ? AND ?
-      AND status NOT IN ('iptal')", [$from, $to]);
+      AND status NOT IN ('iptal','iade')", [$from, $to]);
 ?>
 <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem">
     <div class="stat-card">
@@ -83,7 +83,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
 if ($report === 'sales'): ?>
 <!-- Satış Raporu -->
 <?php
-$rows = dbRows("SELECT o.order_no, o.created_at, d.company_name, o.grand_total, o.status, o.payment_status, COUNT(oi.id) as item_count FROM b2b_orders o JOIN b2b_dealers d ON d.id=o.dealer_id JOIN b2b_order_items oi ON oi.order_id=o.id WHERE DATE(o.created_at) BETWEEN ? AND ? AND o.status != 'cancelled' GROUP BY o.id ORDER BY o.created_at DESC", [$from, $to]);
+$rows = dbRows("SELECT o.id, o.order_no, o.created_at, d.company_name, o.grand_total, o.status, o.payment_status, COUNT(oi.id) as item_count FROM b2b_orders o JOIN b2b_dealers d ON d.id=o.dealer_id LEFT JOIN b2b_order_items oi ON oi.order_id=o.id WHERE DATE(o.created_at) BETWEEN ? AND ? AND o.status NOT IN ('iptal','iade') GROUP BY o.id ORDER BY o.created_at DESC", [$from, $to]);
 if (isset($out)) {
     fputcsv($out, ['Sipariş No','Tarih','Bayi','Tutar','Durum','Ödeme']);
     foreach ($rows as $r) fputcsv($out, [$r['order_no'], $r['created_at'], $r['company_name'], $r['grand_total'], $r['status'], $r['payment_status']]);
@@ -97,7 +97,7 @@ if (isset($out)) {
         <tbody>
         <?php foreach ($rows as $r): ?>
         <tr>
-            <td><a href="?page=orders&action=detail&id=<?= $r['order_no'] ?>" style="color:var(--primary)"><?= htmlspecialchars($r['order_no']) ?></a></td>
+            <td><a href="?page=orders&action=detail&id=<?= (int)$r['id'] ?>" style="color:var(--primary)"><?= htmlspecialchars($r['order_no']) ?></a></td>
             <td><?= fmtDate($r['created_at']) ?></td>
             <td><?= htmlspecialchars($r['company_name']) ?></td>
             <td><?= $r['item_count'] ?></td>
@@ -116,7 +116,30 @@ if (isset($out)) {
 <?php elseif ($report === 'dealers'): ?>
 <!-- Bayi Raporu -->
 <?php
-$rows = dbRows("SELECT d.company_name, d.city, COUNT(o.id) as order_count, COALESCE(SUM(o.grand_total),0) as total, COALESCE(SUM(l.amount * IF(l.type='borc',1,0)),0) - COALESCE(SUM(l.amount * IF(l.type='alacak',1,0)),0) as balance FROM b2b_dealers d LEFT JOIN b2b_orders o ON o.dealer_id=d.id AND DATE(o.created_at) BETWEEN ? AND ? AND o.status != 'cancelled' LEFT JOIN b2b_ledger l ON l.dealer_id=d.id WHERE d.is_active=1 GROUP BY d.id ORDER BY total DESC", [$from, $to]);
+$rows = dbRows(
+    "SELECT d.company_name, d.city,
+            COALESCE(o.order_count,0) AS order_count,
+            COALESCE(o.total,0) AS total,
+            COALESCE(l.balance,0) AS balance
+     FROM b2b_dealers d
+     LEFT JOIN (
+        SELECT dealer_id, COUNT(*) AS order_count, COALESCE(SUM(grand_total),0) AS total
+        FROM b2b_orders
+        WHERE DATE(created_at) BETWEEN ? AND ?
+          AND status NOT IN ('iptal','iade')
+        GROUP BY dealer_id
+     ) o ON o.dealer_id=d.id
+     LEFT JOIN (
+        SELECT dealer_id,
+               COALESCE(SUM(CASE WHEN type='borc' THEN amount ELSE -amount END),0) AS balance
+        FROM b2b_ledger
+        WHERE is_closed=0
+        GROUP BY dealer_id
+     ) l ON l.dealer_id=d.id
+     WHERE d.is_active=1
+     ORDER BY total DESC",
+    [$from, $to]
+);
 if (isset($out)) {
     fputcsv($out, ['Firma','Şehir','Sipariş','Ciro','Bakiye']);
     foreach ($rows as $r) fputcsv($out, [$r['company_name'],$r['city'],$r['order_count'],$r['total'],$r['balance']]);
@@ -147,7 +170,25 @@ if (isset($out)) {
 <?php elseif ($report === 'stock'): ?>
 <!-- Stok Raporu -->
 <?php
-$rows = dbRows("SELECT p.sku, p.name, p.stock, p.stock_critical, p.base_price, COALESCE(SUM(oi.qty),0) as sold_qty, COALESCE(SUM(oi.qty * oi.unit_price),0) as sold_amount FROM b2b_products p LEFT JOIN b2b_order_items oi ON oi.product_id=p.id LEFT JOIN b2b_orders o ON o.id=oi.order_id AND DATE(o.created_at) BETWEEN ? AND ? AND o.status != 'cancelled' WHERE p.is_active=1 GROUP BY p.id ORDER BY sold_qty DESC", [$from, $to]);
+$rows = dbRows(
+    "SELECT p.sku, p.name, p.stock, p.stock_critical, p.base_price,
+            COALESCE(s.sold_qty,0) as sold_qty,
+            COALESCE(s.sold_amount,0) as sold_amount
+     FROM b2b_products p
+     LEFT JOIN (
+        SELECT oi.product_id,
+               COALESCE(SUM(oi.qty),0) AS sold_qty,
+               COALESCE(SUM(oi.line_total),0) AS sold_amount
+        FROM b2b_order_items oi
+        JOIN b2b_orders o ON o.id=oi.order_id
+        WHERE DATE(o.created_at) BETWEEN ? AND ?
+          AND o.status NOT IN ('iptal','iade')
+        GROUP BY oi.product_id
+     ) s ON s.product_id=p.id
+     WHERE p.is_active=1
+     ORDER BY sold_qty DESC",
+    [$from, $to]
+);
 if (isset($out)) {
     fputcsv($out, ['SKU','Ürün','Stok','Kritik Stok','Satış Adedi','Satış Tutarı']);
     foreach ($rows as $r) fputcsv($out, [$r['sku'],$r['name'],$r['stock'],$r['stock_critical'],$r['sold_qty'],$r['sold_amount']]);
