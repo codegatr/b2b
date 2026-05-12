@@ -411,7 +411,7 @@ $isActive = ($dealer['is_active'] ?? 1);
     <tbody>
       <?php foreach ($orders as $o): ?>
       <tr>
-        <td><a href="?page=orders&action=detail&id=<?= $o['id'] ?>" style="font-weight:600;color:var(--primary);font-family:monospace"><?= h($o['order_number']) ?></a></td>
+        <td><a href="?page=orders&action=detail&id=<?= $o['id'] ?>" style="font-weight:600;color:var(--primary);font-family:monospace"><?= h($o['order_no']) ?></a></td>
         <td style="color:var(--text-muted);font-size:12px"><?= fmtDate($o['created_at']) ?></td>
         <td style="text-align:right;font-weight:600"><?= money($o['grand_total']) ?></td>
         <td><?= orderStatusLabel($o['status']) ?></td>
