@@ -114,7 +114,7 @@ if ($action === 'list') {
         <td><?= orderStatusLabel($o['status']) ?></td>
         <td>
             <span class="badge badge-<?= $o['payment_status']==='odendi'?'green':($o['payment_status']==='bekliyor'?'yellow':'blue') ?>">
-                <?= $o['payment_status']==='odendi'?'Ödendi':($o['payment_status']==='kismi'?'Kısmen':'Bekliyor') ?>
+                <?= $o['payment_status']==='odendi'?'Ödendi':($o['payment_status']==='kismi_odeme'?'Kısmen':'Bekliyor') ?>
             </span>
         </td>
         <td>
@@ -173,12 +173,12 @@ $isAuto = ($order['status'] === 'onaylandi');
       <?php
       $pstyle = match($order['payment_status'] ?? '') {
         'odendi'       => 'background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0',
-        'kismi'  => 'background:#fffbeb;color:#d97706;border:1px solid #fed7aa',
+        'kismi_odeme'  => 'background:#fffbeb;color:#d97706;border:1px solid #fed7aa',
         default        => 'background:#fef2f2;color:#dc2626;border:1px solid #fecaca',
       };
       $plabel = match($order['payment_status'] ?? '') {
         'odendi'      => '✓ Ödendi',
-        'kismi' => '◑ Kısmen',
+        'kismi_odeme' => '◑ Kısmen',
         default       => '⏳ Ödenmedi',
       };
       ?>

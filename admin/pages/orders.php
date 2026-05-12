@@ -316,6 +316,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = 'archive_list';
     }
 
+    // ── Ödendi olarak işaretle — Tahsilat oluşturmadan hızlı işaretleme ──
+    if ($act === 'mark_paid') {
+        $oid = intval($_POST['order_id'] ?? 0);
+        $o = dbRow("SELECT * FROM b2b_orders WHERE id=?", [$oid]);
+        if ($o) {
+            dbExec("UPDATE b2b_orders SET payment_status='odendi' WHERE id=?", [$oid]);
+            auditLog('order_marked_paid', 'b2b_orders', $oid, ['old_status' => $o['payment_status'] ?? 'odenmedi']);
+            $success = 'Sipariş ÖDENDİ olarak işaretlendi.';
+            $action = 'detail'; $id = $oid;
+        }
+    }
+
     // ── Tamamlanmış (teslim/iptal/iade) tüm siparişleri toplu arşivle ──
     if ($act === 'archive_completed_bulk') {
         $count = (int)dbVal(
@@ -695,7 +707,19 @@ $completedNotArchived = (int)dbVal(
     // Arşivle / Arşivden Çıkar — sadece tamamlanmış (teslim/iptal/iade) siparişlerde göster
     $isCompleted = in_array($order['status'], ['teslim_edildi','iptal','iade']);
     $isArchived  = !empty($order['is_archived']);
+    $payStatus   = $order['payment_status'] ?? 'odenmedi';
     ?>
+
+    <?php // Ödeme hızlı işaretleme — henüz ödenmediyse ?>
+    <?php if (!in_array($payStatus, ['odendi']) && $order['status'] !== 'iptal'): ?>
+      <form method="post" style="display:inline" onsubmit="return confirm('Bu siparişi ÖDENDİ olarak işaretlemek istediğinize emin misiniz?\n\nDikkat: Bu sadece sipariş durumunu işaretler. Cari hesaba alacak kaydı OLUŞTURULMAZ. Cari hareketi için Tahsilat sayfasından ödeme kaydı eklemelisiniz.');">
+        <?= csrfField() ?>
+        <input type="hidden" name="form_action" value="mark_paid">
+        <input type="hidden" name="order_id" value="<?= (int)$order['id'] ?>">
+        <button type="submit" class="btn" style="background:#dcfce7;color:#15803d;border:1px solid #86efac;font-weight:600">💰 Ödendi İşaretle</button>
+      </form>
+    <?php endif; ?>
+
     <?php if ($isCompleted && !$isArchived): ?>
       <form method="post" style="display:inline" onsubmit="return confirm('Bu siparişi arşive kaldırmak istediğinize emin misiniz?\n\nAna listeden gizlenecek ama silinmeyecek. İstediğin zaman Arşiv menüsünden geri çıkarabilirsiniz.');">
         <?= csrfField() ?>

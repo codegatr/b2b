@@ -17,16 +17,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             dbExec("UPDATE b2b_payments SET status='onaylandi', approved_by=?, approved_at=NOW() WHERE id=?", [adminId(), $pid]);
             // Cari alacak yaz
             ledgerAdd($p['dealer_id'], 'alacak', $p['amount'], "Ödeme onaylandı: " . h(paymentMethodLabel($p["type"] ?? "")), 'payment', $pid);
-            // Sipariş ödeme durumu güncelle
+            // Sipariş ödeme durumu güncelle — SİPARİŞ BAZLI (bayi bazlı değil)
             if ($p['order_id']) {
-                $orderBalance = dbVal(
-                    "SELECT COALESCE(SUM(CASE WHEN type='borc' THEN amount ELSE -amount END),0) FROM b2b_ledger WHERE dealer_id=? AND is_closed=0",
-                    [$p['dealer_id']]
-                );
-                if ($orderBalance <= 0) {
-                    dbExec("UPDATE b2b_orders SET payment_status='odendi' WHERE id=?", [$p['order_id']]);
-                } else {
-                    dbExec("UPDATE b2b_orders SET payment_status='kismi' WHERE id=?", [$p['order_id']]);
+                $order = dbRow("SELECT grand_total FROM b2b_orders WHERE id=?", [$p['order_id']]);
+                if ($order) {
+                    // Bu siparişe ait toplam ONAYLANMIŞ ödeme tutarı
+                    $totalPaid = (float)dbVal(
+                        "SELECT COALESCE(SUM(amount),0) FROM b2b_payments
+                         WHERE order_id=? AND status='onaylandi'",
+                        [$p['order_id']]
+                    );
+                    $orderTotal = (float)$order['grand_total'];
+                    if ($totalPaid >= $orderTotal - 0.01) {
+                        // Tamamen ödendi (yarım kuruş tolerans)
+                        dbExec("UPDATE b2b_orders SET payment_status='odendi' WHERE id=?", [$p['order_id']]);
+                    } elseif ($totalPaid > 0) {
+                        // Kısmi ödeme
+                        dbExec("UPDATE b2b_orders SET payment_status='kismi_odeme' WHERE id=?", [$p['order_id']]);
+                    }
                 }
             }
             // Paraşüt ödeme
