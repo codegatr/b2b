@@ -26,6 +26,25 @@ $recentPayments = dbRows(
      WHERE p.status='bekliyor'
      ORDER BY p.created_at DESC LIMIT 5"
 );
+
+$topProducts = dbRows(
+    "SELECT
+        oi.product_id,
+        oi.product_name,
+        oi.product_sku,
+        COALESCE(p.unit, 'adet') AS unit,
+        SUM(oi.qty) AS total_qty,
+        SUM(oi.line_total) AS total_amount,
+        COUNT(DISTINCT oi.order_id) AS order_count
+     FROM b2b_order_items oi
+     JOIN b2b_orders o ON o.id=oi.order_id
+     LEFT JOIN b2b_products p ON p.id=oi.product_id
+     WHERE o.status NOT IN ('iptal','iade')
+       AND o.created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+     GROUP BY oi.product_id, oi.product_name, oi.product_sku, p.unit
+     ORDER BY total_qty DESC, total_amount DESC
+     LIMIT 8"
+);
 ?>
 <div class="page-body">
 
@@ -165,6 +184,46 @@ $trDate   = date('j') . ' ' . $trMonths[(int)date('n')-1] . ' ' . date('Y') . ',
   </div>
 </div>
 
+</div>
+
+<!-- En Cok Satilan Urunler -->
+<div class="card" style="margin-top:20px">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">En Çok Satılan Ürünler</h3>
+      <div class="text-muted fs-12" style="margin-top:2px">Bu ay iptal/iade hariç siparişlere göre</div>
+    </div>
+    <a href="?page=reports" class="btn btn-secondary btn-sm">Raporlar</a>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th style="width:42px">#</th>
+          <th>Ürün</th>
+          <th>SKU</th>
+          <th style="text-align:right">Satış</th>
+          <th style="text-align:right">Sipariş</th>
+          <th style="text-align:right">Tutar</th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php foreach ($topProducts as $i => $p): ?>
+        <tr>
+          <td class="text-muted fs-12"><?= $i + 1 ?></td>
+          <td class="fw-600"><?= h($p['product_name']) ?></td>
+          <td class="text-muted fs-12"><?= h($p['product_sku'] ?: '—') ?></td>
+          <td style="text-align:right;font-weight:700"><?= number_format((float)$p['total_qty'], 0, ',', '.') ?> <?= h($p['unit']) ?></td>
+          <td style="text-align:right"><?= (int)$p['order_count'] ?></td>
+          <td style="text-align:right;color:var(--success);font-weight:700"><?= money((float)$p['total_amount']) ?></td>
+        </tr>
+        <?php endforeach; ?>
+        <?php if (empty($topProducts)): ?>
+        <tr><td colspan="6" class="text-center text-muted" style="padding:24px">Bu ay satış verisi yok</td></tr>
+        <?php endif; ?>
+      </tbody>
+    </table>
+  </div>
 </div>
 
 <!-- Stok Uyarıları -->
