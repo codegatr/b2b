@@ -12,38 +12,86 @@
  * Öncelik: price_list_items > price_list iskonto > base_price
  */
 function dealerPrice(int $productId, int $priceListId): array {
-    // Fiyat listesi item'ı var mı?
-    $item = dbRow(
-        "SELECT pli.price, pli.discount_percent, pl.discount_percent as list_discount
-         FROM b2b_price_list_items pli
-         JOIN b2b_price_lists pl ON pl.id=pli.price_list_id
-         WHERE pli.price_list_id=? AND pli.product_id=?",
-        [$priceListId, $productId]
-    );
-
     $product = dbRow("SELECT base_price, vat_rate, min_order_qty FROM b2b_products WHERE id=?", [$productId]);
     if (!$product) return ['price'=>0,'vat_rate'=>18,'discount'=>0,'min_qty'=>1];
 
-    if ($item) {
-        $price = (float)$item['price'];
-        $discount = $item['discount_percent'] !== null
-            ? (float)$item['discount_percent']
-            : (float)$item['list_discount'];
-        if ($discount > 0) {
-            $price = $price * (1 - $discount / 100);
-        }
-    } else {
-        // Fiyat listesi yok — base_price + liste iskontosu
-        $pl = dbRow("SELECT discount_percent FROM b2b_price_lists WHERE id=?", [$priceListId]);
-        $listDiscount = $pl ? (float)$pl['discount_percent'] : 0;
-        $price = (float)$product['base_price'] * (1 - $listDiscount / 100);
+    $basePrice = (float)$product['base_price'];
+
+    // Liste yok ise (priceListId=0 veya bulunamadı) → standart fiyat
+    if ($priceListId <= 0) {
+        return [
+            'price'    => round($basePrice, 2),
+            'vat_rate' => (float)$product['vat_rate'],
+            'discount' => 0,
+            'min_qty'  => (int)($product['min_order_qty'] ?? 1),
+        ];
     }
+
+    // Liste seviyesi ayarlar
+    $list = null;
+    try {
+        $list = dbRow("SELECT discount_percent, price_adjust FROM b2b_price_lists WHERE id=?", [$priceListId]);
+    } catch (\Throwable $e) {
+        // Eski şema (price_adjust kolonu yok)
+        $list = dbRow("SELECT discount_percent FROM b2b_price_lists WHERE id=?", [$priceListId]);
+        if ($list) $list['price_adjust'] = null;
+    }
+
+    // Ürün-bazlı override
+    $item = null;
+    try {
+        $item = dbRow(
+            "SELECT price, discount_percent, price_adjust, min_order_qty
+             FROM b2b_price_list_items
+             WHERE price_list_id=? AND product_id=?",
+            [$priceListId, $productId]
+        );
+    } catch (\Throwable $e) {
+        // Eski şema (price_adjust kolonu yok)
+        $item = dbRow(
+            "SELECT price, discount_percent, min_order_qty
+             FROM b2b_price_list_items
+             WHERE price_list_id=? AND product_id=?",
+            [$priceListId, $productId]
+        );
+        if ($item) $item['price_adjust'] = null;
+    }
+
+    $price = $basePrice;
+    $effectiveDiscount = 0;
+
+    // ── Öncelik 1: Ürün-bazlı SABİT FİYAT override
+    if ($item && (float)$item['price'] > 0) {
+        $price = (float)$item['price'];
+    }
+    // ── Öncelik 2: Ürün-bazlı YÜZDE indirim
+    elseif ($item && $item['discount_percent'] !== null) {
+        $price = $basePrice * (1 - (float)$item['discount_percent'] / 100);
+        $effectiveDiscount = (float)$item['discount_percent'];
+    }
+    // ── Öncelik 3: Ürün-bazlı TUTAR ek/eksilt
+    elseif ($item && $item['price_adjust'] !== null) {
+        $price = $basePrice + (float)$item['price_adjust'];
+    }
+    // ── Öncelik 4: Liste geneli YÜZDE indirim
+    elseif ($list && (float)$list['discount_percent'] > 0) {
+        $price = $basePrice * (1 - (float)$list['discount_percent'] / 100);
+        $effectiveDiscount = (float)$list['discount_percent'];
+    }
+    // ── Öncelik 5: Liste geneli TUTAR ek/eksilt
+    elseif ($list && $list['price_adjust'] !== null && (float)$list['price_adjust'] != 0) {
+        $price = $basePrice + (float)$list['price_adjust'];
+    }
+    // else: standart base_price kullanılır
+
+    // Negatif fiyatı engelle
+    if ($price < 0) $price = 0;
 
     return [
         'price'    => round($price, 2),
         'vat_rate' => (float)$product['vat_rate'],
-        'discount' => $item['discount_percent'] ?? ($item['list_discount'] ?? 0),
-        'min_qty'  => $item['min_order_qty'] ?? $product['min_order_qty'] ?? 1,
+        'discount' => $effectiveDiscount,
+        'min_qty'  => $item['min_order_qty'] ?? ($product['min_order_qty'] ?? 1),
     ];
 }
 

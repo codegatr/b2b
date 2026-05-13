@@ -12,6 +12,9 @@ if (isPost() && $action === 'save-list') {
     $name    = trim($_POST['name'] ?? '');
     $desc    = trim($_POST['description'] ?? '');
     $disc    = (float)str_replace(',','.',($_POST['discount_percent']??'0'));
+    // Yeni: price_adjust (tutar bazlı ek/eksilt — boş bırakılırsa NULL)
+    $adjustRaw = isset($_POST['price_adjust']) ? trim($_POST['price_adjust']) : '';
+    $adjust    = $adjustRaw === '' ? null : (float)str_replace(',','.',$adjustRaw);
     $cur     = $_POST['currency'] ?? 'TRY';
     $isDef   = isset($_POST['is_default']) ? 1 : 0;
     $isAct   = isset($_POST['is_active']) ? 1 : 0;
@@ -19,12 +22,23 @@ if (isPost() && $action === 'save-list') {
     if ($isDef) dbExec("UPDATE b2b_price_lists SET is_default=0");
 
     if ($listId) {
-        dbExec("UPDATE b2b_price_lists SET name=?,description=?,discount_percent=?,currency=?,is_default=?,is_active=? WHERE id=?",
-            [$name,$desc,$disc,$cur,$isDef,$isAct,$listId]);
+        try {
+            dbExec("UPDATE b2b_price_lists SET name=?,description=?,discount_percent=?,price_adjust=?,currency=?,is_default=?,is_active=? WHERE id=?",
+                [$name,$desc,$disc,$adjust,$cur,$isDef,$isAct,$listId]);
+        } catch (\Throwable $e) {
+            // Eski şema (migration_018 koşmamış)
+            dbExec("UPDATE b2b_price_lists SET name=?,description=?,discount_percent=?,currency=?,is_default=?,is_active=? WHERE id=?",
+                [$name,$desc,$disc,$cur,$isDef,$isAct,$listId]);
+        }
         $_SESSION['flash_admin'] = ['type'=>'success','msg'=>'Fiyat listesi güncellendi.'];
     } else {
-        $listId = dbInsert("INSERT INTO b2b_price_lists (name,description,discount_percent,currency,is_default,is_active) VALUES (?,?,?,?,?,?)",
-            [$name,$desc,$disc,$cur,$isDef,$isAct]);
+        try {
+            $listId = dbInsert("INSERT INTO b2b_price_lists (name,description,discount_percent,price_adjust,currency,is_default,is_active) VALUES (?,?,?,?,?,?,?)",
+                [$name,$desc,$disc,$adjust,$cur,$isDef,$isAct]);
+        } catch (\Throwable $e) {
+            $listId = dbInsert("INSERT INTO b2b_price_lists (name,description,discount_percent,currency,is_default,is_active) VALUES (?,?,?,?,?,?)",
+                [$name,$desc,$disc,$cur,$isDef,$isAct]);
+        }
         $_SESSION['flash_admin'] = ['type'=>'success','msg'=>'Fiyat listesi oluşturuldu.'];
     }
     auditLog('price_list_save','b2b_price_lists',$listId);
@@ -36,15 +50,25 @@ if (isPost() && $action === 'save-list') {
 if (isPost() && $action === 'save-item') {
     csrfCheck();
     $productId = (int)($_POST['product_id']??0);
-    $price     = (float)str_replace(',','.',($_POST['price']??'0'));
+    $price     = $_POST['price']==='' ? 0 : (float)str_replace(',','.',($_POST['price']??'0'));
     $disc      = $_POST['discount_percent']==='' ? null : (float)str_replace(',','.',($_POST['discount_percent']??'0'));
+    $adjust    = !isset($_POST['price_adjust']) || $_POST['price_adjust']==='' ? null : (float)str_replace(',','.',$_POST['price_adjust']);
     $minQty    = $_POST['min_order_qty']==='' ? null : (int)($_POST['min_order_qty']??null);
 
     if ($listId && $productId) {
-        dbExec("INSERT INTO b2b_price_list_items (price_list_id,product_id,price,discount_percent,min_order_qty)
-                VALUES (?,?,?,?,?)
-                ON DUPLICATE KEY UPDATE price=VALUES(price),discount_percent=VALUES(discount_percent),min_order_qty=VALUES(min_order_qty)",
-            [$listId,$productId,$price,$disc,$minQty]);
+        // Defansif: price_adjust kolonu yoksa sessiz geç
+        try {
+            dbExec("INSERT INTO b2b_price_list_items (price_list_id,product_id,price,discount_percent,price_adjust,min_order_qty)
+                    VALUES (?,?,?,?,?,?)
+                    ON DUPLICATE KEY UPDATE price=VALUES(price),discount_percent=VALUES(discount_percent),price_adjust=VALUES(price_adjust),min_order_qty=VALUES(min_order_qty)",
+                [$listId,$productId,$price,$disc,$adjust,$minQty]);
+        } catch (\Throwable $e) {
+            // Eski şema (migration_018 koşmamış) — price_adjust olmadan kaydet
+            dbExec("INSERT INTO b2b_price_list_items (price_list_id,product_id,price,discount_percent,min_order_qty)
+                    VALUES (?,?,?,?,?)
+                    ON DUPLICATE KEY UPDATE price=VALUES(price),discount_percent=VALUES(discount_percent),min_order_qty=VALUES(min_order_qty)",
+                [$listId,$productId,$price,$disc,$minQty]);
+        }
     }
     jsonResponse(['ok'=>true,'msg'=>'Kaydedildi.']);
 }
@@ -130,7 +154,7 @@ $lists = dbRows("SELECT pl.*, COUNT(pli.id) as item_count,
 <div class="table-wrap">
 <table>
 <thead><tr>
-  <th>Liste Adı</th><th>Para Birimi</th><th>Global İskonto</th><th>Ürün Sayısı</th><th>Bayi Sayısı</th><th>Durum</th><th></th>
+  <th>Liste Adı</th><th>Para Birimi</th><th>Fiyat Kuralı</th><th>Ürün Sayısı</th><th>Bayi Sayısı</th><th>Durum</th><th></th>
 </tr></thead>
 <tbody>
 <?php foreach ($lists as $l): ?>
@@ -143,7 +167,22 @@ $lists = dbRows("SELECT pl.*, COUNT(pli.id) as item_count,
     <?php if ($l['description']): ?><div class="text-muted fs-12"><?= h($l['description']) ?></div><?php endif; ?>
   </td>
   <td><?= h($l['currency']) ?></td>
-  <td><?= $l['discount_percent'] > 0 ? '%'.$l['discount_percent'] : '—' ?></td>
+  <td>
+    <?php
+    $disc   = (float)$l['discount_percent'];
+    $adj    = $l['price_adjust'] ?? null;
+    if ($disc > 0) {
+        echo '<span class="badge" style="background:#fef2f2;color:#b91c1c">−%' . number_format($disc, 2, ',', '.') . '</span>';
+    } elseif ($adj !== null && (float)$adj != 0) {
+        $sign  = (float)$adj >= 0 ? '+' : '';
+        $color = (float)$adj >= 0 ? '#0369a1' : '#15803d';
+        $bg    = (float)$adj >= 0 ? '#eff6ff' : '#f0fdf4';
+        echo '<span class="badge" style="background:' . $bg . ';color:' . $color . '">Baz ' . $sign . number_format((float)$adj, 2, ',', '.') . ' ₺</span>';
+    } else {
+        echo '<span class="text-muted">Standart</span>';
+    }
+    ?>
+  </td>
   <td><?= $l['item_count'] ?> ürün</td>
   <td><?= $l['dealer_count'] ?> bayi</td>
   <td><?= $l['is_active'] ? '<span class="badge badge-success">Aktif</span>' : '<span class="badge badge-secondary">Pasif</span>' ?></td>
@@ -185,8 +224,18 @@ $lists = dbRows("SELECT pl.*, COUNT(pli.id) as item_count,
         <div class="form-group">
           <label class="form-label">Global İskonto (%)</label>
           <input name="discount_percent" type="number" step="0.01" min="0" max="100" class="form-control" value="<?= $list['discount_percent']??'0' ?>">
-          <div class="" style="font-size:12px;color:var(--text-muted);margin-top:4px">Ürün bazında fiyat girilmezse bu iskonto uygulanır</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Standart fiyata YÜZDE indirim (örn: %10)</div>
         </div>
+        <div class="form-group">
+          <label class="form-label">Tutar Ek/İndirim (₺)</label>
+          <input name="price_adjust" type="number" step="0.01" class="form-control" value="<?= isset($list['price_adjust']) && $list['price_adjust']!==null ? h($list['price_adjust']) : '' ?>" placeholder="örn: 5 veya -2.50">
+          <div style="font-size:12px;color:var(--text-muted);margin-top:4px">
+            Standart fiyat <strong>+ bu tutar</strong> uygulanır. <strong>Boş = uygulanmaz.</strong><br>
+            Pozitif = zam (+5 ₺), negatif = indirim (-2.50 ₺).
+          </div>
+        </div>
+      </div>
+      <div class="form-row col-2">
         <div class="form-group">
           <label class="form-label">Para Birimi</label>
           <select name="currency" class="form-control">
@@ -194,6 +243,13 @@ $lists = dbRows("SELECT pl.*, COUNT(pli.id) as item_count,
             <option value="<?= $c ?>" <?= ($list['currency']??'TRY')===$c?'selected':'' ?>><?= $c ?></option>
             <?php endforeach; ?>
           </select>
+        </div>
+        <div class="form-group" style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:10px 12px">
+          <div style="font-size:11px;font-weight:700;color:#92400e;margin-bottom:4px">💡 ÖNCELİK</div>
+          <div style="font-size:11px;color:#78350f;line-height:1.5">
+            Yüzde ve Tutar <strong>ikisi de</strong> dolu ise <strong>Yüzde</strong> uygulanır.
+            Ürün-bazlı override (varsa) liste genelini geçersiz kılar.
+          </div>
         </div>
       </div>
       <div class="form-row col-2">
@@ -251,6 +307,44 @@ $products = dbRows(
     <button class="btn btn-secondary btn-sm" data-modal-open="modal-import">CSV İçe Aktar</button>
   </div>
 </div>
+
+<!-- Aktif Fiyatlandırma Kuralı Özeti — kullanıcı liste ayarlarının ne yaptığını anlasın -->
+<?php
+$adjustValue = $list['price_adjust'] ?? null;
+$globalDisc  = (float)($list['discount_percent'] ?? 0);
+$hasAnyRule  = $globalDisc > 0 || ($adjustValue !== null && (float)$adjustValue != 0);
+?>
+<?php if ($hasAnyRule): ?>
+<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;gap:14px;align-items:flex-start">
+  <span style="font-size:22px;line-height:1">✓</span>
+  <div style="flex:1">
+    <div style="font-weight:700;color:#15803d;font-size:13px;margin-bottom:4px">Aktif Fiyatlandırma Kuralı</div>
+    <div style="font-size:12.5px;color:#166534;line-height:1.6">
+      Bu listeye atanan bayilere
+      <?php if ($globalDisc > 0): ?>
+        <strong>standart fiyat üzerinden %<?= number_format($globalDisc, 2, ',', '.') ?> indirim</strong> uygulanır.
+      <?php elseif ($adjustValue !== null && (float)$adjustValue != 0): ?>
+        <strong>standart fiyat <?= (float)$adjustValue >= 0 ? '+' : '' ?><?= number_format((float)$adjustValue, 2, ',', '.') ?> ₺</strong>
+        <?= (float)$adjustValue >= 0 ? 'ek olarak' : 'indirim olarak' ?> uygulanır.
+      <?php endif; ?>
+      <br>
+      <span style="font-size:11.5px;color:#15803d">Aşağıda <strong>ürüne özel</strong> fiyat girersen, o ürün için liste kuralı geçersiz olur.</span>
+    </div>
+  </div>
+</div>
+<?php else: ?>
+<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;gap:14px;align-items:flex-start">
+  <span style="font-size:22px;line-height:1">ℹ️</span>
+  <div style="flex:1">
+    <div style="font-weight:700;color:#92400e;font-size:13px;margin-bottom:4px">Bu listede genel kural tanımlı değil</div>
+    <div style="font-size:12.5px;color:#78350f;line-height:1.6">
+      Bayiler bu listeyi kullansa bile <strong>standart fiyat</strong> görür.
+      <a href="?page=price-lists&id=<?= $listId ?>&action=edit" style="color:#b45309;font-weight:700">Düzenle</a> butonundan
+      <strong>Global İskonto (%)</strong> veya <strong>Tutar Ek/İndirim (₺)</strong> ayarlayabilirsin.
+    </div>
+  </div>
+</div>
+<?php endif; ?>
 
 <div class="search-wrap">
   <input type="text" id="table-search" class="form-control search-input" placeholder="Ürün ara...">
