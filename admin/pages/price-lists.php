@@ -316,12 +316,8 @@ $lists = dbRows("SELECT pl.*, COUNT(pli.id) as item_count,
       <a href="?page=price-lists&id=<?= $l['id'] ?>&action=items" class="btn btn-secondary btn-sm">Fiyatlar</a>
       <a href="?page=price-lists&id=<?= $l['id'] ?>&action=dealers" class="btn btn-secondary btn-sm">Bayiler</a>
       <a href="?page=price-lists&id=<?= $l['id'] ?>&action=edit" class="btn btn-secondary btn-sm">Düzenle</a>
-      <form method="post" action="?page=price-lists&action=copy-list" style="display:inline" onsubmit="
-        const newName = prompt('Yeni listenin adını girin:', <?= json_encode($l['name'] . ' Kopyası') ?>);
-        if (!newName || !newName.trim()) return false;
-        this.querySelector('input[name=new_name]').value = newName.trim();
-        return true;
-      ">
+      <form method="post" action="?page=price-lists&action=copy-list" class="copy-list-form" style="display:inline"
+            data-list-name="<?= htmlspecialchars($l['name'], ENT_QUOTES, 'UTF-8') ?>">
         <?= csrfField() ?>
         <input type="hidden" name="source_id" value="<?= (int)$l['id'] ?>">
         <input type="hidden" name="new_name" value="">
@@ -337,6 +333,24 @@ $lists = dbRows("SELECT pl.*, COUNT(pli.id) as item_count,
 </div>
 </div>
 </div>
+
+<script>
+// 📋 Kopyala butonları için prompt handler
+// (inline onsubmit yerine bu, çünkü PHP json_encode'un çıktısındaki çift tırnak
+// HTML attribute'unu bozuyor ve handler çalışmıyor — bu yöntem her durumda çalışır)
+document.querySelectorAll('.copy-list-form').forEach(function(form) {
+    form.addEventListener('submit', function(e) {
+        const listName = form.dataset.listName || '';
+        const newName  = prompt('Yeni listenin adını girin:', listName + ' Kopyası');
+        if (!newName || !newName.trim()) {
+            e.preventDefault();
+            return false;
+        }
+        form.querySelector('input[name="new_name"]').value = newName.trim();
+        // submit devam eder
+    });
+});
+</script>
 
 <?php elseif ($action === 'edit'): ?>
 <?php $list = $listId ? dbRow("SELECT * FROM b2b_price_lists WHERE id=?", [$listId]) : null; ?>
