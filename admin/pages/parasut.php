@@ -8,15 +8,28 @@ $debugResult = null;
 if (isset($_GET['test'])) {
     try {
         $result = parasut()->testConnection();
-        $companies = $result['data'] ?? [];
-        if (is_array($companies) && !empty($companies)) {
-            $names = [];
-            foreach ($companies as $c) {
-                $name = $c['attributes']['name'] ?? '?';
-                $cid  = $c['id'] ?? '?';
-                $names[] = "{$name} (ID: {$cid})";
+        // /v4/me cevabı: { data: { id, type:'users', attributes:{ name, email, ... } } }
+        $user = $result['data'] ?? null;
+        if (is_array($user) && !empty($user)) {
+            // İki olası yapı: tek object veya array of objects
+            $isList = isset($user[0]) && is_array($user[0]);
+            if ($isList) {
+                // Liste — eski yapıyı destekle
+                $names = [];
+                foreach ($user as $c) {
+                    $name = $c['attributes']['name'] ?? '?';
+                    $cid  = $c['id'] ?? '?';
+                    $names[] = "{$name} (ID: {$cid})";
+                }
+                $msg = 'success:Bağlantı başarılı. Erişilebilir firmalar: ' . implode(', ', $names);
+            } else {
+                // Tek kullanıcı
+                $userName  = h($user['attributes']['name']  ?? '?');
+                $userEmail = h($user['attributes']['email'] ?? '?');
+                $userId    = h((string)($user['id'] ?? '?'));
+                $companyId = h(setting('parasut_company_id', ''));
+                $msg = "success:✓ Bağlantı başarılı. Kullanıcı: <strong>{$userName}</strong> ({$userEmail}, ID: {$userId}). Kayıtlı Firma ID: <strong>{$companyId}</strong>";
             }
-            $msg = 'success:Bağlantı başarılı. Erişilebilir firmalar: ' . implode(', ', $names);
         } else {
             $msg = 'success:Bağlantı başarılı.';
         }
@@ -164,7 +177,13 @@ $tokenValid = $tokenExpiry && $tokenExpiry > time();
 </div>
 
 <?php if ($msg): [$t,$m] = explode(':', $msg, 2); ?>
-<div class="alert alert-<?= $t==='error'?'danger':'success' ?>"><?= h($m) ?></div>
+<div class="alert alert-<?= $t==='error'?'danger':'success' ?>">
+  <?php if ($t === 'success'): ?>
+    <?= $m // success mesajında sadece <strong> ve text var, güvenli ?>
+  <?php else: ?>
+    <?= h($m) ?>
+  <?php endif; ?>
+</div>
 <?php endif; ?>
 
 <!-- Durum Kartları -->
