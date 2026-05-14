@@ -50,25 +50,48 @@ if (isPost() && $action === 'save-list') {
 if (isPost() && $action === 'save-item') {
     csrfCheck();
     $productId = (int)($_POST['product_id']??0);
-    $price     = $_POST['price']==='' ? 0 : (float)str_replace(',','.',($_POST['price']??'0'));
-    $disc      = $_POST['discount_percent']==='' ? null : (float)str_replace(',','.',($_POST['discount_percent']??'0'));
-    $adjust    = !isset($_POST['price_adjust']) || $_POST['price_adjust']==='' ? null : (float)str_replace(',','.',$_POST['price_adjust']);
-    $minQty    = $_POST['min_order_qty']==='' ? null : (int)($_POST['min_order_qty']??null);
 
-    if ($listId && $productId) {
-        // Defansif: price_adjust kolonu yoksa sessiz geç
-        try {
-            dbExec("INSERT INTO b2b_price_list_items (price_list_id,product_id,price,discount_percent,price_adjust,min_order_qty)
-                    VALUES (?,?,?,?,?,?)
-                    ON DUPLICATE KEY UPDATE price=VALUES(price),discount_percent=VALUES(discount_percent),price_adjust=VALUES(price_adjust),min_order_qty=VALUES(min_order_qty)",
-                [$listId,$productId,$price,$disc,$adjust,$minQty]);
-        } catch (\Throwable $e) {
-            // Eski şema (migration_018 koşmamış) — price_adjust olmadan kaydet
-            dbExec("INSERT INTO b2b_price_list_items (price_list_id,product_id,price,discount_percent,min_order_qty)
-                    VALUES (?,?,?,?,?)
-                    ON DUPLICATE KEY UPDATE price=VALUES(price),discount_percent=VALUES(discount_percent),min_order_qty=VALUES(min_order_qty)",
-                [$listId,$productId,$price,$disc,$minQty]);
-        }
+    // Helper: boş string veya tanımsızsa null, yoksa float/int
+    $parseFloat = function($v) {
+        if (!isset($v) || trim($v) === '') return null;
+        return (float)str_replace(',','.', trim($v));
+    };
+    $parseInt = function($v) {
+        if (!isset($v) || trim($v) === '') return null;
+        return (int)trim($v);
+    };
+
+    $price  = $parseFloat($_POST['price'] ?? '');
+    $disc   = $parseFloat($_POST['discount_percent'] ?? '');
+    $adjust = $parseFloat($_POST['price_adjust'] ?? '');
+    $minQty = $parseInt($_POST['min_order_qty'] ?? '');
+
+    if (!$listId || !$productId) {
+        jsonResponse(['ok'=>false,'msg'=>'Eksik parametre.']);
+    }
+
+    // Tüm alanlar boş ise mevcut override kaydını sil (liste kuralına döner)
+    $allEmpty = ($price === null) && ($disc === null) && ($adjust === null) && ($minQty === null);
+
+    if ($allEmpty) {
+        dbExec("DELETE FROM b2b_price_list_items WHERE price_list_id=? AND product_id=?", [$listId,$productId]);
+        jsonResponse(['ok'=>true,'msg'=>'Özel fiyat silindi (liste kuralına döndü).']);
+    }
+
+    // Sabit fiyat alanı boşsa 0 olarak gönder (DB DECIMAL NOT NULL olabilir)
+    $priceVal = $price ?? 0;
+
+    try {
+        dbExec("INSERT INTO b2b_price_list_items (price_list_id,product_id,price,discount_percent,price_adjust,min_order_qty)
+                VALUES (?,?,?,?,?,?)
+                ON DUPLICATE KEY UPDATE price=VALUES(price),discount_percent=VALUES(discount_percent),price_adjust=VALUES(price_adjust),min_order_qty=VALUES(min_order_qty)",
+            [$listId,$productId,$priceVal,$disc,$adjust,$minQty]);
+    } catch (\Throwable $e) {
+        // Eski şema (migration_020 koşmamış) — price_adjust olmadan
+        dbExec("INSERT INTO b2b_price_list_items (price_list_id,product_id,price,discount_percent,min_order_qty)
+                VALUES (?,?,?,?,?)
+                ON DUPLICATE KEY UPDATE price=VALUES(price),discount_percent=VALUES(discount_percent),min_order_qty=VALUES(min_order_qty)",
+            [$listId,$productId,$priceVal,$disc,$minQty]);
     }
     jsonResponse(['ok'=>true,'msg'=>'Kaydedildi.']);
 }
@@ -281,15 +304,44 @@ $list = dbRow("SELECT * FROM b2b_price_lists WHERE id=?", [$listId]);
 if (!$list) { redirect('?page=price-lists'); }
 
 $search = trim($_GET['q']??'');
-$items = dbRows(
-    "SELECT pli.*, p.name, p.sku, p.base_price, p.stock, p.unit
-     FROM b2b_price_list_items pli
-     JOIN b2b_products p ON p.id=pli.product_id
-     WHERE pli.price_list_id=?
-     " . ($search ? "AND (p.name LIKE ? OR p.sku LIKE ?)" : "") . "
-     ORDER BY p.name",
-    $search ? [$listId, "%$search%", "%$search%"] : [$listId]
-);
+
+// TÜM aktif ürünleri çek; bu listede override edilmişse pli.* gelir, yoksa NULL'lar gelir.
+// Defansif: price_adjust kolonu yoksa try-catch ile eski şemaya düşer.
+try {
+    $allRows = dbRows(
+        "SELECT p.id AS product_id, p.name, p.sku, p.base_price, p.stock, p.unit, p.vat_rate,
+                pli.id AS item_id, pli.price, pli.discount_percent, pli.price_adjust, pli.min_order_qty
+         FROM b2b_products p
+         LEFT JOIN b2b_price_list_items pli ON pli.product_id=p.id AND pli.price_list_id=?
+         WHERE p.is_active=1
+         " . ($search ? " AND (p.name LIKE ? OR p.sku LIKE ?)" : "") . "
+         ORDER BY p.name",
+        $search ? [$listId, "%$search%", "%$search%"] : [$listId]
+    );
+} catch (\Throwable $e) {
+    // Eski şema (price_adjust kolonu yok)
+    $allRows = dbRows(
+        "SELECT p.id AS product_id, p.name, p.sku, p.base_price, p.stock, p.unit, p.vat_rate,
+                pli.id AS item_id, pli.price, pli.discount_percent, pli.min_order_qty
+         FROM b2b_products p
+         LEFT JOIN b2b_price_list_items pli ON pli.product_id=p.id AND pli.price_list_id=?
+         WHERE p.is_active=1
+         " . ($search ? " AND (p.name LIKE ? OR p.sku LIKE ?)" : "") . "
+         ORDER BY p.name",
+        $search ? [$listId, "%$search%", "%$search%"] : [$listId]
+    );
+    foreach ($allRows as &$row) $row['price_adjust'] = null;
+    unset($row);
+}
+
+// Listede override edilmiş ürün sayısı (yeşil özet kutusu için)
+$overrideCount = 0;
+foreach ($allRows as $r) {
+    if ($r['item_id']) $overrideCount++;
+}
+
+// Eski $items uyumluluğu (CSV export gibi yerler kullanıyor olabilir)
+$items = array_filter($allRows, fn($r) => !empty($r['item_id']));
 
 $products = dbRows(
     "SELECT id, name, sku, base_price, unit FROM b2b_products WHERE is_active=1 ORDER BY name"
@@ -299,26 +351,27 @@ $products = dbRows(
 <div class="card-header" style="padding:0;margin-bottom:16px">
   <div>
     <h2 style="font-size:16px"><?= h($list['name']) ?> — Ürün Fiyatları</h2>
-    <div class="text-muted fs-12">Global iskonto: %<?= $list['discount_percent'] ?></div>
+    <div class="text-muted fs-12">
+      <?php if ($globalDisc > 0): ?>Liste kuralı: <strong style="color:#b91c1c">−%<?= number_format($globalDisc, 2, ',', '.') ?></strong>
+      <?php elseif ($globalAdjust !== null && (float)$globalAdjust != 0): ?>Liste kuralı: <strong style="color:#0369a1">Baz <?= (float)$globalAdjust >= 0 ? '+' : '' ?><?= number_format((float)$globalAdjust, 2, ',', '.') ?> ₺</strong>
+      <?php else: ?>Liste kuralı: <span style="color:var(--text-muted)">Standart fiyat</span><?php endif; ?>
+    </div>
   </div>
   <div class="btn-group">
-    <a href="?page=price-lists&id=<?= $listId ?>&action=edit" class="btn btn-secondary btn-sm">Düzenle</a>
-    <button class="btn btn-primary btn-sm" data-modal-open="modal-add-price">+ Ürün Ekle</button>
-    <button class="btn btn-secondary btn-sm" data-modal-open="modal-import">CSV İçe Aktar</button>
+    <a href="?page=price-lists&id=<?= $listId ?>&action=edit" class="btn btn-secondary btn-sm">⚙ Liste Kuralı Düzenle</a>
   </div>
 </div>
 
 <!-- Aktif Fiyatlandırma Kuralı Özeti — kullanıcı liste ayarlarının ne yaptığını anlasın -->
 <?php
 $adjustValue = $list['price_adjust'] ?? null;
-$globalDisc  = (float)($list['discount_percent'] ?? 0);
 $hasAnyRule  = $globalDisc > 0 || ($adjustValue !== null && (float)$adjustValue != 0);
 ?>
 <?php if ($hasAnyRule): ?>
 <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;gap:14px;align-items:flex-start">
   <span style="font-size:22px;line-height:1">✓</span>
   <div style="flex:1">
-    <div style="font-weight:700;color:#15803d;font-size:13px;margin-bottom:4px">Aktif Fiyatlandırma Kuralı</div>
+    <div style="font-weight:700;color:#15803d;font-size:13px;margin-bottom:4px">Aktif Liste Kuralı</div>
     <div style="font-size:12.5px;color:#166534;line-height:1.6">
       Bu listeye atanan bayilere
       <?php if ($globalDisc > 0): ?>
@@ -328,69 +381,154 @@ $hasAnyRule  = $globalDisc > 0 || ($adjustValue !== null && (float)$adjustValue 
         <?= (float)$adjustValue >= 0 ? 'ek olarak' : 'indirim olarak' ?> uygulanır.
       <?php endif; ?>
       <br>
-      <span style="font-size:11.5px;color:#15803d">Aşağıda <strong>ürüne özel</strong> fiyat girersen, o ürün için liste kuralı geçersiz olur.</span>
+      <span style="font-size:11.5px;color:#15803d">Tabloda <strong>ürün-bazlı</strong> değer girersen, o ürün için bu liste kuralı geçersiz olur (önceliği: Sabit > İskonto% > Tutar± > Liste kuralı).</span>
     </div>
   </div>
 </div>
 <?php else: ?>
-<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;gap:14px;align-items:flex-start">
+<div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;gap:14px;align-items:flex-start">
   <span style="font-size:22px;line-height:1">ℹ️</span>
   <div style="flex:1">
-    <div style="font-weight:700;color:#92400e;font-size:13px;margin-bottom:4px">Bu listede genel kural tanımlı değil</div>
-    <div style="font-size:12.5px;color:#78350f;line-height:1.6">
-      Bayiler bu listeyi kullansa bile <strong>standart fiyat</strong> görür.
-      <a href="?page=price-lists&id=<?= $listId ?>&action=edit" style="color:#b45309;font-weight:700">Düzenle</a> butonundan
+    <div style="font-weight:700;color:#1e40af;font-size:13px;margin-bottom:4px">Listede genel kural yok</div>
+    <div style="font-size:12.5px;color:#1e3a8a;line-height:1.6">
+      Bayiler standart fiyat görür — ürüne özel fiyat girmediğin sürece.
+      Toplu indirim/zam için <a href="?page=price-lists&id=<?= $listId ?>&action=edit" style="color:#1d4ed8;font-weight:700">⚙ Liste Kuralı Düzenle</a> butonundan
       <strong>Global İskonto (%)</strong> veya <strong>Tutar Ek/İndirim (₺)</strong> ayarlayabilirsin.
     </div>
   </div>
 </div>
 <?php endif; ?>
 
-<div class="search-wrap">
-  <input type="text" id="table-search" class="form-control search-input" placeholder="Ürün ara...">
+<div class="search-wrap" style="margin-bottom:12px">
+  <input type="text" id="price-search" class="form-control" placeholder="🔍 Ürün adı veya SKU ile ara…" value="<?= h($search) ?>"
+         style="font-size:14px;padding:10px 14px">
 </div>
 
 <div class="card">
 <div class="table-wrap">
 <table>
 <thead><tr>
-  <th>Ürün</th><th>SKU</th><th>Birim</th><th>Liste Fiyatı (KDV hariç)</th><th>İskonto</th><th>Net Fiyat</th><th>Min. Adet</th><th></th>
+  <th>Ürün</th>
+  <th>SKU</th>
+  <th>Baz Fiyat<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">KDV Hariç</span></th>
+  <th style="width:130px">Sabit Fiyat (₺)<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">Override</span></th>
+  <th style="width:90px">İskonto (%)</th>
+  <th style="width:120px">Tutar ± (₺)<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">+5 / -2.50</span></th>
+  <th style="width:80px">Min. Adet</th>
+  <th style="width:140px">Bayinin Göreceği</th>
+  <th style="width:90px"></th>
 </tr></thead>
 <tbody>
-<?php foreach ($items as $item):
-  $netPrice = (float)$item['price'];
-  if ($item['discount_percent'] !== null) {
-      $netPrice *= (1 - $item['discount_percent']/100);
-  } elseif ($list['discount_percent'] > 0) {
-      $netPrice *= (1 - $list['discount_percent']/100);
-  }
+<?php
+$globalDisc   = (float)($list['discount_percent'] ?? 0);
+$globalAdjust = $list['price_adjust'] ?? null;
+
+foreach ($allRows as $row):
+    $pid    = (int)$row['product_id'];
+    $base   = (float)$row['base_price'];
+    $itemId = $row['item_id'];
+
+    // Bayinin göreceği fiyatı hesapla — dealerPrice() önceliği ile
+    $fixedPrice = $row['price'] !== null ? (float)$row['price'] : null;
+    $itemDisc   = $row['discount_percent'];
+    $itemAdjust = $row['price_adjust'] ?? null;
+
+    if ($fixedPrice !== null && $fixedPrice > 0) {
+        $netPrice = $fixedPrice;
+        $netLabel = 'Sabit';
+        $netColor = '#7c3aed';
+    } elseif ($itemDisc !== null) {
+        $netPrice = $base * (1 - (float)$itemDisc / 100);
+        $netLabel = 'Ürün %';
+        $netColor = '#b91c1c';
+    } elseif ($itemAdjust !== null) {
+        $netPrice = $base + (float)$itemAdjust;
+        $netLabel = 'Ürün ±';
+        $netColor = (float)$itemAdjust >= 0 ? '#0369a1' : '#15803d';
+    } elseif ($globalDisc > 0) {
+        $netPrice = $base * (1 - $globalDisc / 100);
+        $netLabel = 'Liste %';
+        $netColor = '#b91c1c';
+    } elseif ($globalAdjust !== null && (float)$globalAdjust != 0) {
+        $netPrice = $base + (float)$globalAdjust;
+        $netLabel = 'Liste ±';
+        $netColor = (float)$globalAdjust >= 0 ? '#0369a1' : '#15803d';
+    } else {
+        $netPrice = $base;
+        $netLabel = 'Standart';
+        $netColor = 'var(--text-muted)';
+    }
+    if ($netPrice < 0) $netPrice = 0;
 ?>
-<tr>
-  <td class="fw-600"><?= h($item['name']) ?></td>
-  <td class="text-muted"><?= h($item['sku']??'—') ?></td>
-  <td><?= h($item['unit']) ?></td>
-  <td><?= money((float)$item['price']) ?></td>
-  <td><?= $item['discount_percent'] !== null ? '%'.$item['discount_percent'] : '<span class="text-muted">—</span>' ?></td>
-  <td><strong style="color:var(--accent)"><?= money($netPrice) ?></strong></td>
-  <td><?= $item['min_order_qty'] ?? '<span class="text-muted">—</span>' ?></td>
+<tr data-product-id="<?= $pid ?>" style="<?= $itemId ? '' : 'background:#fafafa' ?>">
+  <td class="fw-600" style="min-width:200px"><?= h($row['name']) ?>
+    <?php if ($itemId): ?><span style="font-size:10px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:4px;margin-left:6px;font-weight:600">ÖZEL</span><?php endif; ?>
+  </td>
+  <td class="text-muted fs-12"><?= h($row['sku']??'—') ?></td>
+  <td class="fs-12"><?= money($base) ?></td>
   <td>
-    <button class="btn btn-ghost btn-sm btn-icon"
-            onclick="editPriceItem(<?= $item['id'] ?>,<?= $item['product_id'] ?>,<?= h(json_encode($item['name'])) ?>,<?= $item['price'] ?>,<?= $item['discount_percent']??'null' ?>,<?= $item['min_order_qty']??'null' ?>)"
-            title="Düzenle">✏</button>
-    <button class="btn btn-ghost btn-sm btn-icon" style="color:var(--danger)"
-            onclick="deletePriceItem(<?= $item['id'] ?>)" title="Sil">🗑</button>
+    <input type="number" step="0.01" min="0" class="form-control pli-input"
+           data-product-id="<?= $pid ?>" data-field="price"
+           value="<?= $fixedPrice !== null && $fixedPrice > 0 ? number_format($fixedPrice, 2, '.', '') : '' ?>"
+           placeholder="Boş"
+           style="padding:6px 8px;font-size:12px;height:32px;min-height:32px">
+  </td>
+  <td>
+    <input type="number" step="0.01" min="0" max="100" class="form-control pli-input"
+           data-product-id="<?= $pid ?>" data-field="discount_percent"
+           value="<?= $itemDisc !== null ? number_format((float)$itemDisc, 2, '.', '') : '' ?>"
+           placeholder="Boş"
+           style="padding:6px 8px;font-size:12px;height:32px;min-height:32px">
+  </td>
+  <td>
+    <input type="number" step="0.01" class="form-control pli-input"
+           data-product-id="<?= $pid ?>" data-field="price_adjust"
+           value="<?= $itemAdjust !== null ? number_format((float)$itemAdjust, 2, '.', '') : '' ?>"
+           placeholder="Boş"
+           style="padding:6px 8px;font-size:12px;height:32px;min-height:32px">
+  </td>
+  <td>
+    <input type="number" step="1" min="1" class="form-control pli-input"
+           data-product-id="<?= $pid ?>" data-field="min_order_qty"
+           value="<?= $row['min_order_qty'] !== null ? (int)$row['min_order_qty'] : '' ?>"
+           placeholder="1"
+           style="padding:6px 8px;font-size:12px;height:32px;min-height:32px">
+  </td>
+  <td>
+    <div style="font-weight:700;font-size:13px;color:<?= $netColor ?>"><?= money($netPrice) ?></div>
+    <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px"><?= $netLabel ?></div>
+  </td>
+  <td>
+    <button class="btn btn-sm pli-save-btn" data-product-id="<?= $pid ?>"
+            style="background:#10b981;color:#fff;border:none;padding:6px 10px;font-size:12px;font-weight:600;width:100%">
+      💾 Kaydet
+    </button>
+    <?php if ($itemId): ?>
+    <button class="btn btn-sm pli-delete-btn" data-item-id="<?= $itemId ?>"
+            style="background:transparent;color:#dc2626;border:none;padding:4px;font-size:11px;width:100%;margin-top:4px"
+            title="Bu ürünün özel fiyatını sil (standart liste kuralına döner)">
+      🗑 Özel fiyatı sil
+    </button>
+    <?php endif; ?>
   </td>
 </tr>
 <?php endforeach; ?>
-<?php if (empty($items)): ?>
-<tr><td colspan="8" class="text-center text-muted" style="padding:32px">Bu listede ürün fiyatı yok</td></tr>
+<?php if (empty($allRows)): ?>
+<tr><td colspan="9" class="text-center text-muted" style="padding:32px">
+  <?php if ($search): ?>
+  "<?= h($search) ?>" araması için ürün bulunamadı.
+  <?php else: ?>
+  Sistemde hiç aktif ürün yok. <a href="?page=products&action=add">Ürün ekle →</a>
+  <?php endif; ?>
+</td></tr>
 <?php endif; ?>
 </tbody>
 </table>
 </div>
-<div class="card-footer">
-  <span class="text-muted fs-12">Toplam <?= count($items) ?> ürün · Listede olmayan ürünlere global iskonto uygulanır</span>
-  <a href="?page=price-lists&id=<?= $listId ?>&action=export-csv" class="btn btn-secondary btn-sm" style="margin-left:auto">CSV İndir</a>
+<div class="card-footer" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+  <span class="text-muted fs-12">Toplam <?= count($allRows) ?> ürün · <?= $overrideCount ?> ürünün özel fiyatı tanımlı</span>
+  <a href="?page=price-lists&id=<?= $listId ?>&action=export-csv" class="btn btn-secondary btn-sm" style="margin-left:auto">📥 CSV İndir</a>
+  <button class="btn btn-secondary btn-sm" data-modal-open="modal-import">📤 CSV İçe Aktar</button>
 </div>
 </div>
 
@@ -400,6 +538,86 @@ $hasAnyRule  = $globalDisc > 0 || ($adjustValue !== null && (float)$adjustValue 
   <a href="?page=price-lists&id=<?= $listId ?>&action=dealers" class="btn btn-secondary btn-sm">Bayi Atamaları →</a>
 </div>
 </div>
+
+<!-- Inline kaydetme + silme JS -->
+<script>
+(function() {
+    const listId = <?= (int)$listId ?>;
+    const csrfToken = <?= json_encode(csrfToken()) ?>;
+
+    // Kaydet butonları
+    document.querySelectorAll('.pli-save-btn').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            const pid = this.dataset.productId;
+            const row = this.closest('tr');
+            const inputs = row.querySelectorAll('.pli-input');
+
+            const data = new FormData();
+            data.append('csrf_token', csrfToken);
+            data.append('product_id', pid);
+            inputs.forEach(i => data.append(i.dataset.field, i.value));
+
+            const oldText = this.innerHTML;
+            this.innerHTML = '⏳';
+            this.disabled = true;
+
+            try {
+                const res = await fetch(`?page=price-lists&id=${listId}&action=save-item`, {
+                    method: 'POST',
+                    body: data,
+                });
+                const json = await res.json();
+                if (json.ok) {
+                    this.innerHTML = '✓ Kaydedildi';
+                    this.style.background = '#16a34a';
+                    setTimeout(() => location.reload(), 600);
+                } else {
+                    throw new Error(json.msg || 'Kaydetme hatası');
+                }
+            } catch (e) {
+                this.innerHTML = '✗ Hata';
+                this.style.background = '#dc2626';
+                alert('Kaydetme hatası: ' + e.message);
+                setTimeout(() => {
+                    this.innerHTML = oldText;
+                    this.style.background = '#10b981';
+                    this.disabled = false;
+                }, 2000);
+            }
+        });
+    });
+
+    // Sil butonları
+    document.querySelectorAll('.pli-delete-btn').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            if (!confirm('Bu ürünün özel fiyatı silinecek ve liste kuralına dönecek. Devam edilsin mi?')) return;
+            const itemId = this.dataset.itemId;
+            const data = new FormData();
+            data.append('csrf_token', csrfToken);
+            data.append('item_id', itemId);
+            try {
+                await fetch(`?page=price-lists&id=${listId}&action=delete-item`, { method:'POST', body:data });
+                location.reload();
+            } catch(e) { alert('Silme hatası: ' + e.message); }
+        });
+    });
+
+    // Arama kutusu canlı (basit form submit)
+    const searchBox = document.getElementById('price-search');
+    if (searchBox) {
+        let timer;
+        searchBox.addEventListener('input', function() {
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+                const url = new URL(window.location.href);
+                if (this.value.trim()) url.searchParams.set('q', this.value.trim());
+                else url.searchParams.delete('q');
+                window.location.href = url.toString();
+            }, 500);
+        });
+    }
+})();
+</script>
 
 <!-- Modal: Ürün Fiyat Ekle/Düzenle -->
 <div class="modal-overlay" id="modal-add-price">
