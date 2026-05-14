@@ -708,45 +708,62 @@ if (empty($banks)) $banks = [['name'=>'','iban'=>'','holder'=>'','branch'=>'','n
 <?php elseif ($activeTab === 'parasut'): ?>
 <div class="card">
 <div class="card-header"><h3 class="card-title">Paraşüt Entegrasyonu</h3></div>
-<div style="background:#fffbeb;border-bottom:1px solid #fde68a;padding:12px 20px;font-size:13px;color:#92400e;line-height:1.6">
-  ⚠️ <strong>Client ID ve Client Secret</strong> Paraşüt tarafından verilmesi gereken bilgilerdir.<br>
-  <strong>destek@parasut.com</strong> adresine şu e-postayı gönderin:<br>
-  <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:10px 14px;margin-top:8px;font-family:monospace;font-size:12px;color:#78350f;white-space:pre-wrap">Merhaba,
-
-Sistemimizi Paraşüt ile entegre etmek istiyoruz.
-API için gerekli Client ID ve Client Secret bilgilerinin
-tarafımıza iletilmesini rica ederim.
-
-Paraşüt hesap e-postası: info@lemondedutacos.com
-
-Saygılarımla</div>
-  <span style="color:#a16207;font-size:12px;margin-top:6px;display:block">💡 Firma ID: Paraşüt panelindeki URL'den → uygulama.parasut.com/<strong>493289</strong>/ (zaten doğru girilmiş)</span>
+<div style="background:#ecfdf5;border-bottom:1px solid #86efac;padding:14px 20px;font-size:13px;color:#065f46;line-height:1.6">
+  ✓ <strong>Paraşüt API credentials hazır</strong> — Paraşüt destek ekibi tarafından sağlandı.<br>
+  <span style="color:#15803d;font-size:12px;margin-top:6px;display:block">
+    💡 Firma ID: Paraşüt panelinde URL'den okunur — <code style="background:#d1fae5;padding:1px 5px;border-radius:3px">uygulama.parasut.com/<strong>123456</strong>/...</code> kısmındaki sayı
+  </span>
+  <button type="button" class="btn btn-sm" style="margin-top:10px;background:#10b981;color:#fff;border:none" onclick="fillParasutDefaults()">
+    🔑 Hazır Credentials'ı Otomatik Doldur
+  </button>
 </div>
 <div class="card-body">
 <form method="post" id="parasut-form">
     <?= csrfField() ?>
     <input type="hidden" name="tab" value="parasut">
     <div class="form-grid-2">
-        <div class="form-group"><label class="form-label">E-posta</label>
-            <input type="email" name="parasut_email" value="<?= htmlspecialchars(setting('parasut_email')) ?>" class="form-control"></div>
-        <div class="form-group"><label class="form-label">Şifre</label>
-            <input type="password" name="parasut_password" class="form-control" placeholder="Değiştirmek için girin"></div>
-        <div class="form-group"><label class="form-label">Client ID</label>
-            <input type="text" name="parasut_client_id" value="<?= htmlspecialchars(setting('parasut_client_id')) ?>" class="form-control" placeholder="Paraşüt OAuth2 Client ID"></div>
-        <div class="form-group"><label class="form-label">Client Secret</label>
-            <input type="text" name="parasut_client_secret" value="<?= htmlspecialchars(setting('parasut_client_secret')) ?>" class="form-control" placeholder="Paraşüt OAuth2 Client Secret"></div>
-        <div class="form-group"><label class="form-label">Firma ID</label>
-            <input type="text" name="parasut_company_id" value="<?= htmlspecialchars(setting('parasut_company_id')) ?>" class="form-control"></div>
-        <div class="form-group"><label class="form-label">Satış Hesabı</label>
-            <input type="text" name="parasut_sales_account" value="<?= htmlspecialchars(setting('parasut_sales_account')) ?>" class="form-control"></div>
-        <div class="form-group"><label class="form-label">Banka Hesabı</label>
-            <input type="text" name="parasut_bank_account" value="<?= htmlspecialchars(setting('parasut_bank_account')) ?>" class="form-control"></div>
+        <div class="form-group"><label class="form-label">E-posta <span style="color:#dc2626">*</span></label>
+            <input type="email" name="parasut_email" id="parasut_email" value="<?= htmlspecialchars(setting('parasut_email')) ?>" class="form-control" placeholder="info@firma.com"></div>
+        <div class="form-group"><label class="form-label">Şifre <span style="color:#dc2626">*</span></label>
+            <input type="password" name="parasut_password" id="parasut_password" class="form-control" placeholder="<?= setting('parasut_password') ? 'Değiştirmek için girin (kayıtlı)' : 'Paraşüt giriş şifresi' ?>"></div>
+        <div class="form-group"><label class="form-label">Client ID <span style="color:#dc2626">*</span></label>
+            <input type="text" name="parasut_client_id" id="parasut_client_id" value="<?= htmlspecialchars(setting('parasut_client_id')) ?>" class="form-control" placeholder="Paraşüt OAuth2 Client ID"></div>
+        <div class="form-group"><label class="form-label">Client Secret <span style="color:#dc2626">*</span></label>
+            <input type="text" name="parasut_client_secret" id="parasut_client_secret" value="<?= htmlspecialchars(setting('parasut_client_secret')) ?>" class="form-control" placeholder="Paraşüt OAuth2 Client Secret"></div>
+        <div class="form-group"><label class="form-label">Firma ID <span style="color:#dc2626">*</span></label>
+            <input type="text" name="parasut_company_id" value="<?= htmlspecialchars(setting('parasut_company_id')) ?>" class="form-control" placeholder="123456"></div>
+        <div class="form-group"><label class="form-label">Satış Hesabı ID</label>
+            <input type="text" name="parasut_sales_account" value="<?= htmlspecialchars(setting('parasut_sales_account')) ?>" class="form-control" placeholder="Opsiyonel"></div>
+        <div class="form-group"><label class="form-label">Banka Hesabı ID</label>
+            <input type="text" name="parasut_bank_account" value="<?= htmlspecialchars(setting('parasut_bank_account')) ?>" class="form-control" placeholder="Opsiyonel"></div>
+        <div class="form-group" style="display:flex;align-items:center;gap:10px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:10px 14px">
+            <input type="checkbox" name="parasut_auto_invoice" id="parasut_auto_invoice" value="1" <?= setting('parasut_auto_invoice')==='1'?'checked':'' ?> style="margin:0">
+            <label for="parasut_auto_invoice" style="font-size:13px;cursor:pointer;margin:0">
+                <strong>Otomatik fatura oluştur</strong><br>
+                <span style="font-size:11px;color:var(--text-muted)">Bayi sipariş verince Paraşüt'e otomatik fatura kesilir</span>
+            </label>
+        </div>
     </div>
     <div class="form-actions">
-        <button type="submit" class="btn btn-primary">Kaydet</button>
-        <button type="submit" name="do_test_parasut" value="1" class="btn btn-secondary">Bağlantıyı Test Et</button>
+        <button type="submit" class="btn btn-primary">💾 Kaydet</button>
+        <button type="submit" name="do_test_parasut" value="1" class="btn btn-secondary">🔌 Kaydet + Bağlantı Test Et</button>
     </div>
 </form>
+
+<script>
+// "Hazır Credentials" butonu — Paraşüt destek tarafından verilen değerleri otomatik girer
+function fillParasutDefaults() {
+    if (!confirm('Bu işlem Client ID ve Client Secret alanlarına Paraşüt destek tarafından verilen değerleri yazacak. Devam edilsin mi?')) return;
+    document.getElementById('parasut_client_id').value    = 'taOjy8CKFO8gsd8vbZfK6ix_y7V_KiPQtnpsBtA_ZT4';
+    document.getElementById('parasut_client_secret').value = 'suRs9XdOyl4qhborgXdJQi09lQASmL2dbsgiA5WxR6I';
+    if (!document.getElementById('parasut_email').value) {
+        document.getElementById('parasut_email').focus();
+        alert('E-posta ve Şifre alanlarını siz doldurun (Paraşüt giriş bilgileriniz). Sonra Kaydet → Bağlantı Test Et.');
+    } else {
+        alert('Client ID ve Secret dolduruldu. E-posta/Şifre/Firma ID doğru ise Kaydet → Bağlantı Test Et.');
+    }
+}
+</script>
 
 <!-- Stok Senkronizasyonu -->
 <div style="border-top:1px solid var(--border);margin-top:20px;padding-top:20px">

@@ -1,5 +1,5 @@
 {
-  "version": "1.1.36",
+  "version": "1.1.37",
   "release_date": "2026-05-12",
   "min_php": "8.3",
   "files": [
@@ -77,6 +77,7 @@
     "migration_017.sql",
     "migration_018.sql",
     "migration_019.sql",
-    "migration_020.sql"
+    "migration_020.sql",
+    "migration_021.sql"
   ]
 }

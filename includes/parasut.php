@@ -272,12 +272,80 @@ class Parasut {
         if (!$token) {
             throw new Exception('Token alınamadı. E-posta/şifre/client bilgilerini kontrol edin.');
         }
-        // Firma bilgisi çek
-        $r = $this->http('GET', $this->endpoint('me'));
+        // Firma bilgisi çek — /me endpoint companyId'siz (kullanıcıya ait firmaları döner)
+        $r = $this->http('GET', "{$this->baseUrl}/me");
         if (empty($r['data'])) {
-            throw new Exception('Firma bilgisi alınamadı (HTTP hata). Firma ID doğru mu?');
+            throw new Exception('Firma bilgisi alınamadı (HTTP hata). Client ID/Secret veya kullanıcı bilgileri yanlış olabilir.');
         }
         return $r;
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // ÜRÜN SENKRONİZASYONU
+    // ──────────────────────────────────────────────────────────
+
+    /**
+     * Paraşüt'te ürün oluştur veya güncelle (parasut_product_id varsa update).
+     * Return: Paraşüt product ID veya null.
+     */
+    public function syncProduct(int|array $product): ?string {
+        if (!$this->isEnabled()) return null;
+
+        if (is_int($product)) {
+            $product = dbRow("SELECT * FROM b2b_products WHERE id=?", [$product]);
+            if (!$product) return null;
+        }
+
+        $parasutId = $product['parasut_product_id'] ?? null;
+
+        $attributes = [
+            'name'               => $product['name'] ?? 'Ürün',
+            'code'               => $product['sku']  ?? null,
+            'vat_rate'           => (float)($product['vat_rate'] ?? 20),
+            'unit'               => $product['unit'] ?? 'Adet',
+            'currency'           => setting('currency', 'TRY'),
+            'list_price'         => (float)($product['base_price'] ?? 0),
+            'inventory_tracking' => false, // Stok takibi sistemimizde yapılıyor
+        ];
+
+        $body = ['data' => ['type' => 'products', 'attributes' => $attributes]];
+
+        try {
+            if ($parasutId) {
+                // Güncelleme
+                $body['data']['id'] = $parasutId;
+                $res = $this->http('PUT', $this->endpoint("products/{$parasutId}"), $body);
+            } else {
+                // Yeni oluşturma
+                $res = $this->http('POST', $this->endpoint('products'), $body);
+                $newId = $res['data']['id'] ?? null;
+                if ($newId && !empty($product['id'])) {
+                    try {
+                        dbExec("UPDATE b2b_products SET parasut_product_id=? WHERE id=?", [$newId, $product['id']]);
+                    } catch (\Throwable $e) {
+                        // Kolon yoksa sessiz geç
+                    }
+                }
+            }
+            return $res['data']['id'] ?? $parasutId;
+        } catch (\Throwable $e) {
+            error_log('Parasut syncProduct hatası: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Tüm aktif ürünleri toplu senkronize et. (array $results) [success, fail, total]
+     */
+    public function bulkSyncProducts(): array {
+        if (!$this->isEnabled()) return ['success'=>0,'fail'=>0,'total'=>0];
+        $products = dbRows("SELECT * FROM b2b_products WHERE is_active=1");
+        $success = 0; $fail = 0;
+        foreach ($products as $p) {
+            $id = $this->syncProduct($p);
+            if ($id) $success++; else $fail++;
+        }
+        return ['success'=>$success, 'fail'=>$fail, 'total'=>count($products)];
     }
 }
 

@@ -136,7 +136,7 @@ if (isPost() && $action === 'import-csv' && isset($_FILES['csv'])) {
 }
 
 // ── Görünüm ───────────────────────────────────────────────────
-if ($action === 'list' || !$listId): ?>
+if ($action === 'list'): ?>
 <div class="page-body">
 <div class="card-header" style="margin-bottom:16px;padding:0">
   <h2 style="font-size:16px;flex:1">Fiyat Listeleri</h2>
