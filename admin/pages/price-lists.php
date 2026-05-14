@@ -61,14 +61,23 @@ if (isPost() && $action === 'save-item') {
         return (int)trim($v);
     };
 
-    $price  = $parseFloat($_POST['price'] ?? '');
-    $disc   = $parseFloat($_POST['discount_percent'] ?? '');
-    $adjust = $parseFloat($_POST['price_adjust'] ?? '');
-    $minQty = $parseInt($_POST['min_order_qty'] ?? '');
+    // Input'lar KDV DAHİL olarak gelir, DB'ye NET yazılır
+    $priceInc  = $parseFloat($_POST['price'] ?? '');
+    $disc      = $parseFloat($_POST['discount_percent'] ?? '');
+    $adjustInc = $parseFloat($_POST['price_adjust'] ?? '');
+    $minQty    = $parseInt($_POST['min_order_qty'] ?? '');
 
     if (!$listId || !$productId) {
         jsonResponse(['ok'=>false,'msg'=>'Eksik parametre.']);
     }
+
+    // Ürünün KDV oranını oku ve KDV Dahil → NET dönüşümü yap
+    $productInfo = dbRow("SELECT vat_rate FROM b2b_products WHERE id=?", [$productId]);
+    $vatRate = (float)($productInfo['vat_rate'] ?? 20);
+    $vatM    = 1 + $vatRate / 100;
+
+    $price  = $priceInc !== null  ? round($priceInc / $vatM, 4)  : null;
+    $adjust = $adjustInc !== null ? round($adjustInc / $vatM, 4) : null;
 
     // Tüm alanlar boş ise mevcut override kaydını sil (liste kuralına döner)
     $allEmpty = ($price === null) && ($disc === null) && ($adjust === null) && ($minQty === null);
@@ -340,6 +349,12 @@ foreach ($allRows as $r) {
     if ($r['item_id']) $overrideCount++;
 }
 
+// Liste seviyesi kuralları (header + tablo render için gerekli)
+$globalDisc   = (float)($list['discount_percent'] ?? 0);
+$globalAdjust = $list['price_adjust'] ?? null;
+$adjustValue  = $globalAdjust;  // eski isim — daha aşağıda kullanılıyor
+$hasAnyRule   = $globalDisc > 0 || ($globalAdjust !== null && (float)$globalAdjust != 0);
+
 // Eski $items uyumluluğu (CSV export gibi yerler kullanıyor olabilir)
 $items = array_filter($allRows, fn($r) => !empty($r['item_id']));
 
@@ -363,10 +378,6 @@ $products = dbRows(
 </div>
 
 <!-- Aktif Fiyatlandırma Kuralı Özeti — kullanıcı liste ayarlarının ne yaptığını anlasın -->
-<?php
-$adjustValue = $list['price_adjust'] ?? null;
-$hasAnyRule  = $globalDisc > 0 || ($adjustValue !== null && (float)$adjustValue != 0);
-?>
 <?php if ($hasAnyRule): ?>
 <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;gap:14px;align-items:flex-start">
   <span style="font-size:22px;line-height:1">✓</span>
@@ -410,29 +421,33 @@ $hasAnyRule  = $globalDisc > 0 || ($adjustValue !== null && (float)$adjustValue 
 <thead><tr>
   <th>Ürün</th>
   <th>SKU</th>
-  <th>Baz Fiyat<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">KDV Hariç</span></th>
-  <th style="width:130px">Sabit Fiyat (₺)<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">Override</span></th>
+  <th>Baz Fiyat<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">KDV Dahil</span></th>
+  <th style="width:130px">Sabit Fiyat (₺)<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">KDV Dahil · Override</span></th>
   <th style="width:90px">İskonto (%)</th>
-  <th style="width:120px">Tutar ± (₺)<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">+5 / -2.50</span></th>
+  <th style="width:120px">Tutar ± (₺)<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">KDV Dahil · +5 / -2.50</span></th>
   <th style="width:80px">Min. Adet</th>
-  <th style="width:140px">Bayinin Göreceği</th>
+  <th style="width:140px">Bayinin Göreceği<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">KDV Dahil</span></th>
   <th style="width:90px"></th>
 </tr></thead>
 <tbody>
 <?php
-$globalDisc   = (float)($list['discount_percent'] ?? 0);
-$globalAdjust = $list['price_adjust'] ?? null;
-
 foreach ($allRows as $row):
-    $pid    = (int)$row['product_id'];
-    $base   = (float)$row['base_price'];
-    $itemId = $row['item_id'];
+    $pid     = (int)$row['product_id'];
+    $base    = (float)$row['base_price'];
+    $vatRate = (float)($row['vat_rate'] ?? 20);
+    $vatM    = 1 + $vatRate / 100;  // KDV çarpanı (örn: 1.20)
+    $itemId  = $row['item_id'];
 
-    // Bayinin göreceği fiyatı hesapla — dealerPrice() önceliği ile
-    $fixedPrice = $row['price'] !== null ? (float)$row['price'] : null;
-    $itemDisc   = $row['discount_percent'];
-    $itemAdjust = $row['price_adjust'] ?? null;
+    // DB'de net saklı — KDV Dahil değerleri hesapla
+    $fixedPrice    = $row['price'] !== null ? (float)$row['price'] : null;
+    $itemDisc      = $row['discount_percent'];
+    $itemAdjust    = $row['price_adjust'] ?? null;
 
+    // Input alanlarında gösterilecek KDV Dahil değerler
+    $fixedPriceInc  = ($fixedPrice !== null && $fixedPrice > 0) ? $fixedPrice * $vatM : null;
+    $itemAdjustInc  = $itemAdjust !== null ? (float)$itemAdjust * $vatM : null;
+
+    // Bayinin göreceği NET fiyatı hesapla — dealerPrice() önceliği ile
     if ($fixedPrice !== null && $fixedPrice > 0) {
         $netPrice = $fixedPrice;
         $netLabel = 'Sabit';
@@ -459,17 +474,24 @@ foreach ($allRows as $row):
         $netColor = 'var(--text-muted)';
     }
     if ($netPrice < 0) $netPrice = 0;
+
+    // Gösterimde KDV Dahil
+    $baseInc     = $base * $vatM;
+    $netPriceInc = $netPrice * $vatM;
 ?>
-<tr data-product-id="<?= $pid ?>" style="<?= $itemId ? '' : 'background:#fafafa' ?>">
+<tr data-product-id="<?= $pid ?>" data-vat-mult="<?= $vatM ?>" style="<?= $itemId ? '' : 'background:#fafafa' ?>">
   <td class="fw-600" style="min-width:200px"><?= h($row['name']) ?>
     <?php if ($itemId): ?><span style="font-size:10px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:4px;margin-left:6px;font-weight:600">ÖZEL</span><?php endif; ?>
   </td>
   <td class="text-muted fs-12"><?= h($row['sku']??'—') ?></td>
-  <td class="fs-12"><?= money($base) ?></td>
+  <td class="fs-12">
+    <?= money($baseInc) ?>
+    <div style="font-size:10px;color:var(--text-muted)">%<?= number_format($vatRate, 0) ?> KDV</div>
+  </td>
   <td>
     <input type="number" step="0.01" min="0" class="form-control pli-input"
            data-product-id="<?= $pid ?>" data-field="price"
-           value="<?= $fixedPrice !== null && $fixedPrice > 0 ? number_format($fixedPrice, 2, '.', '') : '' ?>"
+           value="<?= $fixedPriceInc !== null ? number_format($fixedPriceInc, 2, '.', '') : '' ?>"
            placeholder="Boş"
            style="padding:6px 8px;font-size:12px;height:32px;min-height:32px">
   </td>
@@ -483,7 +505,7 @@ foreach ($allRows as $row):
   <td>
     <input type="number" step="0.01" class="form-control pli-input"
            data-product-id="<?= $pid ?>" data-field="price_adjust"
-           value="<?= $itemAdjust !== null ? number_format((float)$itemAdjust, 2, '.', '') : '' ?>"
+           value="<?= $itemAdjustInc !== null ? number_format($itemAdjustInc, 2, '.', '') : '' ?>"
            placeholder="Boş"
            style="padding:6px 8px;font-size:12px;height:32px;min-height:32px">
   </td>
@@ -495,7 +517,7 @@ foreach ($allRows as $row):
            style="padding:6px 8px;font-size:12px;height:32px;min-height:32px">
   </td>
   <td>
-    <div style="font-weight:700;font-size:13px;color:<?= $netColor ?>"><?= money($netPrice) ?></div>
+    <div style="font-weight:700;font-size:13px;color:<?= $netColor ?>"><?= money($netPriceInc) ?></div>
     <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px"><?= $netLabel ?></div>
   </td>
   <td>
