@@ -427,8 +427,15 @@ function h(mixed $val): string {
 }
 
 function jsonResponse(array $data, int $code = 200): never {
-    http_response_code($code);
-    header('Content-Type: application/json; charset=utf-8');
+    // Daha önce yazılmış HER TÜRLÜ çıktıyı (HTML, BOM, accidental whitespace) sil
+    // Böylece bu fonksiyon nereden çağrılırsa çağrılsın header'lar temiz set edilir
+    while (ob_get_level() > 0) {
+        @ob_end_clean();
+    }
+    if (!headers_sent()) {
+        http_response_code($code);
+        header('Content-Type: application/json; charset=utf-8');
+    }
     echo json_encode($data, JSON_UNESCAPED_UNICODE);
     exit;
 }

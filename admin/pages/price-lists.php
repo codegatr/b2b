@@ -6,6 +6,18 @@
 $action = $_GET['action'] ?? 'list';
 $listId = (int)($_GET['id'] ?? 0);
 
+// ═══════════════════════════════════════════════════════════════════
+// EARLY AJAX INTERCEPT — header conflict önleme
+// Bu blok, admin/index.php intercept ETMESE BİLE (eski versiyon, vs.)
+// save-item ve delete-item action'larında HİÇBİR HTML çıktısı yok.
+// jsonResponse() ob_end_clean ile zaten korunuyor, bu ek bir güvence.
+// ═══════════════════════════════════════════════════════════════════
+if (isPost() && in_array($action, ['save-item', 'delete-item'], true)) {
+    // Buffer'ları temizle (admin layout HTML basıldıysa da)
+    while (ob_get_level() > 0) { @ob_end_clean(); }
+    @ob_start();  // yeni temiz buffer
+}
+
 // ── Kaydet ───────────────────────────────────────────────────
 if (isPost() && $action === 'save-list') {
     csrfCheck();
