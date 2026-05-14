@@ -54,7 +54,7 @@ if (isPost() && $action === 'save-list') {
         $_SESSION['flash_admin'] = ['type'=>'success','msg'=>'Fiyat listesi oluşturuldu.'];
     }
     auditLog('price_list_save','b2b_price_lists',$listId);
-    header("Location: ?page=price-lists&id=$listId&action=items");
+    redirect("?page=price-lists&id=$listId&action=items");
     exit;
 }
 
@@ -144,7 +144,7 @@ if (isPost() && $action === 'assign-dealers') {
         dbExec("UPDATE b2b_dealers SET price_list_id=$listId WHERE id IN($in)");
         $_SESSION['flash_admin'] = ['type'=>'success','msg'=>count($dealerIds).' bayiye atandı.'];
     }
-    header("Location: ?page=price-lists&id=$listId&action=dealers");
+    redirect("?page=price-lists&id=$listId&action=dealers");
     exit;
 }
 
@@ -175,7 +175,7 @@ if (isPost() && $action === 'import-csv' && isset($_FILES['csv'])) {
         fclose($handle);
         $_SESSION['flash_admin'] = ['type'=>'success','msg'=>"$imported ürün fiyatı içe aktarıldı.".($errors?" ".count($errors)." hata.":'')];
     }
-    header("Location: ?page=price-lists&id=$listId&action=items");
+    redirect("?page=price-lists&id=$listId&action=items");
     exit;
 }
 
