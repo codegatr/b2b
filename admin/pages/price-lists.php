@@ -128,9 +128,57 @@ if (isPost() && $action === 'delete-item') {
 // ── Listeyi sil ───────────────────────────────────────────────
 if (isPost() && $action === 'delete-list') {
     csrfCheck();
+
+    if (!$listId) {
+        $_SESSION['flash_admin'] = ['type'=>'danger','msg'=>'Geçersiz liste ID.'];
+        redirect('?page=price-lists');
+    }
+
+    $list = dbRow("SELECT * FROM b2b_price_lists WHERE id=?", [$listId]);
+    if (!$list) {
+        $_SESSION['flash_admin'] = ['type'=>'danger','msg'=>'Liste bulunamadı.'];
+        redirect('?page=price-lists');
+    }
+
+    // Varsayılan liste silinemez
+    if (!empty($list['is_default'])) {
+        $_SESSION['flash_admin'] = ['type'=>'danger','msg'=>'Varsayılan liste silinemez. Önce başka bir listeyi varsayılan yapın.'];
+        redirect('?page=price-lists');
+    }
+
+    // Bu listeye atanmış bayileri varsayılan listeye taşı (yetim kalmasın)
+    $defaultId = (int)dbVal("SELECT id FROM b2b_price_lists WHERE is_default=1 AND id != ? LIMIT 1", [$listId]);
+    $movedDealers = 0;
+    if ($defaultId) {
+        $movedDealers = (int)dbVal("SELECT COUNT(*) FROM b2b_dealers WHERE price_list_id=?", [$listId]);
+        if ($movedDealers > 0) {
+            dbExec("UPDATE b2b_dealers SET price_list_id=? WHERE price_list_id=?", [$defaultId, $listId]);
+        }
+    } else {
+        // Varsayılan liste yok — bayilerin price_list_id'sini NULL yap
+        $movedDealers = (int)dbVal("SELECT COUNT(*) FROM b2b_dealers WHERE price_list_id=?", [$listId]);
+        if ($movedDealers > 0) {
+            dbExec("UPDATE b2b_dealers SET price_list_id=NULL WHERE price_list_id=?", [$listId]);
+        }
+    }
+
+    $itemCount = (int)dbVal("SELECT COUNT(*) FROM b2b_price_list_items WHERE price_list_id=?", [$listId]);
+
     dbExec("DELETE FROM b2b_price_list_items WHERE price_list_id=?", [$listId]);
     dbExec("DELETE FROM b2b_price_lists WHERE id=?", [$listId]);
-    $_SESSION['flash_admin'] = ['type'=>'success','msg'=>'Fiyat listesi silindi.'];
+
+    auditLog('price_list_deleted', 'b2b_price_lists', $listId, [
+        'name'           => $list['name'],
+        'item_count'     => $itemCount,
+        'moved_dealers'  => $movedDealers,
+        'moved_to_list'  => $defaultId ?: null,
+    ]);
+
+    $msg = "'{$list['name']}' listesi silindi.";
+    if ($itemCount > 0)    $msg .= " ({$itemCount} ürün özel fiyatı kaldırıldı)";
+    if ($movedDealers > 0) $msg .= " ({$movedDealers} bayi " . ($defaultId ? 'varsayılan listeye taşındı' : 'listesiz kaldı') . ')';
+
+    $_SESSION['flash_admin'] = ['type'=>'success','msg'=>$msg];
     redirect('?page=price-lists');
 }
 
@@ -323,6 +371,19 @@ $lists = dbRows("SELECT pl.*, COUNT(pli.id) as item_count,
         <input type="hidden" name="new_name" value="">
         <button type="submit" class="btn btn-secondary btn-sm" title="Bu listeyi tüm ürün fiyatlarıyla birlikte kopyala">📋 Kopyala</button>
       </form>
+      <?php if (empty($l['is_default'])): ?>
+      <form method="post" action="?page=price-lists&id=<?= (int)$l['id'] ?>&action=delete-list" class="delete-list-form" style="display:inline"
+            data-list-name="<?= htmlspecialchars($l['name'], ENT_QUOTES, 'UTF-8') ?>"
+            data-dealer-count="<?= (int)($l['dealer_count'] ?? 0) ?>"
+            data-item-count="<?= (int)($l['item_count'] ?? 0) ?>">
+        <?= csrfField() ?>
+        <button type="submit" class="btn btn-sm" style="background:#fee2e2;color:#b91c1c;border:1px solid #fecaca;font-weight:600"
+                title="Bu listeyi sil">🗑 Sil</button>
+      </form>
+      <?php else: ?>
+      <button type="button" class="btn btn-sm" disabled style="opacity:.4;cursor:not-allowed;background:#fafafa;color:#999;border:1px solid #e5e7eb"
+              title="Varsayılan liste silinemez. Önce başka bir listeyi varsayılan yapın.">🔒 Sil</button>
+      <?php endif; ?>
     </div>
   </td>
 </tr>
@@ -348,6 +409,30 @@ document.querySelectorAll('.copy-list-form').forEach(function(form) {
         }
         form.querySelector('input[name="new_name"]').value = newName.trim();
         // submit devam eder
+    });
+});
+
+// 🗑 Sil butonları için detaylı onay
+document.querySelectorAll('.delete-list-form').forEach(function(form) {
+    form.addEventListener('submit', function(e) {
+        const name        = form.dataset.listName || '';
+        const dealerCount = parseInt(form.dataset.dealerCount || '0', 10);
+        const itemCount   = parseInt(form.dataset.itemCount   || '0', 10);
+
+        let lines = ['"' + name + '" listesi silinecek.'];
+        lines.push('');
+        if (itemCount > 0)   lines.push('• ' + itemCount + ' ürün özel fiyatı kaldırılacak');
+        if (dealerCount > 0) lines.push('• ' + dealerCount + ' bayi varsayılan listeye taşınacak');
+        if (itemCount === 0 && dealerCount === 0) {
+            lines.push('(Listede ürün özel fiyatı veya atanmış bayi yok)');
+        }
+        lines.push('');
+        lines.push('Bu işlem GERİ ALINAMAZ. Devam edilsin mi?');
+
+        if (!confirm(lines.join('\n'))) {
+            e.preventDefault();
+            return false;
+        }
     });
 });
 </script>
