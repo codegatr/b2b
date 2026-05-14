@@ -2,6 +2,7 @@
 requireAdmin();
 
 $msg = '';
+$debugResult = null;
 
 // ── Bağlantı testi
 if (isset($_GET['test'])) {
@@ -21,6 +22,71 @@ if (isset($_GET['test'])) {
         }
     } catch (Exception $e) {
         $msg = 'error:' . $e->getMessage();
+    }
+}
+
+// ── DEBUG: Token endpoint'ine elden istek at (kullanıcı farklı parametreler deneyebilir)
+if (isPost() && ($_POST['action'] ?? '') === 'debug_token') {
+    csrfCheck();
+    $email    = trim($_POST['debug_email'] ?? '');
+    $password = $_POST['debug_password'] ?? '';
+    $redirect = trim($_POST['debug_redirect'] ?? 'urn:ietf:wg:oauth:2.0:oob');
+
+    $clientId     = setting('parasut_client_id');
+    $clientSecret = setting('parasut_client_secret');
+
+    if (empty($email) || empty($password)) {
+        $msg = 'error:E-posta ve Şifre zorunlu.';
+    } else {
+        $ch = curl_init();
+        $postData = http_build_query([
+            'grant_type'    => 'password',
+            'client_id'     => $clientId,
+            'client_secret' => $clientSecret,
+            'username'      => $email,
+            'password'      => $password,
+            'redirect_uri'  => $redirect,
+        ]);
+        curl_setopt_array($ch, [
+            CURLOPT_URL            => 'https://api.parasut.com/oauth/token',
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $postData,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 20,
+            CURLOPT_HTTPHEADER     => [
+                'Content-Type: application/x-www-form-urlencoded',
+                'Accept: application/json',
+            ],
+        ]);
+        $raw  = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err  = curl_error($ch);
+        curl_close($ch);
+
+        $debugResult = [
+            'http_code'    => $code,
+            'curl_error'   => $err,
+            'raw_response' => $raw,
+            'sent_params'  => [
+                'client_id'     => substr($clientId, 0, 25) . '...',
+                'client_secret' => substr($clientSecret, 0, 15) . '...',
+                'username'      => $email,
+                'password'      => '(' . strlen($password) . ' karakter)',
+                'redirect_uri'  => $redirect,
+                'grant_type'    => 'password',
+            ],
+        ];
+
+        // Token başarılı olduysa kullanıcının kayıtlı şifresini de güncelle (kolaylık)
+        $parsed = json_decode($raw, true);
+        if (!empty($parsed['access_token'])) {
+            settingSave('parasut_email', $email);
+            settingSave('parasut_password', $password);
+            settingSave('parasut_token_cache', $parsed['access_token'] . '|' . (time() + ($parsed['expires_in'] ?? 7200) - 60));
+            $msg = 'success:✓ Token alındı! E-posta ve şifre kaydedildi. Artık entegrasyon kullanıma hazır.';
+        } else {
+            $msg = 'error:Token alınamadı — aşağıdaki detaya bakın.';
+        }
     }
 }
 
@@ -162,6 +228,82 @@ $tokenValid = $tokenExpiry && $tokenExpiry > time();
   <a href="?page=settings&tab=parasut">Ayarları tamamlayın →</a>
 </div>
 <?php else: ?>
+<!-- ═══════════════════════ DEBUG / TANI PANELİ ═══════════════════════ -->
+<details<?= $debugResult || ($msg && str_starts_with($msg, 'error')) ? ' open' : '' ?> style="background:#fff;border:1px solid var(--border);border-radius:12px;margin-bottom:20px;overflow:hidden">
+  <summary style="padding:14px 18px;background:#fafafa;border-bottom:1px solid var(--border);cursor:pointer;font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px;list-style:none">
+    🔍 Token Tanı Aracı
+    <span style="font-size:11px;color:var(--text-muted);font-weight:400;margin-left:auto">Bağlantı hatası alıyorsan tıkla</span>
+  </summary>
+  <div style="padding:18px">
+    <p style="font-size:13px;color:var(--text-muted);margin:0 0 14px;line-height:1.6">
+      Token alma hatası alıyorsan, e-posta ve şifreni <strong>elden tekrar girip test edebilirsin</strong>.
+      Bu form kayıtlı şifreyi DEĞİL, buraya yazdığını kullanır.
+      Başarılı olursa otomatik kaydeder.
+    </p>
+
+    <form method="post" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <?= csrfField() ?>
+      <input type="hidden" name="action" value="debug_token">
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px;display:block">E-posta</label>
+        <input type="email" name="debug_email" class="form-control" required
+               value="<?= h(setting('parasut_email')) ?>" placeholder="info@firma.com">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px;display:block">Şifre <span style="color:var(--text-muted);font-weight:400">(yeniden gir)</span></label>
+        <input type="password" name="debug_password" class="form-control" required
+               placeholder="Paraşüt şifresi" autocomplete="off">
+      </div>
+      <div style="grid-column:span 2">
+        <label style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px;display:block">
+          Redirect URI <span style="color:var(--text-muted);font-weight:400">(Paraşüt destek tarafından verilen — varsayılan değer doğru)</span>
+        </label>
+        <input type="text" name="debug_redirect" class="form-control"
+               value="urn:ietf:wg:oauth:2.0:oob"
+               style="font-family:monospace;font-size:12px">
+      </div>
+      <div style="grid-column:span 2;display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding-top:4px">
+        <button type="submit" class="btn btn-primary" style="background:#0ea5e9;border:none">🔌 Token Almayı Dene</button>
+        <span style="font-size:11px;color:var(--text-muted)">Başarılı olursa otomatik kaydeder ve token cache'ler</span>
+      </div>
+    </form>
+
+    <?php if ($debugResult): ?>
+    <div style="background:#1e293b;color:#e2e8f0;padding:16px 18px;border-radius:8px;font-family:monospace;font-size:12px;line-height:1.6;overflow-x:auto;margin-top:12px">
+      <div style="margin-bottom:10px">
+        <strong style="color:#fbbf24">HTTP Kodu:</strong>
+        <span style="color:<?= $debugResult['http_code'] < 400 ? '#22c55e' : '#ef4444' ?>;font-weight:700"><?= $debugResult['http_code'] ?: 'N/A' ?></span>
+      </div>
+      <?php if ($debugResult['curl_error']): ?>
+      <div style="margin-bottom:10px;color:#ef4444">
+        <strong>cURL Hatası:</strong> <?= h($debugResult['curl_error']) ?>
+      </div>
+      <?php endif; ?>
+      <div style="margin-bottom:10px">
+        <strong style="color:#fbbf24">Gönderilen parametreler:</strong>
+        <pre style="margin:6px 0 0;color:#94a3b8;white-space:pre-wrap"><?= h(json_encode($debugResult['sent_params'], JSON_PRETTY_PRINT)) ?></pre>
+      </div>
+      <div>
+        <strong style="color:#fbbf24">Paraşüt Yanıtı:</strong>
+        <pre style="margin:6px 0 0;color:#94a3b8;white-space:pre-wrap;word-break:break-all"><?= h($debugResult['raw_response'] ?: '(boş)') ?></pre>
+      </div>
+    </div>
+    <?php endif; ?>
+
+    <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:12px 14px;margin-top:14px;font-size:12px;line-height:1.7">
+      <strong style="color:#92400e">💡 invalid_grant hatası ne demek?</strong><br>
+      <strong>Client ID ve Secret doğru</strong> (yoksa <code>invalid_client</code> dönerdi). Sorun <strong>kullanıcı doğrulamasında</strong>.<br>
+      Olası nedenler:
+      <ul style="margin:6px 0 0 18px;padding:0">
+        <li><strong>2FA (iki aşamalı doğrulama) açık</strong> → Paraşüt → Güvenlik'ten kapat</li>
+        <li><strong>E-posta veya şifre yanlış</strong> → uygulama.parasut.com'a manuel giriş yap, kontrol et</li>
+        <li><strong>Şifrede özel karakter var</strong> (örn <code>%</code>, <code>&</code>) → harf+rakam olan yeni şifre belirle</li>
+        <li><strong>Hesap askıda</strong> veya şifre süresi dolmuş → Paraşüt'ten kontrol et</li>
+      </ul>
+    </div>
+  </div>
+</details>
+
 <div class="card" style="margin-bottom:20px">
   <div class="card-header"><h3 class="card-title">Mevcut Ayarlar</h3></div>
   <div class="card-body">
