@@ -113,9 +113,10 @@ $labelExport  = ($page === 'stock-scan' && ($_GET['action'] ?? '') === 'labels')
 $ajaxLookup   = ($page === 'stock-scan' && ($_GET['action'] ?? '') === 'lookup');
 $batchAjax    = ($page === 'stock-scan' && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form_action'] ?? '') === 'apply_single');
 $paymentsAjax = ($page === 'payments' && ($_GET['action'] ?? '') === 'dealer_orders');
-if (!empty($_GET['export']) || !empty($_GET['print']) || $labelExport || $ajaxLookup || $batchAjax || $paymentsAjax) {
+$priceListsAjax = ($page === 'price-lists' && $_SERVER['REQUEST_METHOD'] === 'POST' && in_array(($_GET['action'] ?? ''), ['save-item','delete-item'], true));
+if (!empty($_GET['export']) || !empty($_GET['print']) || $labelExport || $ajaxLookup || $batchAjax || $paymentsAjax || $priceListsAjax) {
     // İzinli sayfaların tümünü buraya alın — örn. ledger PDF, raporlar PDF
-    $allowedExportPages = ['ledger', 'reports', 'dealers', 'orders', 'stock-scan', 'payments'];
+    $allowedExportPages = ['ledger', 'reports', 'dealers', 'orders', 'stock-scan', 'payments', 'price-lists'];
     if (in_array($page, $allowedExportPages, true)) {
         $pageFile = __DIR__ . "/pages/$page.php";
         if (file_exists($pageFile)) {
