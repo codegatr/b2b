@@ -724,8 +724,15 @@ if (empty($banks)) $banks = [['name'=>'','iban'=>'','holder'=>'','branch'=>'','n
     <div class="form-grid-2">
         <div class="form-group"><label class="form-label">E-posta <span style="color:#dc2626">*</span></label>
             <input type="email" name="parasut_email" id="parasut_email" value="<?= htmlspecialchars(setting('parasut_email')) ?>" class="form-control" placeholder="info@firma.com"></div>
-        <div class="form-group"><label class="form-label">Şifre <span style="color:#dc2626">*</span></label>
-            <input type="password" name="parasut_password" id="parasut_password" class="form-control" placeholder="<?= setting('parasut_password') ? 'Değiştirmek için girin (kayıtlı)' : 'Paraşüt giriş şifresi' ?>"></div>
+        <div class="form-group"><label class="form-label">
+                Şifre <span style="color:#dc2626">*</span>
+                <?php if (setting('parasut_password')): ?>
+                <span style="font-size:10px;background:#dcfce7;color:#15803d;padding:1px 6px;border-radius:4px;margin-left:6px;font-weight:600">KAYITLI</span>
+                <?php else: ?>
+                <span style="font-size:10px;background:#fee2e2;color:#b91c1c;padding:1px 6px;border-radius:4px;margin-left:6px;font-weight:600">BOŞ</span>
+                <?php endif; ?>
+            </label>
+            <input type="password" name="parasut_password" id="parasut_password" class="form-control" placeholder="<?= setting('parasut_password') ? 'Değiştirmek için girin (mevcut şifre değişmez)' : 'Paraşüt giriş şifresi (zorunlu)' ?>"></div>
         <div class="form-group"><label class="form-label">Client ID <span style="color:#dc2626">*</span></label>
             <input type="text" name="parasut_client_id" id="parasut_client_id" value="<?= htmlspecialchars(setting('parasut_client_id')) ?>" class="form-control" placeholder="Paraşüt OAuth2 Client ID"></div>
         <div class="form-group"><label class="form-label">Client Secret <span style="color:#dc2626">*</span></label>

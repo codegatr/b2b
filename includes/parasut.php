@@ -54,13 +54,29 @@ class Parasut {
             }
         }
 
+        // Ön kontrol — eksik ayar varsa açık hata ver
+        $clientId     = setting('parasut_client_id');
+        $clientSecret = setting('parasut_client_secret');
+        $email        = setting('parasut_email');
+        $password     = setting('parasut_password');
+
+        $missing = [];
+        if (empty($clientId))     $missing[] = 'Client ID';
+        if (empty($clientSecret)) $missing[] = 'Client Secret';
+        if (empty($email))        $missing[] = 'E-posta';
+        if (empty($password))     $missing[] = 'Şifre';
+        if (!empty($missing)) {
+            $this->lastErrorDetail = 'Eksik ayar: ' . implode(', ', $missing) . '. Settings → Paraşüt sekmesinde girilmesi gerekli.';
+            return null;
+        }
+
         // Yeni token al
         $response = $this->http('POST', $this->authUrl, [
             'grant_type'    => 'password',
-            'client_id'     => setting('parasut_client_id'),
-            'client_secret' => setting('parasut_client_secret'),
-            'username'      => setting('parasut_email'),
-            'password'      => setting('parasut_password'),
+            'client_id'     => $clientId,
+            'client_secret' => $clientSecret,
+            'username'      => $email,
+            'password'      => $password,
             'redirect_uri'  => 'urn:ietf:wg:oauth:2.0:oob',
         ], false);
 
@@ -68,8 +84,12 @@ class Parasut {
             $this->token = $response['access_token'];
             $expiry = time() + ($response['expires_in'] ?? 7200) - 60;
             settingSave('parasut_token_cache', $this->token . '|' . $expiry);
+            $this->lastErrorDetail = null;
             return $this->token;
         }
+
+        // Token alınamadı — hata mesajını saklayıp null dön
+        $this->lastErrorDetail = $this->getErrorDetail($response);
         return null;
     }
 
@@ -100,8 +120,10 @@ class Parasut {
 
         if ($method === 'POST') {
             curl_setopt($ch, CURLOPT_POST, true);
-            // Token isteği: form-urlencoded, API isteği: JSON
             curl_setopt($ch, CURLOPT_POSTFIELDS, $auth ? json_encode($data) : http_build_query($data));
+        } elseif ($method === 'PUT') {
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PUT');
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
         } elseif ($method === 'PATCH') {
             curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
@@ -109,13 +131,67 @@ class Parasut {
             curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'DELETE');
         }
 
-        $result   = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $result    = curl_exec($ch);
+        $curlError = curl_error($ch);
+        $httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
         $parsed = json_decode($result ?: '{}', true) ?? [];
-        $this->logAction($method . ' ' . $url, $data, $parsed, $httpCode < 400 ? 'success' : 'error');
+
+        // HTTP kodunu ve curl hatasını parsed'a meta olarak ekle (debug için)
+        $parsed['__meta'] = [
+            'http_code'   => $httpCode,
+            'curl_error'  => $curlError,
+            'raw_snippet' => is_string($result) ? mb_substr($result, 0, 500) : '',
+        ];
+
+        // Sensitive field'leri loga yazmadan önce maskele (client_secret, password)
+        $logReq = $data;
+        if (isset($logReq['client_secret'])) $logReq['client_secret'] = '***';
+        if (isset($logReq['password']))      $logReq['password'] = '***';
+
+        $this->logAction(
+            $method . ' ' . preg_replace('/^https?:\/\/[^\/]+/', '', $url) . ' [HTTP ' . $httpCode . ']',
+            $logReq,
+            $parsed,
+            $httpCode > 0 && $httpCode < 400 ? 'success' : 'error'
+        );
+
         return $parsed;
+    }
+
+    /**
+     * Son hata mesajını oku — testConnection ve syncDealer/createInvoice
+     * sonrası kullanıcıya gösterilebilir.
+     */
+    public ?string $lastErrorDetail = null;
+
+    private function getErrorDetail(array $response): string {
+        $meta = $response['__meta'] ?? [];
+        $http = $meta['http_code'] ?? 0;
+        $curl = $meta['curl_error'] ?? '';
+
+        if ($curl) {
+            return "Bağlantı hatası: $curl";
+        }
+
+        // Paraşüt token endpoint error formatı: {"error":"invalid_grant","error_description":"..."}
+        if (!empty($response['error'])) {
+            $err = $response['error'];
+            $desc = $response['error_description'] ?? '';
+            return "Paraşüt API hatası: $err" . ($desc ? " — $desc" : "") . " (HTTP $http)";
+        }
+
+        // API endpoint error formatı: {"errors":[{"title":"...","detail":"..."}]}
+        if (!empty($response['errors']) && is_array($response['errors'])) {
+            $msgs = [];
+            foreach ($response['errors'] as $e) {
+                $msgs[] = ($e['title'] ?? 'Hata') . ($e['detail'] ?? '' ? ': ' . $e['detail'] : '');
+            }
+            return "Paraşüt API hatası (HTTP $http): " . implode(' / ', $msgs);
+        }
+
+        return "Bilinmeyen hata (HTTP $http)";
     }
 
     private function endpoint(string $path): string {
@@ -270,12 +346,14 @@ class Parasut {
         }
         $token = $this->getToken();
         if (!$token) {
-            throw new Exception('Token alınamadı. E-posta/şifre/client bilgilerini kontrol edin.');
+            $detail = $this->lastErrorDetail ?: 'bilinmeyen sebep';
+            throw new Exception("Token alınamadı: $detail");
         }
-        // Firma bilgisi çek — /me endpoint companyId'siz (kullanıcıya ait firmaları döner)
+        // Firma bilgisi çek — /me endpoint companyId'siz
         $r = $this->http('GET', "{$this->baseUrl}/me");
         if (empty($r['data'])) {
-            throw new Exception('Firma bilgisi alınamadı (HTTP hata). Client ID/Secret veya kullanıcı bilgileri yanlış olabilir.');
+            $detail = $this->getErrorDetail($r);
+            throw new Exception("Firma bilgisi alınamadı. $detail");
         }
         return $r;
     }
