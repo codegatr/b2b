@@ -172,6 +172,7 @@ $tokenValid = $tokenExpiry && $tokenExpiry > time();
     <?php if ($tokenCache): ?>
     <a href="?page=parasut&clear_token=1" class="btn btn-secondary" onclick="return confirm('Token cache temizlensin mi? Bir sonraki istekte yeniden alınır.');">🔄 Token Yenile</a>
     <?php endif; ?>
+    <a href="?page=parasut-mapping" class="btn btn-primary" style="background:#7c3aed;border-color:#7c3aed">🔗 Eşleme Sayfası</a>
     <a href="?page=settings&tab=parasut" class="btn btn-primary">⚙ Ayarları Düzenle</a>
   </div>
 </div>
@@ -401,28 +402,43 @@ Teşekkür ederim,
   </div>
 </div>
 
-<!-- Toplu Senkronizasyon -->
-<div class="card" style="margin-bottom:20px">
-  <div class="card-header"><h3 class="card-title">⚙ Toplu Senkronizasyon</h3></div>
+<!-- Toplu Senkronizasyon — ARTIK ESLEME SAYFASINDAN -->
+<div class="card" style="margin-bottom:20px;border:2px solid #fcd34d;background:#fffbeb">
+  <div class="card-header" style="background:transparent;border-bottom:1px solid #fde68a">
+    <h3 class="card-title" style="color:#92400e">⚠️ Toplu Senkronizasyon — Eşleme Üzerinden Yapın</h3>
+  </div>
   <div class="card-body">
-    <p style="font-size:13px;color:var(--text-muted);margin:0 0 14px">
-      Mevcut bayi ve ürünleri Paraşüt'e tek tıkla aktarın. Önceden senkronize edilenler güncellenmez (her bayi/ürün için Paraşüt ID kaydedilir, bir daha çağrılmaz).
+    <p style="font-size:13px;color:#78350f;margin:0 0 14px;line-height:1.6">
+      <strong>Doğrudan toplu senkron <u>çift kayıt</u> riski taşır.</strong> Paraşüt'te zaten bir cari/ürün varsa
+      yenisi oluşur. Önce <strong>Eşleme</strong> sayfasında Paraşüt'tekilerle bayilerinizi/ürünlerinizi
+      eşleştirin (otomatik veya manuel), sonra eşleşmemiş olanlar için "Paraşüt'te Oluştur" butonu kullanın.
     </p>
-    <div style="display:flex;gap:10px;flex-wrap:wrap">
-      <form method="post" onsubmit="return confirm('Toplam <?= $totalDealers - $syncedDealers ?> bayi Paraşüt\'e gönderilecek.\n\nDevam edilsin mi?');">
-        <?= csrfField() ?>
-        <input type="hidden" name="action" value="bulk_sync_dealers">
-        <button type="submit" class="btn btn-primary"<?= ($totalDealers - $syncedDealers) <= 0 ? ' disabled' : '' ?>>
-          👥 Bayileri Senkronize Et (<?= $totalDealers - $syncedDealers ?>)
-        </button>
-      </form>
-      <form method="post" onsubmit="return confirm('Toplam <?= $totalProducts ?> ürün Paraşüt\'e gönderilecek (mevcut olanlar güncellenir).\n\nDevam edilsin mi?');">
-        <?= csrfField() ?>
-        <input type="hidden" name="action" value="bulk_sync_products">
-        <button type="submit" class="btn btn-primary"<?= $totalProducts <= 0 ? ' disabled' : '' ?>>
-          📦 Ürünleri Senkronize Et (<?= $totalProducts ?>)
-        </button>
-      </form>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <a href="?page=parasut-mapping&tab=dealers" class="btn btn-primary" style="background:#d97706;border-color:#d97706">
+        👥 Bayi Eşleme Sayfası
+      </a>
+      <a href="?page=parasut-mapping&tab=products" class="btn btn-primary" style="background:#d97706;border-color:#d97706">
+        📦 Ürün Eşleme Sayfası
+      </a>
+      <details style="margin-left:auto;font-size:11px">
+        <summary style="cursor:pointer;color:#92400e">Yine de körlemesine senkron istiyorum…</summary>
+        <div style="margin-top:10px;display:flex;gap:8px">
+          <form method="post" onsubmit="return confirm('⚠️ ÇİFT KAYIT RİSKİ\n\n<?= $totalDealers - $syncedDealers ?> bayi Paraşüt\'e körlemesine gönderilecek. Paraşüt\'te aynı isim/vergi no\'lu cari varsa YENİSİ oluşur.\n\nGerçekten devam edilsin mi? (önerilmez)');">
+            <?= csrfField() ?>
+            <input type="hidden" name="action" value="bulk_sync_dealers">
+            <button type="submit" class="btn btn-sm btn-secondary"<?= ($totalDealers - $syncedDealers) <= 0 ? ' disabled' : '' ?>>
+              Bayileri zorla gönder (<?= $totalDealers - $syncedDealers ?>)
+            </button>
+          </form>
+          <form method="post" onsubmit="return confirm('⚠️ ÇİFT KAYIT RİSKİ\n\n<?= $totalProducts ?> ürün Paraşüt\'e körlemesine gönderilecek.\n\nGerçekten devam edilsin mi?');">
+            <?= csrfField() ?>
+            <input type="hidden" name="action" value="bulk_sync_products">
+            <button type="submit" class="btn btn-sm btn-secondary"<?= $totalProducts <= 0 ? ' disabled' : '' ?>>
+              Ürünleri zorla gönder (<?= $totalProducts ?>)
+            </button>
+          </form>
+        </div>
+      </details>
     </div>
   </div>
 </div>
