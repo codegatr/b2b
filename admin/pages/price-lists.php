@@ -134,6 +134,87 @@ if (isPost() && $action === 'delete-list') {
     redirect('?page=price-lists');
 }
 
+// ── Listeyi kopyala — kaynak listenin tüm ürün override'larıyla birlikte ──
+if (isPost() && $action === 'copy-list') {
+    csrfCheck();
+    $sourceId = (int)($_POST['source_id'] ?? 0);
+    $newName  = trim($_POST['new_name'] ?? '');
+
+    if (!$sourceId || $newName === '') {
+        $_SESSION['flash_admin'] = ['type'=>'danger','msg'=>'Kaynak liste ve yeni isim zorunludur.'];
+        redirect('?page=price-lists');
+    }
+
+    $source = dbRow("SELECT * FROM b2b_price_lists WHERE id=?", [$sourceId]);
+    if (!$source) {
+        $_SESSION['flash_admin'] = ['type'=>'danger','msg'=>'Kaynak liste bulunamadı.'];
+        redirect('?page=price-lists');
+    }
+
+    // Aynı isimde liste var mı kontrol et
+    $exists = dbVal("SELECT COUNT(*) FROM b2b_price_lists WHERE LOWER(name)=LOWER(?)", [$newName]);
+    if ($exists > 0) {
+        $_SESSION['flash_admin'] = ['type'=>'danger','msg'=>"'{$newName}' isminde bir liste zaten var. Farklı bir isim deneyin."];
+        redirect('?page=price-lists');
+    }
+
+    // 1) Yeni liste oluştur — kaynak ayarlarıyla birlikte (varsayılan ASLA olmasın)
+    try {
+        $newId = dbInsert(
+            "INSERT INTO b2b_price_lists (name, description, discount_percent, price_adjust, currency, is_default, is_active)
+             VALUES (?, ?, ?, ?, ?, 0, 1)",
+            [
+                $newName,
+                $source['description'] ?? '',
+                $source['discount_percent'] ?? 0,
+                $source['price_adjust'] ?? null,
+                $source['currency'] ?? 'TRY',
+            ]
+        );
+    } catch (\Throwable $e) {
+        // Eski şema — price_adjust kolonu yoksa
+        $newId = dbInsert(
+            "INSERT INTO b2b_price_lists (name, description, discount_percent, currency, is_default, is_active)
+             VALUES (?, ?, ?, ?, 0, 1)",
+            [
+                $newName,
+                $source['description'] ?? '',
+                $source['discount_percent'] ?? 0,
+                $source['currency'] ?? 'TRY',
+            ]
+        );
+    }
+
+    // 2) Ürün override'larını kopyala (INSERT...SELECT — DB-side, hızlı)
+    try {
+        dbExec(
+            "INSERT INTO b2b_price_list_items
+                (price_list_id, product_id, price, discount_percent, price_adjust, min_order_qty)
+             SELECT ?, product_id, price, discount_percent, price_adjust, min_order_qty
+             FROM b2b_price_list_items WHERE price_list_id=?",
+            [$newId, $sourceId]
+        );
+    } catch (\Throwable $e) {
+        // Eski şema fallback
+        dbExec(
+            "INSERT INTO b2b_price_list_items
+                (price_list_id, product_id, price, discount_percent, min_order_qty)
+             SELECT ?, product_id, price, discount_percent, min_order_qty
+             FROM b2b_price_list_items WHERE price_list_id=?",
+            [$newId, $sourceId]
+        );
+    }
+
+    $itemCount = (int)dbVal("SELECT COUNT(*) FROM b2b_price_list_items WHERE price_list_id=?", [$newId]);
+    auditLog('price_list_copied', 'b2b_price_lists', $newId, ['source_id'=>$sourceId,'item_count'=>$itemCount]);
+
+    $msg = "'{$source['name']}' listesi '{$newName}' olarak kopyalandı.";
+    if ($itemCount > 0) $msg .= " ({$itemCount} ürün özel fiyatı transfer edildi)";
+
+    $_SESSION['flash_admin'] = ['type'=>'success','msg'=>$msg];
+    redirect("?page=price-lists&id=$newId&action=items");
+}
+
 // ── Bayiye toplu atama ────────────────────────────────────────
 if (isPost() && $action === 'assign-dealers') {
     csrfCheck();
@@ -235,6 +316,17 @@ $lists = dbRows("SELECT pl.*, COUNT(pli.id) as item_count,
       <a href="?page=price-lists&id=<?= $l['id'] ?>&action=items" class="btn btn-secondary btn-sm">Fiyatlar</a>
       <a href="?page=price-lists&id=<?= $l['id'] ?>&action=dealers" class="btn btn-secondary btn-sm">Bayiler</a>
       <a href="?page=price-lists&id=<?= $l['id'] ?>&action=edit" class="btn btn-secondary btn-sm">Düzenle</a>
+      <form method="post" action="?page=price-lists&action=copy-list" style="display:inline" onsubmit="
+        const newName = prompt('Yeni listenin adını girin:', <?= json_encode($l['name'] . ' Kopyası') ?>);
+        if (!newName || !newName.trim()) return false;
+        this.querySelector('input[name=new_name]').value = newName.trim();
+        return true;
+      ">
+        <?= csrfField() ?>
+        <input type="hidden" name="source_id" value="<?= (int)$l['id'] ?>">
+        <input type="hidden" name="new_name" value="">
+        <button type="submit" class="btn btn-secondary btn-sm" title="Bu listeyi tüm ürün fiyatlarıyla birlikte kopyala">📋 Kopyala</button>
+      </form>
     </div>
   </td>
 </tr>
