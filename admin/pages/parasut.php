@@ -301,6 +301,52 @@ $tokenValid = $tokenExpiry && $tokenExpiry > time();
         <li><strong>Hesap askıda</strong> veya şifre süresi dolmuş → Paraşüt'ten kontrol et</li>
       </ul>
     </div>
+
+    <!-- Destek başvuru şablonu -->
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px 16px;margin-top:12px;font-size:12px;line-height:1.6">
+      <div style="font-weight:700;color:#1e40af;font-size:13px;margin-bottom:8px">
+        📧 Yukarıdakileri denedin ve hâlâ olmuyorsa — Paraşüt destek ekibine yaz
+      </div>
+      <div style="margin-bottom:8px;color:#1e3a8a">
+        <strong>Adres:</strong>
+        <a href="mailto:destek@parasut.com" style="color:#1d4ed8">destek@parasut.com</a>
+      </div>
+      <details style="margin-top:8px">
+        <summary style="cursor:pointer;font-weight:600;color:#1e40af;font-size:12px;padding:4px 0">📋 Hazır e-posta şablonu (tıkla)</summary>
+        <pre id="support-template" style="margin-top:8px;background:#fff;border:1px solid #c7d2fe;border-radius:6px;padding:12px 14px;font-family:monospace;font-size:11px;color:#1e293b;white-space:pre-wrap;line-height:1.6">Merhaba,
+
+OAuth2 password grant ile API token alma denemelerimizde sürekli
+"invalid_grant" hatası alıyoruz. HTTP 400 dönüyor.
+
+Hesap bilgilerimiz:
+- E-posta: <?= h(setting('parasut_email') ?: 'info@lemondedutacos.com') ?>
+
+- Client ID: <?= h(setting('parasut_client_id')) ?>
+
+
+- Firma ID: <?= h(setting('parasut_company_id')) ?>
+
+
+Lütfen kontrol eder misiniz:
+1. Yukarıdaki Client ID gerçekten bizim hesabımıza mı bağlı?
+2. Hesabımızda 2FA (iki aşamalı doğrulama) aktif mi? Aktifse,
+   password grant kullanamadığımız için authorization_code grant'a
+   geçiş yapmamız mı gerekiyor?
+3. API erişimi hesabımızda aktif mi?
+4. Eğer authorization_code akışına geçmemiz gerekiyorsa, callback
+   URL'imizi hangi adres olarak ayarlamamız gerekir?
+
+Teşekkür ederim,
+<?= h(setting('site_name', 'Le Monde Du Tacos B2B')) ?></pre>
+        <button type="button" class="btn btn-sm" style="background:#1d4ed8;color:#fff;border:none;margin-top:8px" onclick="
+          const el = document.getElementById('support-template');
+          navigator.clipboard.writeText(el.textContent).then(() => {
+            this.textContent = '✓ Kopyalandı';
+            setTimeout(() => this.textContent = '📋 Şablonu Kopyala', 2000);
+          });
+        ">📋 Şablonu Kopyala</button>
+      </details>
+    </div>
   </div>
 </details>
 
