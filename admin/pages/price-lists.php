@@ -596,7 +596,7 @@ foreach ($allRows as $row):
             this.disabled = true;
 
             try {
-                const res = await fetch(`?page=price-lists&id=${listId}&action=save-item`, {
+                const res = await fetch(`ajax-price-list-item.php?action=save&list_id=${listId}`, {
                     method: 'POST',
                     body: data,
                 });
@@ -630,7 +630,7 @@ foreach ($allRows as $row):
             data.append('csrf_token', csrfToken);
             data.append('item_id', itemId);
             try {
-                await fetch(`?page=price-lists&id=${listId}&action=delete-item`, { method:'POST', body:data });
+                await fetch(`ajax-price-list-item.php?action=delete`, { method:'POST', body:data });
                 location.reload();
             } catch(e) { alert('Silme hatası: ' + e.message); }
         });
