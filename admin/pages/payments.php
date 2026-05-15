@@ -68,6 +68,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $act = $_POST['form_action'] ?? '';
     $pid = intval($_POST['payment_id'] ?? 0);
 
+    // ─── Eksik ledger kayıtlarını yeniden oluştur ───────────────
+    // Onaylanmış tahsilatlar var ama b2b_ledger'da eşleşen kaydı yok →
+    // manuel senkron butonu. Eski bug'lardan kalan eksik kayıtları onarır.
+    if ($act === 'resync_ledger') {
+        $orphans = dbRows(
+            "SELECT p.*
+             FROM b2b_payments p
+             LEFT JOIN b2b_ledger l ON l.reference_type='payment' AND l.reference_id=p.id
+             WHERE p.status='onaylandi' AND l.id IS NULL
+             ORDER BY p.id"
+        );
+        $fixed = 0;
+        foreach ($orphans as $op) {
+            $orderRef = '';
+            if (!empty($op['order_id'])) {
+                $ono = dbVal("SELECT order_no FROM b2b_orders WHERE id=?", [$op['order_id']]);
+                if ($ono) $orderRef = " — Sipariş #{$ono}";
+            }
+            $methodLabel = function_exists('paymentMethodLabel') ? paymentMethodLabel($op['type'] ?? '') : ($op['type'] ?? '');
+            $desc = "Ödeme onaylandı: {$methodLabel}{$orderRef}";
+            ledgerAdd((int)$op['dealer_id'], 'alacak', (float)$op['amount'], $desc, 'payment', (int)$op['id']);
+            $fixed++;
+        }
+        if ($fixed > 0) {
+            auditLog('ledger_resync', 'b2b_payments', 0, ['orphan_count'=>$fixed]);
+            $success = "{$fixed} eksik ledger kaydı tamamlandı.";
+        } else {
+            $success = 'Eksik ledger kaydı bulunmadı. Tüm onaylı tahsilatlar zaten cari hesapta.';
+        }
+        $action = 'list';
+    }
+
     if ($act === 'approve') {
         $p = dbRow("SELECT * FROM b2b_payments WHERE id=?", [$pid]);
         if ($p && $p['status'] === 'bekliyor') {
@@ -260,7 +292,27 @@ if ($action === 'list') {
         <p class="page-sub text-warning"><?= money($pendingSum) ?> onay bekliyor</p>
         <?php endif; ?>
     </div>
-    <button class="btn btn-primary" onclick="openModal('modal-manual')">＋ Manuel Tahsilat</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <?php
+        // Onaylı ama ledger'a yazılmamış tahsilat sayısı
+        $orphanCount = (int)dbVal(
+            "SELECT COUNT(*)
+             FROM b2b_payments p
+             LEFT JOIN b2b_ledger l ON l.reference_type='payment' AND l.reference_id=p.id
+             WHERE p.status='onaylandi' AND l.id IS NULL"
+        );
+        ?>
+        <?php if ($orphanCount > 0): ?>
+        <form method="post" onsubmit="return confirm('<?= $orphanCount ?> onaylı tahsilatın ledger kaydı eksik. Şimdi oluşturulsun mu?\n\nBu işlem cari hesabı düzeltir.');">
+            <?= csrfField() ?>
+            <input type="hidden" name="form_action" value="resync_ledger">
+            <button type="submit" class="btn btn-sm" style="background:#dc2626;color:#fff;border:none" title="Onaylı tahsilatlardan ledger'a yazılmamış olanları tamamla">
+                🔧 Ledger Eksik (<?= $orphanCount ?>) - Düzelt
+            </button>
+        </form>
+        <?php endif; ?>
+        <button class="btn btn-primary" onclick="openModal('modal-manual')">＋ Manuel Tahsilat</button>
+    </div>
 </div>
 
 <?php if (!empty($success)): ?><div class="alert alert-success"><?= h($success) ?></div><?php endif; ?>

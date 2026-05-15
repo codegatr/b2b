@@ -35,22 +35,22 @@ ALTER TABLE `b2b_dealers`
   ADD COLUMN IF NOT EXISTS `tax_office` VARCHAR(128) DEFAULT NULL
   COMMENT 'Vergi dairesi (Paraşüt cari oluşturma için)';
 
--- ─── Yeni settings kayıtları (settings tablosu key/value)
-INSERT INTO `b2b_settings` (`setting_key`, `setting_value`)
-  SELECT 'parasut_auto_einvoice', '1'
-  WHERE NOT EXISTS (SELECT 1 FROM `b2b_settings` WHERE `setting_key`='parasut_auto_einvoice');
+-- ─── Yeni settings kayıtları (settings tablosu skey/sval)
+INSERT INTO `b2b_settings` (`skey`, `sval`, `sgroup`)
+  SELECT 'parasut_auto_einvoice', '1', 'parasut'
+  WHERE NOT EXISTS (SELECT 1 FROM `b2b_settings` WHERE `skey`='parasut_auto_einvoice');
 
-INSERT INTO `b2b_settings` (`setting_key`, `setting_value`)
-  SELECT 'parasut_einvoice_scenario', 'basic'
-  WHERE NOT EXISTS (SELECT 1 FROM `b2b_settings` WHERE `setting_key`='parasut_einvoice_scenario');
+INSERT INTO `b2b_settings` (`skey`, `sval`, `sgroup`)
+  SELECT 'parasut_einvoice_scenario', 'basic', 'parasut'
+  WHERE NOT EXISTS (SELECT 1 FROM `b2b_settings` WHERE `skey`='parasut_einvoice_scenario');
 
-INSERT INTO `b2b_settings` (`setting_key`, `setting_value`)
-  SELECT 'parasut_collection_account_id', ''
-  WHERE NOT EXISTS (SELECT 1 FROM `b2b_settings` WHERE `setting_key`='parasut_collection_account_id');
+INSERT INTO `b2b_settings` (`skey`, `sval`, `sgroup`)
+  SELECT 'parasut_collection_account_id', '', 'parasut'
+  WHERE NOT EXISTS (SELECT 1 FROM `b2b_settings` WHERE `skey`='parasut_collection_account_id');
 
-INSERT INTO `b2b_settings` (`setting_key`, `setting_value`)
-  SELECT 'parasut_save_pdf', '1'
-  WHERE NOT EXISTS (SELECT 1 FROM `b2b_settings` WHERE `setting_key`='parasut_save_pdf');
+INSERT INTO `b2b_settings` (`skey`, `sval`, `sgroup`)
+  SELECT 'parasut_save_pdf', '1', 'parasut'
+  WHERE NOT EXISTS (SELECT 1 FROM `b2b_settings` WHERE `skey`='parasut_save_pdf');
 
 -- ─── Index'ler
 CREATE INDEX IF NOT EXISTS `idx_parasut_einvoice` ON `b2b_orders` (`parasut_einvoice_id`);
