@@ -176,7 +176,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // statüsüne geçişte applyOrderLedger() ile eklenir
             // (eksik teslim olursa o kadar borçlandırma için).
             // Paraşüt fatura
-            try { parasut()->syncInvoice($oid); } catch (\Throwable $e) {}
+            try { parasut()->fullInvoiceFlow($oid); } catch (\Throwable $e) {}
             // Bildirim + e-posta
             notifyDealer($order['dealer_id'], 'order', 'Siparişiniz Onaylandı', "#{$order['order_no']} numaralı siparişiniz onaylandı.", '?page=orders&action=detail&id='.$oid);
             sendOrderStatusEmail($oid, 'onaylandi');
@@ -228,7 +228,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // teslim_edildi geçişinde applyOrderLedger() çağrılır.
             if ($oldStatus === 'bekliyor' && $status === 'onaylandi') {
                 dbExec("UPDATE b2b_orders SET status='onaylandi', approved_by=?, approved_at=NOW() WHERE id=?", [adminId(), $oid]);
-                try { parasut()->syncInvoice($oid); } catch (\Throwable $e) {}
+                try { parasut()->fullInvoiceFlow($oid); } catch (\Throwable $e) {}
                 notifyDealer($oldOrder['dealer_id'], 'order', 'Siparişiniz Onaylandı',
                     "#{$oldOrder['order_no']} numaralı siparişiniz onaylandı.",
                     '?page=orders&action=detail&id='.$oid);
@@ -380,6 +380,79 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 auditLog('order_reactivated', 'b2b_orders', $oid, ['by'=>adminId()]);
                 $success = 'Sipariş yeniden "Bekliyor" durumuna alındı.';
             }
+        }
+        $action = 'detail'; $id = $oid;
+    }
+
+    // ─────── PARAŞÜT FATURA AKSİYONLARI ───────
+    if ($act === 'parasut_full_flow') {
+        // Fatura yoksa oluştur + e-arşiv/e-fatura resmileştir + PDF al
+        try {
+            $r = parasut()->fullInvoiceFlow($oid);
+            if ($r['ok']) {
+                $msg = 'Paraşüt: ' . $r['msg'];
+                if ($r['einvoice_id'] && $r['einvoice_type']) {
+                    $tName = $r['einvoice_type'] === 'e_invoice' ? 'E-Fatura' : 'E-Arşiv';
+                    $msg .= " {$tName} olarak resmileştirildi (ID: {$r['einvoice_id']}).";
+                }
+                $success = $msg;
+            } else {
+                $error = 'Paraşüt hatası: ' . $r['msg'];
+            }
+        } catch (\Throwable $e) {
+            $error = 'Paraşüt hatası: ' . $e->getMessage();
+        }
+        $action = 'detail'; $id = $oid;
+    }
+
+    if ($act === 'parasut_refresh_pdf') {
+        // Sadece PDF URL'sini yeniden çek (signed URL süresi dolduğunda)
+        $ord = dbRow("SELECT parasut_invoice_id FROM b2b_orders WHERE id=?", [$oid]);
+        if (!empty($ord['parasut_invoice_id'])) {
+            $url = parasut()->getInvoicePdfUrl($ord['parasut_invoice_id']);
+            if ($url) {
+                dbExec("UPDATE b2b_orders SET parasut_invoice_pdf_url=?, parasut_synced_at=NOW() WHERE id=?", [$url, $oid]);
+                $success = 'Fatura PDF URL yenilendi.';
+            } else {
+                $error = 'PDF URL alınamadı (fatura henüz resmileştirilmemiş olabilir).';
+            }
+        } else {
+            $error = 'Bu sipariş için henüz Paraşüt faturası yok.';
+        }
+        $action = 'detail'; $id = $oid;
+    }
+
+    if ($act === 'parasut_sync_status') {
+        // Fatura durumunu Paraşüt'ten oku ve DB'ye yaz
+        $ord = dbRow("SELECT parasut_invoice_id FROM b2b_orders WHERE id=?", [$oid]);
+        if (!empty($ord['parasut_invoice_id'])) {
+            $status = parasut()->getInvoiceStatus($ord['parasut_invoice_id']);
+            if ($status) {
+                dbExec("UPDATE b2b_orders SET parasut_invoice_status=?, parasut_synced_at=NOW() WHERE id=?", [$status, $oid]);
+                $success = 'Fatura durumu güncellendi: ' . $status;
+            } else {
+                $error = 'Fatura durumu alınamadı.';
+            }
+        } else {
+            $error = 'Paraşüt faturası yok.';
+        }
+        $action = 'detail'; $id = $oid;
+    }
+
+    if ($act === 'parasut_cancel_invoice') {
+        // Fatura iptal (Paraşüt'te)
+        $ord = dbRow("SELECT parasut_invoice_id FROM b2b_orders WHERE id=?", [$oid]);
+        if (!empty($ord['parasut_invoice_id'])) {
+            $ok = parasut()->cancelInvoice($ord['parasut_invoice_id']);
+            if ($ok) {
+                dbExec("UPDATE b2b_orders SET parasut_invoice_status='cancelled', parasut_synced_at=NOW() WHERE id=?", [$oid]);
+                auditLog('parasut_invoice_cancelled', 'b2b_orders', $oid, ['invoice_id'=>$ord['parasut_invoice_id']]);
+                $success = 'Paraşüt faturası iptal edildi.';
+            } else {
+                $error = 'Fatura iptali başarısız.';
+            }
+        } else {
+            $error = 'Paraşüt faturası yok.';
         }
         $action = 'detail'; $id = $oid;
     }
@@ -908,6 +981,139 @@ $completedNotArchived = (int)dbVal(
         <span class="badge badge-<?= $ps==='onaylandi'?'success':($ps==='reddedildi'?'danger':'warning') ?>"><?= ['onaylandi'=>'Onaylandı','reddedildi'=>'Reddedildi','bekliyor'=>'Bekliyor'][$ps]??$ps ?></span>
       </div>
       <?php endforeach; ?>
+    </div>
+  </div>
+  <?php endif; ?>
+
+  <!-- ─── PARAŞÜT FATURA KARTI ─── -->
+  <?php if (parasut()->isEnabled()): ?>
+  <?php
+    // Paraşüt durumu
+    $pInvoiceId    = $order['parasut_invoice_id']      ?? null;
+    $pEinvoiceId   = $order['parasut_einvoice_id']     ?? null;
+    $pEinvoiceType = $order['parasut_einvoice_type']   ?? null;
+    $pPdfUrl       = $order['parasut_invoice_pdf_url'] ?? null;
+    $pStatus       = $order['parasut_invoice_status']  ?? null;
+    $pSyncedAt     = $order['parasut_synced_at']       ?? null;
+
+    $statusLabels = [
+      'paid'           => ['Ödenmiş', '#16a34a', '#dcfce7'],
+      'unpaid'         => ['Ödenmemiş', '#dc2626', '#fee2e2'],
+      'partially_paid' => ['Kısmi Ödendi', '#ea580c', '#ffedd5'],
+      'overdue'        => ['Vadesi Geçmiş', '#dc2626', '#fee2e2'],
+      'cancelled'      => ['İptal', '#6b7280', '#f3f4f6'],
+      'draft'          => ['Taslak', '#6b7280', '#f3f4f6'],
+    ];
+    $stat = $statusLabels[$pStatus] ?? null;
+  ?>
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-header" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7)">
+      <h3 class="card-title" style="display:flex;align-items:center;gap:8px;color:#15803d">
+        <span>📑</span> Paraşüt Faturası
+      </h3>
+    </div>
+    <div class="card-body">
+      <?php if ($pInvoiceId): ?>
+        <!-- Fatura var -->
+        <div style="display:grid;gap:8px;font-size:12px;margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding-bottom:6px">
+            <span style="color:var(--text-muted)">Sales Invoice ID</span>
+            <span style="font-family:monospace;font-weight:600"><?= h($pInvoiceId) ?></span>
+          </div>
+          <?php if ($pEinvoiceId): ?>
+          <div style="display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding-bottom:6px">
+            <span style="color:var(--text-muted)">Resmi Belge</span>
+            <span>
+              <span class="badge" style="background:<?= $pEinvoiceType==='e_invoice'?'#ddd6fe':'#fef3c7' ?>;color:<?= $pEinvoiceType==='e_invoice'?'#5b21b6':'#92400e' ?>;font-size:10px;font-weight:700">
+                <?= $pEinvoiceType==='e_invoice' ? 'E-FATURA' : 'E-ARŞİV' ?>
+              </span>
+              <span style="font-family:monospace;font-size:11px;margin-left:6px"><?= h($pEinvoiceId) ?></span>
+            </span>
+          </div>
+          <?php else: ?>
+          <div style="display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding-bottom:6px">
+            <span style="color:var(--text-muted)">Resmi Belge</span>
+            <span style="color:#dc2626;font-weight:600">Henüz Yok</span>
+          </div>
+          <?php endif; ?>
+          <?php if ($stat): ?>
+          <div style="display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding-bottom:6px">
+            <span style="color:var(--text-muted)">Durum</span>
+            <span class="badge" style="background:<?= $stat[2] ?>;color:<?= $stat[1] ?>;font-size:10px;font-weight:700"><?= $stat[0] ?></span>
+          </div>
+          <?php endif; ?>
+          <?php if ($pSyncedAt): ?>
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted)">
+            <span>Son senkron</span>
+            <span><?= date('d.m.Y H:i', strtotime($pSyncedAt)) ?></span>
+          </div>
+          <?php endif; ?>
+        </div>
+
+        <!-- Aksiyon butonları -->
+        <div style="display:grid;gap:6px">
+          <?php if ($pPdfUrl): ?>
+          <a href="<?= h($pPdfUrl) ?>" target="_blank" class="btn btn-sm" style="background:#dc2626;color:#fff;border:none;width:100%">
+            📄 Faturayı PDF İndir
+          </a>
+          <?php endif; ?>
+
+          <?php if (!$pEinvoiceId): ?>
+          <form method="post" onsubmit="return confirm('Bu siparişin faturası e-arşiv veya e-fatura olarak Paraşüt''te resmileştirilecek.\n\nDevam edilsin mi?');">
+            <?= csrfField() ?>
+            <input type="hidden" name="act" value="parasut_full_flow">
+            <input type="hidden" name="oid" value="<?= (int)$order['id'] ?>">
+            <button type="submit" class="btn btn-sm" style="background:#7c3aed;color:#fff;border:none;width:100%">
+              ⚡ Resmileştir (E-Arşiv/E-Fatura)
+            </button>
+          </form>
+          <?php endif; ?>
+
+          <div style="display:flex;gap:6px">
+            <form method="post" style="flex:1">
+              <?= csrfField() ?>
+              <input type="hidden" name="act" value="parasut_sync_status">
+              <input type="hidden" name="oid" value="<?= (int)$order['id'] ?>">
+              <button type="submit" class="btn btn-sm btn-secondary" style="width:100%;font-size:11px">🔄 Durumu Çek</button>
+            </form>
+            <?php if ($pInvoiceId): ?>
+            <form method="post" style="flex:1">
+              <?= csrfField() ?>
+              <input type="hidden" name="act" value="parasut_refresh_pdf">
+              <input type="hidden" name="oid" value="<?= (int)$order['id'] ?>">
+              <button type="submit" class="btn btn-sm btn-secondary" style="width:100%;font-size:11px">🔄 PDF Yenile</button>
+            </form>
+            <?php endif; ?>
+          </div>
+
+          <?php if ($pStatus !== 'cancelled' && $pInvoiceId): ?>
+          <form method="post" onsubmit="return confirm('⚠️ Paraşüt''teki fatura İPTAL edilecek. Bu işlem muhasebede iz bırakır.\n\nDevam edilsin mi?');" style="margin-top:6px">
+            <?= csrfField() ?>
+            <input type="hidden" name="act" value="parasut_cancel_invoice">
+            <input type="hidden" name="oid" value="<?= (int)$order['id'] ?>">
+            <button type="submit" class="btn btn-sm" style="background:transparent;color:#dc2626;border:1px solid #fecaca;width:100%;font-size:11px">
+              🗑 Paraşüt'te İptal Et
+            </button>
+          </form>
+          <?php endif; ?>
+        </div>
+
+      <?php else: ?>
+        <!-- Fatura yok -->
+        <div style="text-align:center;padding:14px 0">
+          <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px">
+            Bu sipariş için Paraşüt'te henüz fatura kesilmedi.
+          </div>
+          <form method="post">
+            <?= csrfField() ?>
+            <input type="hidden" name="act" value="parasut_full_flow">
+            <input type="hidden" name="oid" value="<?= (int)$order['id'] ?>">
+            <button type="submit" class="btn btn-primary" style="width:100%">
+              ⚡ Paraşüt'te Fatura Oluştur + Resmileştir
+            </button>
+          </form>
+        </div>
+      <?php endif; ?>
     </div>
   </div>
   <?php endif; ?>

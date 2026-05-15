@@ -191,6 +191,13 @@ $isAuto = ($order['status'] === 'onaylandi');
     $payable = ($order['payment_status'] ?? '') !== 'odendi'
             && !in_array($order['status'] ?? '', ['iptal','iade'], true);
     ?>
+    <?php if (!empty($order['parasut_invoice_pdf_url'])): ?>
+    <a href="<?= h($order['parasut_invoice_pdf_url']) ?>" target="_blank"
+       class="btn" style="background:#dc2626;color:#fff;border:none"
+       title="Resmi e-arşiv/e-fatura PDF indir">
+       📄 Faturayı İndir
+    </a>
+    <?php endif; ?>
     <?php if ($payable && $cardEnabled): ?>
     <a href="?page=payment-card&order_id=<?= $order['id'] ?>"
        class="btn"

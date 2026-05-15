@@ -310,22 +310,50 @@ class Parasut {
     // TAHSİLAT
     // ──────────────────────────────────────────────────────────
 
-    /** Ödeme kaydı oluştur */
-    public function createPayment(string $invoiceId, float $amount, string $date, string $note = ''): ?string {
-        if (!$this->isEnabled() || !$invoiceId) return null;
+    /**
+     * Ödeme kaydı oluştur — bir SalesInvoice'a ödeme bağlar.
+     *
+     * @param string $invoiceId Paraşüt sales_invoice ID
+     * @param float  $amount    Tahsilat tutarı
+     * @param string $date      Ödeme tarihi (Y-m-d)
+     * @param string $note      Açıklama
+     * @param string|null $accountId Hangi banka/kasa hesabına (yoksa settings'ten default alınır)
+     */
+    public function createPayment(string $invoiceId, float $amount, string $date, string $note = '', ?string $accountId = null): ?string {
+        if (!$this->isEnabled() || !$invoiceId || $amount <= 0) return null;
 
-        $body = ['data' => ['type' => 'payments', 'attributes' => [
-            'description'  => $note ?: 'Tahsilat',
-            'payment_date' => $date,
-            'amount'       => $amount,
-            'currency'     => setting('currency', 'TRY'),
-            'exchange_rate'=> 1,
-        ], 'relationships' => [
-            'payable' => ['data' => ['type'=>'SalesInvoice','id'=>$invoiceId]],
-        ]]];
+        // Hesap ID — parametre yoksa settings'ten oku
+        if (!$accountId) {
+            $accountId = setting('parasut_collection_account_id', '') ?: null;
+        }
 
-        $res = $this->http('POST', $this->endpoint('payments'), $body);
-        return $res['data']['id'] ?? null;
+        $body = ['data' => [
+            'type' => 'payments',
+            'attributes' => [
+                'description'   => $note ?: 'Tahsilat',
+                'payment_date'  => $date,
+                'amount'        => $amount,
+                'currency'      => setting('currency', 'TRY'),
+                'exchange_rate' => 1,
+            ],
+            'relationships' => [
+                'payable' => ['data' => ['type'=>'SalesInvoice', 'id'=>$invoiceId]],
+            ],
+        ]];
+
+        if ($accountId) {
+            $body['data']['relationships']['account'] = [
+                'data' => ['type'=>'accounts', 'id'=>$accountId],
+            ];
+        }
+
+        try {
+            $res = $this->http('POST', $this->endpoint('payments'), $body);
+            return $res['data']['id'] ?? null;
+        } catch (\Throwable $e) {
+            error_log('Paraşüt createPayment: ' . $e->getMessage());
+            return null;
+        }
     }
 
     // ──────────────────────────────────────────────────────────
@@ -492,6 +520,406 @@ class Parasut {
             if (count($res['data']) < 100) break;
         }
         return $all;
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // VKN SORGULAMA (e-fatura mı e-arşiv mi karar için)
+    // ──────────────────────────────────────────────────────────
+
+    /**
+     * Vergi numarası Paraşüt e-fatura sisteminde kayıtlı mı?
+     * Kayıtlıysa array dönülür (e_invoice_address, alias bilgisi), değilse boş.
+     *
+     * GET /v4/{company_id}/e_invoice_inboxes?filter[vkn]=XXXX
+     *
+     * @return array{registered: bool, address: ?string, raw: array}
+     */
+    public function checkVKN(string $vkn): array {
+        if (!$this->isEnabled() || empty($vkn)) {
+            return ['registered'=>false, 'address'=>null, 'raw'=>[]];
+        }
+        $vkn = preg_replace('/[^0-9]/', '', $vkn);
+        $url = $this->endpoint('e_invoice_inboxes') . '?filter[vkn]=' . urlencode($vkn);
+        $r = $this->http('GET', $url);
+
+        $data = $r['data'] ?? [];
+        if (!empty($data) && is_array($data) && isset($data[0]['attributes']['e_invoice_address'])) {
+            return [
+                'registered' => true,
+                'address'    => $data[0]['attributes']['e_invoice_address'],
+                'raw'        => $data[0],
+            ];
+        }
+        return ['registered'=>false, 'address'=>null, 'raw'=>$data];
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // E-ARŞİV / E-FATURA RESMİLEŞTİRME
+    // ──────────────────────────────────────────────────────────
+
+    /**
+     * Sales invoice'u E-ARŞİV olarak resmileştir (VKN e-fatura kayıtlı DEĞİLSE).
+     *
+     * POST /v4/{company_id}/e_archives
+     * Body: { data: { type: 'e_archives', relationships: { sales_invoice: {...} } } }
+     *
+     * Bu işlem async — trackable_jobs döndürür. Tamamlanması saniyeler sürer.
+     *
+     * @return string|null e-arşiv ID veya null
+     */
+    public function createEArchive(string $salesInvoiceId): ?string {
+        if (!$this->isEnabled()) return null;
+
+        $body = [
+            'data' => [
+                'type' => 'e_archives',
+                'relationships' => [
+                    'sales_invoice' => [
+                        'data' => ['id' => $salesInvoiceId, 'type' => 'sales_invoices'],
+                    ],
+                ],
+            ],
+        ];
+
+        try {
+            $r = $this->http('POST', $this->endpoint('e_archives'), $body);
+            return $r['data']['id'] ?? null;
+        } catch (\Throwable $e) {
+            error_log('Paraşüt createEArchive: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Sales invoice'u E-FATURA olarak resmileştir (VKN e-fatura sisteminde kayıtlıysa).
+     *
+     * POST /v4/{company_id}/e_invoices
+     * Body: { data: { type: 'e_invoices', attributes: { scenario, to, note },
+     *                 relationships: { invoice: {...} } } }
+     *
+     * @param string $eInvoiceAddress checkVKN()'nın döndürdüğü 'address'
+     * @param string $scenario 'basic' veya 'commercial'
+     * @return string|null e-fatura ID
+     */
+    public function createEInvoice(string $salesInvoiceId, string $eInvoiceAddress, string $scenario = 'basic', string $note = ''): ?string {
+        if (!$this->isEnabled()) return null;
+
+        $body = [
+            'data' => [
+                'type' => 'e_invoices',
+                'attributes' => [
+                    'scenario' => in_array($scenario, ['basic','commercial'], true) ? $scenario : 'basic',
+                    'to'       => $eInvoiceAddress,
+                ],
+                'relationships' => [
+                    'invoice' => [
+                        'data' => ['id' => $salesInvoiceId, 'type' => 'sales_invoices'],
+                    ],
+                ],
+            ],
+        ];
+        if (!empty($note)) $body['data']['attributes']['note'] = $note;
+
+        try {
+            $r = $this->http('POST', $this->endpoint('e_invoices'), $body);
+            return $r['data']['id'] ?? null;
+        } catch (\Throwable $e) {
+            error_log('Paraşüt createEInvoice: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * KOMPLE AKIŞ: Bir B2B siparişi için Paraşüt'te
+     * (1) cari yoksa oluştur, (2) fatura kes, (3) VKN sorgula,
+     * (4) e-fatura veya e-arşiv olarak resmileştir, (5) PDF URL çek.
+     *
+     * Tüm aşamaları otomatik yürütür ve b2b_orders kayıtlarını günceller.
+     *
+     * @return array{ok:bool, invoice_id:?string, einvoice_id:?string, einvoice_type:?string, pdf_url:?string, msg:string}
+     */
+    public function fullInvoiceFlow(int $orderId): array {
+        if (!$this->isEnabled()) {
+            return ['ok'=>false, 'invoice_id'=>null, 'einvoice_id'=>null, 'einvoice_type'=>null, 'pdf_url'=>null, 'msg'=>'Entegrasyon kapalı.'];
+        }
+
+        // 1. Mevcut fatura var mı?
+        $order = dbRow("SELECT * FROM b2b_orders WHERE id=?", [$orderId]);
+        if (!$order) {
+            return ['ok'=>false, 'invoice_id'=>null, 'einvoice_id'=>null, 'einvoice_type'=>null, 'pdf_url'=>null, 'msg'=>'Sipariş bulunamadı.'];
+        }
+
+        $invoiceId = $order['parasut_invoice_id'] ?? null;
+
+        // 2. Fatura yoksa oluştur (syncInvoice tetikleyici)
+        if (!$invoiceId) {
+            $invoiceId = $this->syncInvoice($orderId);
+            if (!$invoiceId) {
+                return ['ok'=>false, 'invoice_id'=>null, 'einvoice_id'=>null, 'einvoice_type'=>null, 'pdf_url'=>null, 'msg'=>'Fatura oluşturulamadı.'];
+            }
+        }
+
+        // 3. E-resmi belge zaten varsa atla
+        $einvoiceId   = $order['parasut_einvoice_id']   ?? null;
+        $einvoiceType = $order['parasut_einvoice_type'] ?? null;
+
+        if (!$einvoiceId && (int)setting('parasut_auto_einvoice', 1) === 1) {
+            // 4. Bayinin VKN'ını al, e-fatura sorgu yap
+            $dealer = dbRow("SELECT * FROM b2b_dealers WHERE id=?", [$order['dealer_id']]);
+            $vkn = trim($dealer['tax_number'] ?? '');
+
+            if ($vkn !== '' && strlen($vkn) >= 10) {
+                $vknCheck = $this->checkVKN($vkn);
+                if ($vknCheck['registered'] && !empty($vknCheck['address'])) {
+                    // E-FATURA
+                    $scenario   = setting('parasut_einvoice_scenario', 'basic');
+                    $einvoiceId = $this->createEInvoice($invoiceId, $vknCheck['address'], $scenario);
+                    $einvoiceType = 'e_invoice';
+                } else {
+                    // E-ARŞİV (VKN sistemde yok)
+                    $einvoiceId = $this->createEArchive($invoiceId);
+                    $einvoiceType = 'e_archive';
+                }
+            } else {
+                // VKN yok → e-arşiv (bireysel müşteri gibi)
+                $einvoiceId = $this->createEArchive($invoiceId);
+                $einvoiceType = 'e_archive';
+            }
+
+            if ($einvoiceId) {
+                dbExec("UPDATE b2b_orders SET parasut_einvoice_id=?, parasut_einvoice_type=? WHERE id=?",
+                    [$einvoiceId, $einvoiceType, $orderId]);
+            }
+        }
+
+        // 5. PDF URL çek
+        $pdfUrl = null;
+        if ((int)setting('parasut_save_pdf', 1) === 1) {
+            $pdfUrl = $this->getInvoicePdfUrl($invoiceId);
+            if ($pdfUrl) {
+                dbExec("UPDATE b2b_orders SET parasut_invoice_pdf_url=?, parasut_synced_at=NOW() WHERE id=?",
+                    [$pdfUrl, $orderId]);
+            }
+        }
+
+        // 6. Fatura durumu güncelle
+        $status = $this->getInvoiceStatus($invoiceId);
+        if ($status) {
+            dbExec("UPDATE b2b_orders SET parasut_invoice_status=? WHERE id=?", [$status, $orderId]);
+        }
+
+        return [
+            'ok'            => true,
+            'invoice_id'    => $invoiceId,
+            'einvoice_id'   => $einvoiceId,
+            'einvoice_type' => $einvoiceType,
+            'pdf_url'       => $pdfUrl,
+            'msg'           => 'Fatura işlemleri tamamlandı.',
+        ];
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // FATURA YÖNETİMİ
+    // ──────────────────────────────────────────────────────────
+
+    /**
+     * Fatura PDF URL'sini çek (geçici signed URL — birkaç dakika geçerli).
+     *
+     * GET /v4/{company_id}/sales_invoices/{id}/pdf
+     */
+    public function getInvoicePdfUrl(string $invoiceId): ?string {
+        if (!$this->isEnabled() || empty($invoiceId)) return null;
+        try {
+            $r = $this->http('GET', $this->endpoint("sales_invoices/{$invoiceId}/pdf"));
+            return $r['url'] ?? $r['data']['attributes']['url'] ?? null;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Fatura durumunu çek: draft, unpaid, partially_paid, paid, overdue, cancelled
+     */
+    public function getInvoiceStatus(string $invoiceId): ?string {
+        if (!$this->isEnabled() || empty($invoiceId)) return null;
+        try {
+            $r = $this->http('GET', $this->endpoint("sales_invoices/{$invoiceId}"));
+            return $r['data']['attributes']['payment_status'] ?? null;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Fatura iptal et (Paraşüt resmi prosedürü).
+     * PATCH /v4/{company_id}/sales_invoices/{id}/cancel
+     */
+    public function cancelInvoice(string $invoiceId): bool {
+        if (!$this->isEnabled() || empty($invoiceId)) return false;
+        try {
+            $r = $this->http('PATCH', $this->endpoint("sales_invoices/{$invoiceId}/cancel"));
+            return !empty($r['data']);
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    /**
+     * İptal edilmiş faturayı geri al.
+     * PATCH /v4/{company_id}/sales_invoices/{id}/recover
+     */
+    public function recoverInvoice(string $invoiceId): bool {
+        if (!$this->isEnabled() || empty($invoiceId)) return false;
+        try {
+            $r = $this->http('PATCH', $this->endpoint("sales_invoices/{$invoiceId}/recover"));
+            return !empty($r['data']);
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Bir cariye ait tüm satış faturalarını çek.
+     * GET /v4/{company_id}/sales_invoices?filter[contact_id]=X
+     */
+    public function listInvoicesByContact(string $contactId, int $page = 1, int $size = 100): array {
+        if (!$this->isEnabled() || empty($contactId)) return ['data'=>[]];
+        $size = max(1, min(100, $size));
+        $url = $this->endpoint('sales_invoices')
+             . '?filter[contact_id]=' . urlencode($contactId)
+             . '&page[number]=' . $page
+             . '&page[size]='   . $size
+             . '&sort=-issue_date';
+        $r = $this->http('GET', $url);
+        return ['data'=>$r['data'] ?? [], 'meta'=>$r['meta'] ?? []];
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // BANKA / KASA HESAPLARI
+    // ──────────────────────────────────────────────────────────
+
+    /**
+     * Tüm hesapları (banka, kasa, kredi kartı) listele.
+     * Tahsilat oluştururken hangi hesaba yatacağını seçmek için.
+     */
+    public function listAccounts(): array {
+        if (!$this->isEnabled()) return [];
+        try {
+            $r = $this->http('GET', $this->endpoint('accounts') . '?page[size]=100');
+            return $r['data'] ?? [];
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // CARİ BAKİYE
+    // ──────────────────────────────────────────────────────────
+
+    /**
+     * Bir cariye ait güncel bakiye bilgisini çek.
+     * Contact detayında 'balance' alanı var.
+     *
+     * @return float|null Negatif = bayinin borcu, pozitif = bayinin alacağı
+     */
+    public function getContactBalance(string $contactId): ?float {
+        if (!$this->isEnabled() || empty($contactId)) return null;
+        try {
+            $r = $this->http('GET', $this->endpoint("contacts/{$contactId}"));
+            $bal = $r['data']['attributes']['balance'] ?? null;
+            return $bal !== null ? (float)$bal : null;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Tüm bayilerin Paraşüt bakiyesini senkronla.
+     */
+    public function syncAllBalances(): array {
+        if (!$this->isEnabled()) return ['success'=>0, 'fail'=>0, 'total'=>0];
+        $dealers = dbRows("SELECT id, parasut_contact_id FROM b2b_dealers
+                           WHERE is_active=1 AND parasut_contact_id IS NOT NULL AND parasut_contact_id != ''");
+        $success = 0; $fail = 0;
+        foreach ($dealers as $d) {
+            $bal = $this->getContactBalance($d['parasut_contact_id']);
+            if ($bal !== null) {
+                dbExec("UPDATE b2b_dealers SET parasut_balance=?, parasut_balance_updated=NOW() WHERE id=?",
+                    [$bal, $d['id']]);
+                $success++;
+            } else {
+                $fail++;
+            }
+        }
+        return ['success'=>$success, 'fail'=>$fail, 'total'=>count($dealers)];
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // CARİ HAREKET (manuel borçlandırma/alacaklandırma)
+    // ──────────────────────────────────────────────────────────
+
+    /**
+     * Bir cariye manuel borçlandırma yaz (örn ceza, indirim).
+     * POST /v4/{company_id}/contacts/{id}/contact_debit_transactions
+     */
+    public function debitContact(string $contactId, float $amount, string $description, ?string $accountId = null): ?string {
+        if (!$this->isEnabled() || empty($contactId) || $amount <= 0) return null;
+
+        $body = [
+            'data' => [
+                'type' => 'contact_debit_transactions',
+                'attributes' => [
+                    'amount'      => $amount,
+                    'description' => $description,
+                    'currency'    => setting('currency', 'TRY'),
+                    'date'        => date('Y-m-d'),
+                ],
+            ],
+        ];
+        if ($accountId) {
+            $body['data']['relationships'] = [
+                'account' => ['data' => ['id'=>$accountId, 'type'=>'accounts']],
+            ];
+        }
+
+        try {
+            $r = $this->http('POST', $this->endpoint("contacts/{$contactId}/contact_debit_transactions"), $body);
+            return $r['data']['id'] ?? null;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Bir cariye manuel alacaklandırma yaz.
+     * POST /v4/{company_id}/contacts/{id}/contact_credit_transactions
+     */
+    public function creditContact(string $contactId, float $amount, string $description, ?string $accountId = null): ?string {
+        if (!$this->isEnabled() || empty($contactId) || $amount <= 0) return null;
+
+        $body = [
+            'data' => [
+                'type' => 'contact_credit_transactions',
+                'attributes' => [
+                    'amount'      => $amount,
+                    'description' => $description,
+                    'currency'    => setting('currency', 'TRY'),
+                    'date'        => date('Y-m-d'),
+                ],
+            ],
+        ];
+        if ($accountId) {
+            $body['data']['relationships'] = [
+                'account' => ['data' => ['id'=>$accountId, 'type'=>'accounts']],
+            ];
+        }
+
+        try {
+            $r = $this->http('POST', $this->endpoint("contacts/{$contactId}/contact_credit_transactions"), $body);
+            return $r['data']['id'] ?? null;
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 }
 

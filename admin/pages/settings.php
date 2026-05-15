@@ -193,13 +193,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Paraşüt
     if ($tab === 'parasut') {
-        foreach (['parasut_email','parasut_company_id','parasut_sales_account','parasut_bank_account','parasut_client_id','parasut_client_secret'] as $f) {
+        foreach (['parasut_email','parasut_company_id','parasut_sales_account','parasut_bank_account','parasut_client_id','parasut_client_secret','parasut_collection_account_id','parasut_einvoice_scenario'] as $f) {
             settingSave($f, trim($_POST[$f] ?? ''));
         }
         if (!empty($_POST['parasut_password'])) settingSave('parasut_password', $_POST['parasut_password']);
         settingSave('parasut_access_token', '');
         settingSave('parasut_token_expires', '');
-        settingSave('parasut_auto_invoice', isset($_POST['parasut_auto_invoice'])?'1':'0');
+        settingSave('parasut_auto_invoice',  isset($_POST['parasut_auto_invoice'])?'1':'0');
+        settingSave('parasut_auto_einvoice', isset($_POST['parasut_auto_einvoice'])?'1':'0');
+        settingSave('parasut_save_pdf',      isset($_POST['parasut_save_pdf'])?'1':'0');
         settingClearCache();
         // Test butonu ile geldiyse → test URL'sine yönlendir
         if (!empty($_POST['do_test_parasut'])) {
@@ -741,13 +743,85 @@ if (empty($banks)) $banks = [['name'=>'','iban'=>'','holder'=>'','branch'=>'','n
             <input type="text" name="parasut_company_id" value="<?= htmlspecialchars(setting('parasut_company_id')) ?>" class="form-control" placeholder="123456"></div>
         <div class="form-group"><label class="form-label">Satış Hesabı ID</label>
             <input type="text" name="parasut_sales_account" value="<?= htmlspecialchars(setting('parasut_sales_account')) ?>" class="form-control" placeholder="Opsiyonel"></div>
-        <div class="form-group"><label class="form-label">Banka Hesabı ID</label>
+        <div class="form-group"><label class="form-label">Banka Hesabı ID <span style="color:var(--text-muted);font-size:10px;font-weight:400">(eski - kullanılmıyor)</span></label>
             <input type="text" name="parasut_bank_account" value="<?= htmlspecialchars(setting('parasut_bank_account')) ?>" class="form-control" placeholder="Opsiyonel"></div>
-        <div class="form-group" style="display:flex;align-items:center;gap:10px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:10px 14px">
-            <input type="checkbox" name="parasut_auto_invoice" id="parasut_auto_invoice" value="1" <?= setting('parasut_auto_invoice')==='1'?'checked':'' ?> style="margin:0">
-            <label for="parasut_auto_invoice" style="font-size:13px;cursor:pointer;margin:0">
-                <strong>Otomatik fatura oluştur</strong><br>
-                <span style="font-size:11px;color:var(--text-muted)">Bayi sipariş verince Paraşüt'e otomatik fatura kesilir</span>
+    </div>
+
+    <!-- Paraşüt Hesap Seçimi (dinamik dropdown) -->
+    <div style="margin-top:16px;padding:14px 16px;background:#f0fdf4;border:1px solid #86efac;border-radius:10px">
+        <div style="font-weight:700;font-size:13px;color:#15803d;margin-bottom:10px">💰 Tahsilat Hesabı (Banka / Kasa)</div>
+        <div style="font-size:12px;color:#166534;line-height:1.6;margin-bottom:10px">
+            Bayilerden gelen tahsilatlar Paraşüt'te hangi hesaba yansıyacak? Bu liste Paraşüt'teki banka/kasa/kredi kartı hesaplarınızdan otomatik gelir.
+        </div>
+        <?php
+        $accounts = parasut()->isEnabled() ? parasut()->listAccounts() : [];
+        $currentAccountId = setting('parasut_collection_account_id', '');
+        ?>
+        <select name="parasut_collection_account_id" class="form-control" style="max-width:500px">
+            <option value="">— Seçilmedi (Paraşüt varsayılanını kullan) —</option>
+            <?php foreach ($accounts as $acc):
+                $name = $acc['attributes']['name'] ?? '?';
+                $type = $acc['attributes']['account_type'] ?? '';
+                $cur  = $acc['attributes']['currency'] ?? 'TRY';
+                $bal  = $acc['attributes']['balance'] ?? null;
+                $label = $name . ' (' . ($type === 'bank' ? '🏦 Banka' : ($type === 'cash' ? '💵 Kasa' : '💳 ' . $type)) . ', ' . $cur . ')';
+                if ($bal !== null) $label .= ' · Bakiye: ' . number_format((float)$bal, 2, ',', '.');
+            ?>
+            <option value="<?= h($acc['id']) ?>"<?= $currentAccountId === $acc['id'] ? ' selected' : '' ?>>
+                <?= h($label) ?>
+            </option>
+            <?php endforeach; ?>
+        </select>
+        <?php if (empty($accounts)): ?>
+        <div style="font-size:11px;color:#92400e;margin-top:6px">⚠️ Paraşüt hesabınız bağlı değil veya bağlantı çalışmıyor. Önce credentials gir + Bağlantı Test Et.</div>
+        <?php endif; ?>
+    </div>
+
+    <!-- Otomasyon Toggleları -->
+    <div style="margin-top:16px;display:grid;grid-template-columns:1fr;gap:10px">
+        <label style="display:flex;align-items:flex-start;gap:12px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px 14px;cursor:pointer">
+            <input type="checkbox" name="parasut_auto_invoice" value="1" <?= setting('parasut_auto_invoice')==='1'?'checked':'' ?> style="margin-top:2px">
+            <div>
+                <div style="font-weight:700;font-size:13px">📄 Otomatik Fatura Oluştur</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Bayi sipariş verince Paraşüt'e sales_invoice otomatik kesilir</div>
+            </div>
+        </label>
+
+        <label style="display:flex;align-items:flex-start;gap:12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:12px 14px;cursor:pointer">
+            <input type="checkbox" name="parasut_auto_einvoice" value="1" <?= setting('parasut_auto_einvoice','1')==='1'?'checked':'' ?> style="margin-top:2px">
+            <div>
+                <div style="font-weight:700;font-size:13px">⚡ Otomatik E-Arşiv / E-Fatura Resmileştir</div>
+                <div style="font-size:11px;color:#92400e;margin-top:2px">
+                    Fatura kesildikten sonra bayinin <strong>vergi numarası</strong> sorgulanır.
+                    E-fatura sisteminde kayıtlıysa → <strong>E-Fatura</strong>, değilse → <strong>E-Arşiv</strong> olarak resmileştirilir.
+                    Vergi numarası yoksa otomatik E-Arşiv.
+                </div>
+            </div>
+        </label>
+
+        <label style="display:flex;align-items:flex-start;gap:12px;background:#ede9fe;border:1px solid #c4b5fd;border-radius:8px;padding:12px 14px;cursor:pointer">
+            <input type="checkbox" name="parasut_save_pdf" value="1" <?= setting('parasut_save_pdf','1')==='1'?'checked':'' ?> style="margin-top:2px">
+            <div>
+                <div style="font-weight:700;font-size:13px">📥 Fatura PDF URL'sini DB'ye Kaydet</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:2px">
+                    Bayinin sipariş detayında "Faturayı PDF İndir" butonu çıkar. URL geçici (signed) olduğu için yeniden çekilebilir.
+                </div>
+            </div>
+        </label>
+    </div>
+
+    <!-- E-Fatura Senaryosu (e-fatura kayıtlı bayiler için) -->
+    <?php $scenario = setting('parasut_einvoice_scenario', 'basic'); ?>
+    <div style="margin-top:16px;padding:12px 14px;background:#fafafa;border:1px solid #e5e7eb;border-radius:8px">
+        <label class="form-label" style="font-size:12px">E-Fatura Senaryosu (e-fatura sisteminde kayıtlı bayiler için)</label>
+        <div style="display:flex;gap:14px;margin-top:6px">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+                <input type="radio" name="parasut_einvoice_scenario" value="basic" <?= $scenario === 'basic' ? 'checked' : '' ?>>
+                <strong>Temel</strong> <span style="color:var(--text-muted);font-size:11px">(çoğu durumda doğru)</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+                <input type="radio" name="parasut_einvoice_scenario" value="commercial" <?= $scenario === 'commercial' ? 'checked' : '' ?>>
+                <strong>Ticari</strong> <span style="color:var(--text-muted);font-size:11px">(itiraz/iade vs. iş akışı gerekirse)</span>
             </label>
         </div>
     </div>
