@@ -197,22 +197,33 @@ if ($tab === 'dealers') {
     $b2bDealers = dbRows("SELECT id, company_name, first_name, last_name, email, phone, tax_number, parasut_contact_id,
                                   COALESCE(NULLIF(company_name,''), CONCAT(TRIM(first_name),' ',TRIM(last_name))) AS display_name
                           FROM b2b_dealers WHERE is_active=1
-                          ORDER BY display_name");
+                          ORDER BY (parasut_contact_id IS NOT NULL AND parasut_contact_id != '') DESC, display_name");
 
     // Paraşüt'ten cari listesi
     $parasutContacts = parasut()->listAllContacts();
 
-    // Hızlı lookup için ID→object map
+    // Hızlı lookup için ID→object map (string-key)
     $parasutContactsById = [];
     foreach ($parasutContacts as $c) {
-        $parasutContactsById[$c['id']] = $c;
+        $parasutContactsById[(string)$c['id']] = $c;
     }
 
-    // Eşleşmiş bayilerin Paraşüt ID'lerini topla → sadece Paraşüt'te olanları bul
-    $usedContactIds = array_filter(array_column($b2bDealers, 'parasut_contact_id'));
-    $orphanContacts = []; // Paraşüt'te olup B2B'de eşleşmemiş cariler
+    // Eşleşmiş bayilerin Paraşüt ID'lerini topla
+    $usedContactIds = array_map('strval', array_filter(array_column($b2bDealers, 'parasut_contact_id')));
+
+    // Paraşüt'te olup B2B'de eşleşmemiş cariler (yetimler)
+    $orphanContacts = [];
     foreach ($parasutContacts as $c) {
-        if (!in_array($c['id'], $usedContactIds, true)) $orphanContacts[] = $c;
+        if (!in_array((string)$c['id'], $usedContactIds, true)) $orphanContacts[] = $c;
+    }
+
+    // B2B'de eşleşmiş AMA Paraşüt'te bulunamayan ID'ler (silinmiş/yanlış)
+    $missingMatches = 0;
+    foreach ($b2bDealers as $d) {
+        $pid = (string)($d['parasut_contact_id'] ?? '');
+        if ($pid !== '' && !isset($parasutContactsById[$pid])) {
+            $missingMatches++;
+        }
     }
 
     $stats = [
@@ -228,15 +239,25 @@ if ($tab === 'dealers') {
 
     $parasutProducts = parasut()->listAllProducts();
 
+    // Hızlı lookup için ID→object map (string-key)
     $parasutProductsById = [];
     foreach ($parasutProducts as $p) {
-        $parasutProductsById[$p['id']] = $p;
+        $parasutProductsById[(string)$p['id']] = $p;
     }
 
-    $usedProductIds = array_filter(array_column($b2bProducts, 'parasut_product_id'));
+    $usedProductIds = array_map('strval', array_filter(array_column($b2bProducts, 'parasut_product_id')));
     $orphanProducts = [];
     foreach ($parasutProducts as $p) {
-        if (!in_array($p['id'], $usedProductIds, true)) $orphanProducts[] = $p;
+        if (!in_array((string)$p['id'], $usedProductIds, true)) $orphanProducts[] = $p;
+    }
+
+    // B2B'de eşleşmiş AMA Paraşüt'te bulunamayan ID'ler
+    $missingMatches = 0;
+    foreach ($b2bProducts as $p) {
+        $pid = (string)($p['parasut_product_id'] ?? '');
+        if ($pid !== '' && !isset($parasutProductsById[$pid])) {
+            $missingMatches++;
+        }
     }
 
     $stats = [
@@ -261,6 +282,61 @@ if ($tab === 'dealers') {
 
 <?php if ($msg): [$t,$m] = explode(':', $msg, 2); ?>
 <div class="alert alert-<?= $t==='error'?'danger':'success' ?>"><?= h($m) ?></div>
+<?php endif; ?>
+
+<!-- ─── Paraşüt API DURUMU ─── -->
+<?php
+$apiCount = ($tab === 'dealers') ? count($parasutContacts) : count($parasutProducts);
+$apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
+?>
+<?php if ($apiCount === 0): ?>
+<!-- Paraşüt'ten HİÇ veri gelmedi - SERT UYARI -->
+<div class="alert" style="background:#fef2f2;border:2px solid #dc2626;color:#7f1d1d;padding:14px 16px;margin-bottom:16px">
+  <div style="display:flex;align-items:flex-start;gap:12px">
+    <div style="font-size:24px">🚨</div>
+    <div style="flex:1">
+      <div style="font-weight:700;font-size:14px;color:#b91c1c;margin-bottom:4px">
+        Paraşüt'ten <?= $apiKind ?> listesi BOŞ döndü
+      </div>
+      <div style="font-size:12px;line-height:1.6">
+        Bu durumda eşleştirme yapılamaz. Olası sebepler:
+        <ul style="margin:6px 0 0 18px;padding:0">
+          <li><strong>Token sorunu:</strong> Erişim tokeni geçersiz veya süresi dolmuş</li>
+          <li><strong>Yanlış Company ID:</strong> Settings'teki <code>parasut_company_id</code> başka bir hesaba ait</li>
+          <li><strong>Yetki eksikliği:</strong> Bu API kullanıcısının <?= $apiKind ?>leri okuma izni yok</li>
+          <li><strong>Hesabınız boş:</strong> Paraşüt hesabınızda gerçekten kayıt yok</li>
+        </ul>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <a href="?page=parasut&test=1" class="btn btn-sm" style="background:#dc2626;color:#fff;border:none">🔌 Bağlantı Test Et</a>
+          <a href="?page=parasut&clear_token=1" class="btn btn-sm" style="background:#fff;color:#dc2626;border:1px solid #dc2626" onclick="return confirm('Token cache temizlensin mi?');">🔄 Token Yenile</a>
+          <a href="?page=settings&tab=parasut" class="btn btn-sm" style="background:#fff;color:#dc2626;border:1px solid #dc2626">⚙ Credentials Kontrol</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<?php elseif (!empty($missingMatches)): ?>
+<!-- Eşleşmiş ama Paraşüt'te bulunamayan kayıtlar var -->
+<div class="alert" style="background:#fef3c7;border:1px solid #fcd34d;color:#78350f;padding:12px 14px;margin-bottom:16px">
+  <div style="display:flex;align-items:flex-start;gap:10px">
+    <div style="font-size:20px">⚠️</div>
+    <div style="flex:1">
+      <div style="font-weight:700;font-size:13px;color:#92400e">
+        <?= $missingMatches ?> kayıp eşleşme tespit edildi
+      </div>
+      <div style="font-size:12px;line-height:1.5;margin-top:4px">
+        <?= $missingMatches ?> <?= $apiKind ?> için kayıtlı Paraşüt ID'si var, ancak Paraşüt'ten gelen listede bulunamadı.
+        Bu kayıtlar Paraşüt'te silinmiş veya başka bir hesapta olabilir.
+        <strong>Kırmızı işaretli</strong> satırlarda eşlemeyi sıfırlayıp yeniden bağlayın.
+      </div>
+    </div>
+  </div>
+</div>
+<?php else: ?>
+<!-- Sağlıklı durum - kısa bilgi -->
+<div style="background:#f0fdf4;border:1px solid #86efac;color:#166534;padding:8px 14px;border-radius:8px;margin-bottom:16px;font-size:12px">
+  ✓ Paraşüt'ten <strong><?= $apiCount ?></strong> <?= $apiKind ?> başarıyla çekildi.
+</div>
 <?php endif; ?>
 
 <!-- Sekme Navigasyonu -->
@@ -364,16 +440,39 @@ if ($tab === 'dealers') {
       </thead>
       <tbody>
         <?php foreach ($b2bDealers as $d):
-            $linked = null;
-            if (!empty($d['parasut_contact_id']) && isset($parasutContactsById[$d['parasut_contact_id']])) {
-                $linked = $parasutContactsById[$d['parasut_contact_id']];
+            $linkedId = (string)($d['parasut_contact_id'] ?? '');
+            $linked   = null;
+            $isLost   = false;  // Eşleşme var ama Paraşüt'te bulunamayan ID
+
+            if ($linkedId !== '') {
+                if (isset($parasutContactsById[$linkedId])) {
+                    $linked = $parasutContactsById[$linkedId];
+                } else {
+                    $isLost = true;
+                }
             }
+
+            // Satır arka plan rengi:
+            // - Eşleşmiş ve sağlam: hafif yeşil
+            // - Eşleşmiş ama kayıp: kırmızı (uyarı)
+            // - Bağlanmamış: sarımsı
+            if ($linked)      $rowBg = '#f0fdf4'; // green-50
+            elseif ($isLost)  $rowBg = '#fef2f2'; // red-50
+            else              $rowBg = '#fffbeb'; // yellow-50
+
+            $rowBorder = $linked ? '4px solid #16a34a' : ($isLost ? '4px solid #dc2626' : '4px solid transparent');
         ?>
-        <tr style="<?= $linked ? '' : 'background:#fffbeb' ?>">
+        <tr style="background:<?= $rowBg ?>;border-left:<?= $rowBorder ?>">
           <td>
             <div style="font-weight:600"><?= h($d["display_name"] ?: ($d["company_name"] ?: ($d["first_name"]." ".$d["last_name"]))) ?></div>
             <?php if (!empty($d['phone'])): ?>
             <div style="font-size:11px;color:var(--text-muted)"><?= h($d['phone']) ?></div>
+            <?php endif; ?>
+            <?php if ($linked): ?>
+            <div style="margin-top:4px;font-size:10px;color:#15803d;font-weight:700">✓ <?= h($linked['attributes']['name'] ?? 'Eşleşti') ?> (ID: <?= h($linkedId) ?>)</div>
+            <?php elseif ($isLost): ?>
+            <div style="margin-top:4px;font-size:10px;color:#b91c1c;font-weight:700">⚠️ Paraşüt'te bu ID bulunamadı: <?= h($linkedId) ?></div>
+            <div style="font-size:10px;color:#7f1d1d">Bu kayıt Paraşüt'te silinmiş olabilir. Aşağıdan "— Bağlı değil —" seç + 💾 ile eşlemeyi sıfırla.</div>
             <?php endif; ?>
           </td>
           <td style="font-family:monospace;font-size:12px"><?= h($d['tax_number'] ?: '—') ?></td>
@@ -383,12 +482,15 @@ if ($tab === 'dealers') {
               <?= csrfField() ?>
               <input type="hidden" name="action" value="map-dealer">
               <input type="hidden" name="dealer_id" value="<?= (int)$d['id'] ?>">
-              <select name="parasut_id" class="form-control" style="font-size:12px;padding:4px 8px;height:30px;min-height:30px;flex:1">
+              <select name="parasut_id" class="form-control" style="font-size:12px;padding:4px 8px;height:30px;min-height:30px;flex:1<?= $linked ? ';border:2px solid #16a34a' : ($isLost ? ';border:2px solid #dc2626' : '') ?>">
                 <option value="-">— Bağlı değil —</option>
+                <?php if ($isLost): ?>
+                <option value="<?= h($linkedId) ?>" selected style="color:#dc2626">⚠️ KAYIP ID: <?= h($linkedId) ?> (Paraşüt'te yok)</option>
+                <?php endif; ?>
                 <?php foreach ($parasutContacts as $c):
                     $cName = $c['attributes']['name'] ?? '?';
                     $cTax  = $c['attributes']['tax_number'] ?? '';
-                    $isSel = ($d['parasut_contact_id'] ?? '') === $c['id'];
+                    $isSel = (string)($d['parasut_contact_id'] ?? '') === (string)$c['id'];
                 ?>
                 <option value="<?= h($c['id']) ?>"<?= $isSel ? ' selected' : '' ?>>
                   <?= h($cName) ?><?= $cTax ? ' [VKN: ' . h($cTax) . ']' : '' ?> (ID: <?= h($c['id']) ?>)
@@ -397,9 +499,6 @@ if ($tab === 'dealers') {
               </select>
               <button type="submit" class="btn btn-sm" style="padding:4px 10px;font-size:11px;background:#16a34a;color:#fff;border:none">💾</button>
             </form>
-            <?php if ($linked): ?>
-            <div style="margin-top:4px;font-size:10px;color:#15803d;font-weight:600">✓ Eşleşmiş</div>
-            <?php endif; ?>
           </td>
           <td>
             <?php if (!$linked): ?>
@@ -466,13 +565,34 @@ if ($tab === 'dealers') {
       </thead>
       <tbody>
         <?php foreach ($b2bProducts as $p):
-            $linked = null;
-            if (!empty($p['parasut_product_id']) && isset($parasutProductsById[$p['parasut_product_id']])) {
-                $linked = $parasutProductsById[$p['parasut_product_id']];
+            $linkedId = (string)($p['parasut_product_id'] ?? '');
+            $linked   = null;
+            $isLost   = false;
+
+            if ($linkedId !== '') {
+                if (isset($parasutProductsById[$linkedId])) {
+                    $linked = $parasutProductsById[$linkedId];
+                } else {
+                    $isLost = true;
+                }
             }
+
+            if ($linked)      $rowBg = '#f0fdf4';
+            elseif ($isLost)  $rowBg = '#fef2f2';
+            else              $rowBg = '#fffbeb';
+
+            $rowBorder = $linked ? '4px solid #16a34a' : ($isLost ? '4px solid #dc2626' : '4px solid transparent');
         ?>
-        <tr style="<?= $linked ? '' : 'background:#fffbeb' ?>">
-          <td style="font-weight:600"><?= h($p['name']) ?></td>
+        <tr style="background:<?= $rowBg ?>;border-left:<?= $rowBorder ?>">
+          <td>
+            <div style="font-weight:600"><?= h($p['name']) ?></div>
+            <?php if ($linked): ?>
+            <div style="margin-top:4px;font-size:10px;color:#15803d;font-weight:700">✓ <?= h($linked['attributes']['name'] ?? 'Eşleşti') ?> (ID: <?= h($linkedId) ?>)</div>
+            <?php elseif ($isLost): ?>
+            <div style="margin-top:4px;font-size:10px;color:#b91c1c;font-weight:700">⚠️ Paraşüt'te bu ID bulunamadı: <?= h($linkedId) ?></div>
+            <div style="font-size:10px;color:#7f1d1d">Aşağıdan "— Bağlı değil —" seç + 💾 ile eşlemeyi sıfırla.</div>
+            <?php endif; ?>
+          </td>
           <td style="font-family:monospace;font-size:12px"><?= h($p['sku'] ?: '—') ?></td>
           <td style="font-size:12px"><?= moneyInc((float)$p['base_price'], $p['vat_rate'] ?? 20) ?></td>
           <td style="font-size:12px">%<?= (int)($p['vat_rate'] ?? 20) ?></td>
@@ -481,12 +601,15 @@ if ($tab === 'dealers') {
               <?= csrfField() ?>
               <input type="hidden" name="action" value="map-product">
               <input type="hidden" name="product_id" value="<?= (int)$p['id'] ?>">
-              <select name="parasut_id" class="form-control" style="font-size:12px;padding:4px 8px;height:30px;min-height:30px;flex:1">
+              <select name="parasut_id" class="form-control" style="font-size:12px;padding:4px 8px;height:30px;min-height:30px;flex:1<?= $linked ? ';border:2px solid #16a34a' : ($isLost ? ';border:2px solid #dc2626' : '') ?>">
                 <option value="-">— Bağlı değil —</option>
+                <?php if ($isLost): ?>
+                <option value="<?= h($linkedId) ?>" selected style="color:#dc2626">⚠️ KAYIP ID: <?= h($linkedId) ?> (Paraşüt'te yok)</option>
+                <?php endif; ?>
                 <?php foreach ($parasutProducts as $pp):
                     $ppName = $pp['attributes']['name'] ?? '?';
                     $ppCode = $pp['attributes']['code'] ?? '';
-                    $isSel = ($p['parasut_product_id'] ?? '') === $pp['id'];
+                    $isSel = (string)($p['parasut_product_id'] ?? '') === (string)$pp['id'];
                 ?>
                 <option value="<?= h($pp['id']) ?>"<?= $isSel ? ' selected' : '' ?>>
                   <?= h($ppName) ?><?= $ppCode ? ' [Kod: ' . h($ppCode) . ']' : '' ?> (ID: <?= h($pp['id']) ?>)
@@ -495,9 +618,6 @@ if ($tab === 'dealers') {
               </select>
               <button type="submit" class="btn btn-sm" style="padding:4px 10px;font-size:11px;background:#16a34a;color:#fff;border:none">💾</button>
             </form>
-            <?php if ($linked): ?>
-            <div style="margin-top:4px;font-size:10px;color:#15803d;font-weight:600">✓ Eşleşmiş</div>
-            <?php endif; ?>
           </td>
           <td>
             <?php if (!$linked): ?>
