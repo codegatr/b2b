@@ -60,7 +60,23 @@ elseif ($filter === 'none') { $where[] = 'p.stock <= 0'; }
 if ($search) { $where[] = '(p.name LIKE ? OR p.sku LIKE ?)'; $s="%$search%"; $params[]=$s; $params[]=$s; }
 
 $products = dbRows(
-    "SELECT p.*, c.name as cat_name
+    "SELECT p.*, c.name as cat_name,
+            -- Son 30 gün satılan adet
+            (SELECT COALESCE(SUM(oi.quantity), 0)
+             FROM b2b_order_items oi
+             JOIN b2b_orders o ON o.id=oi.order_id
+             WHERE oi.product_id=p.id
+               AND o.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+               AND o.status NOT IN ('iptal','iade')
+            ) AS sold_30d,
+            -- Son 30 gün ortalama günlük satış
+            (SELECT COALESCE(SUM(oi.quantity), 0) / 30
+             FROM b2b_order_items oi
+             JOIN b2b_orders o ON o.id=oi.order_id
+             WHERE oi.product_id=p.id
+               AND o.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+               AND o.status NOT IN ('iptal','iade')
+            ) AS daily_avg
      FROM b2b_products p
      LEFT JOIN b2b_categories c ON c.id=p.category_id
      WHERE " . implode(' AND ', $where) . "
@@ -144,40 +160,113 @@ $parasutEnabled = !empty(setting('parasut_email')) && !empty(setting('parasut_co
   <div class="card">
     <div class="card-header">
       <h3 class="card-title">Stok Listesi (<?= count($products) ?>)</h3>
-      <button type="submit" class="btn btn-primary btn-sm">Tüm Değişiklikleri Kaydet</button>
+      <button type="submit" class="btn btn-primary btn-sm">💾 Tüm Değişiklikleri Kaydet</button>
     </div>
     <div class="table-wrap">
-      <table class="table">
+      <table class="table" style="font-size:13px">
         <thead>
           <tr>
-            <th>SKU</th>
-            <th>Ürün Adı</th>
-            <th>Kategori</th>
-            <th>Kritik Seviye</th>
-            <th>Mevcut Stok</th>
-            <th>Yeni Stok</th>
+            <th style="width:60px">Ürün</th>
+            <th>İsim / SKU</th>
+            <th style="width:120px">Kategori</th>
+            <th style="width:110px">Baz Fiyat<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">KDV Hariç</span></th>
+            <th style="width:80px">Kritik</th>
+            <th style="width:180px">Stok Durumu</th>
+            <th style="width:110px">Son 30 Gün<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">Satış / Gün</span></th>
+            <th style="width:120px">Yeni Stok</th>
           </tr>
         </thead>
         <tbody>
         <?php if (empty($products)): ?>
-        <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-muted)">Ürün bulunamadı.</td></tr>
+        <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-muted)">Ürün bulunamadı.</td></tr>
         <?php endif; ?>
-        <?php foreach ($products as $p): ?>
-        <?php
-        $stockClass = $p['stock'] <= 0 ? 'danger' : ($p['stock'] <= $p['stock_critical'] ? 'warning' : 'success');
+        <?php foreach ($products as $p):
+            $stockNum  = (int)$p['stock'];
+            $critical  = (int)$p['stock_critical'];
+            $sold30d   = (int)($p['sold_30d'] ?? 0);
+            $dailyAvg  = (float)($p['daily_avg'] ?? 0);
+
+            if ($stockNum <= 0) { $stockClass='danger'; $barColor='#dc2626'; $bgColor='#fee2e2'; $statusText='Stoksuz'; }
+            elseif ($stockNum <= $critical) { $stockClass='warning'; $barColor='#ea580c'; $bgColor='#ffedd5'; $statusText='Kritik'; }
+            else { $stockClass='success'; $barColor='#16a34a'; $bgColor='#dcfce7'; $statusText='Yeterli'; }
+
+            // Stok bar - 0..(critical*4) aralığını göster, ↑'sı %100
+            $barMax = max($critical * 4, 1);
+            $barPct = min(100, ($stockNum / $barMax) * 100);
+
+            // Tahmini bitiş süresi
+            $daysLeft = $dailyAvg > 0 ? $stockNum / $dailyAvg : null;
         ?>
         <tr>
-          <td><code style="font-size:11px"><?= h($p['sku'] ?? '—') ?></code></td>
-          <td class="fw-600"><?= h($p['name']) ?></td>
-          <td style="font-size:12px;color:var(--text-muted)"><?= h($p['cat_name'] ?? '—') ?></td>
-          <td style="font-size:12px;color:var(--text-muted)"><?= (int)$p['stock_critical'] ?></td>
+          <!-- Resim -->
           <td>
-            <span class="badge badge-<?= $stockClass ?>"><?= (int)$p['stock'] ?></span>
+            <?php if (!empty($p['image'])): ?>
+              <img src="/uploads/products/<?= h($p['image']) ?>"
+                   alt="<?= h($p['name']) ?>"
+                   style="width:48px;height:48px;object-fit:cover;border-radius:8px;border:1px solid var(--border);display:block">
+            <?php else: ?>
+              <div style="width:48px;height:48px;border-radius:8px;background:linear-gradient(135deg,#e5e7eb,#f3f4f6);display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:20px">📦</div>
+            <?php endif; ?>
           </td>
+
+          <!-- İsim + SKU -->
+          <td>
+            <div style="font-weight:600"><?= h($p['name']) ?></div>
+            <?php if (!empty($p['sku'])): ?>
+              <code style="font-size:10.5px;color:var(--text-muted);background:#f3f4f6;padding:1px 6px;border-radius:3px"><?= h($p['sku']) ?></code>
+            <?php endif; ?>
+          </td>
+
+          <!-- Kategori -->
+          <td>
+            <?php if (!empty($p['cat_name'])): ?>
+              <span class="badge" style="background:#ede9fe;color:#6b21a8;font-size:10px;font-weight:600"><?= h($p['cat_name']) ?></span>
+            <?php else: ?>
+              <span style="color:var(--text-muted);font-size:11px">—</span>
+            <?php endif; ?>
+          </td>
+
+          <!-- Baz Fiyat (KDV Hariç) -->
+          <td style="font-weight:600;font-size:12px">
+            <?= money((float)$p['base_price']) ?>
+          </td>
+
+          <!-- Kritik Seviye -->
+          <td style="text-align:center;font-size:12px;color:var(--text-muted)">
+            <?= $critical ?>
+          </td>
+
+          <!-- Stok Durumu (bar + badge) -->
+          <td>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="badge" style="background:<?= $bgColor ?>;color:<?= $barColor ?>;font-size:11px;font-weight:700;min-width:48px;text-align:center"><?= $stockNum ?></span>
+              <div style="flex:1;height:6px;background:#f3f4f6;border-radius:3px;overflow:hidden">
+                <div style="height:100%;width:<?= $barPct ?>%;background:<?= $barColor ?>;transition:width 0.3s"></div>
+              </div>
+            </div>
+            <div style="font-size:10px;color:<?= $barColor ?>;font-weight:600;margin-top:3px;text-transform:uppercase;letter-spacing:.3px"><?= $statusText ?></div>
+          </td>
+
+          <!-- Satış istatistik -->
+          <td>
+            <?php if ($sold30d > 0): ?>
+              <div style="font-weight:600;font-size:12px"><?= $sold30d ?> adet</div>
+              <div style="font-size:10px;color:var(--text-muted)">
+                ~<?= number_format($dailyAvg, 1, ',', '.') ?> / gün
+                <?php if ($daysLeft !== null && $daysLeft < 14): ?>
+                <br><span style="color:#ea580c;font-weight:600">~<?= round($daysLeft) ?> gün kalır</span>
+                <?php endif; ?>
+              </div>
+            <?php else: ?>
+              <span style="color:var(--text-muted);font-size:11px">—</span>
+            <?php endif; ?>
+          </td>
+
+          <!-- Yeni Stok input -->
           <td>
             <input type="number" name="stock[<?= $p['id'] ?>]"
-                   value="<?= (int)$p['stock'] ?>" min="0"
-                   class="form-control" style="width:90px;height:34px;padding:4px 8px">
+                   value="<?= $stockNum ?>" min="0"
+                   class="form-control" style="width:100%;height:36px;padding:4px 8px;font-weight:600;text-align:center;border:2px solid #e5e7eb;font-size:13px">
           </td>
         </tr>
         <?php endforeach; ?>
@@ -185,8 +274,11 @@ $parasutEnabled = !empty(setting('parasut_email')) && !empty(setting('parasut_co
       </table>
     </div>
     <?php if (!empty($products)): ?>
-    <div style="padding:12px 16px;border-top:1px solid var(--border)">
-      <button type="submit" class="btn btn-primary">Tüm Değişiklikleri Kaydet</button>
+    <div style="padding:14px 18px;border-top:1px solid var(--border);background:#fafafa;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <div style="flex:1;font-size:12px;color:var(--text-muted)">
+        💡 Değişiklik yaptığın input'lar otomatik kaydedilmez. Tüm değişiklikleri yapıp <strong>"Tüm Değişiklikleri Kaydet"</strong> butonuna basın.
+      </div>
+      <button type="submit" class="btn btn-primary">💾 Tüm Değişiklikleri Kaydet</button>
     </div>
     <?php endif; ?>
   </div>

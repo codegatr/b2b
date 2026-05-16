@@ -89,9 +89,10 @@ if (isPost() && ($_POST['action'] ?? '') === 'auto-match-dealers') {
             }
         }
 
-        // En son isim eşleşmesi (case-insensitive, tam)
-        if (!$candidate && !empty($d['firm_name'])) {
-            $name = mb_strtolower(trim($d['firm_name']));
+        // En son isim eşleşmesi (case-insensitive, tam) — company_name veya display_name
+        $matchName = !empty($d['company_name']) ? $d['company_name'] : (trim(($d['first_name']??'').' '.($d['last_name']??'')) ?: '');
+        if (!$candidate && $matchName !== '') {
+            $name = mb_strtolower(trim($matchName));
             foreach ($contacts as $c) {
                 $cName = mb_strtolower(trim($c['attributes']['name'] ?? ''));
                 if ($cName !== '' && $cName === $name) {
@@ -193,7 +194,10 @@ if (isPost() && ($_POST['action'] ?? '') === 'create-product') {
 // ──────────────────────────────────────────────────────────────
 
 if ($tab === 'dealers') {
-    $b2bDealers = dbRows("SELECT id, firm_name, email, phone, tax_number, parasut_contact_id FROM b2b_dealers WHERE is_active=1 ORDER BY firm_name");
+    $b2bDealers = dbRows("SELECT id, company_name, first_name, last_name, email, phone, tax_number, parasut_contact_id,
+                                  COALESCE(NULLIF(company_name,''), CONCAT(TRIM(first_name),' ',TRIM(last_name))) AS display_name
+                          FROM b2b_dealers WHERE is_active=1
+                          ORDER BY display_name");
 
     // Paraşüt'ten cari listesi
     $parasutContacts = parasut()->listAllContacts();
@@ -367,7 +371,7 @@ if ($tab === 'dealers') {
         ?>
         <tr style="<?= $linked ? '' : 'background:#fffbeb' ?>">
           <td>
-            <div style="font-weight:600"><?= h($d['firm_name']) ?></div>
+            <div style="font-weight:600"><?= h($d["display_name"] ?: ($d["company_name"] ?: ($d["first_name"]." ".$d["last_name"]))) ?></div>
             <?php if (!empty($d['phone'])): ?>
             <div style="font-size:11px;color:var(--text-muted)"><?= h($d['phone']) ?></div>
             <?php endif; ?>
