@@ -62,7 +62,7 @@ if ($search) { $where[] = '(p.name LIKE ? OR p.sku LIKE ?)'; $s="%$search%"; $pa
 $products = dbRows(
     "SELECT p.*, c.name as cat_name,
             -- Son 30 gün satılan adet
-            (SELECT COALESCE(SUM(oi.quantity), 0)
+            (SELECT COALESCE(SUM(oi.qty), 0)
              FROM b2b_order_items oi
              JOIN b2b_orders o ON o.id=oi.order_id
              WHERE oi.product_id=p.id
@@ -70,7 +70,7 @@ $products = dbRows(
                AND o.status NOT IN ('iptal','iade')
             ) AS sold_30d,
             -- Son 30 gün ortalama günlük satış
-            (SELECT COALESCE(SUM(oi.quantity), 0) / 30
+            (SELECT COALESCE(SUM(oi.qty), 0) / 30
              FROM b2b_order_items oi
              JOIN b2b_orders o ON o.id=oi.order_id
              WHERE oi.product_id=p.id
