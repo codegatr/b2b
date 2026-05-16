@@ -474,11 +474,14 @@ class Parasut {
     /**
      * Paraşüt'teki tek sayfa cari (contact) listesini çek.
      * Filter destekler: ['name'=>'Acme', 'tax_number'=>'1234567890', 'email'=>'a@b.c']
+     *
+     * NOT: Paraşüt API V4 page[size] MAX 25 — fazlası 422 hata verir.
+     *
      * @return array{data: array, meta: array}
      */
-    public function listContacts(int $page = 1, int $size = 100, array $filter = []): array {
+    public function listContacts(int $page = 1, int $size = 25, array $filter = []): array {
         if (!$this->isEnabled()) return ['data'=>[], 'meta'=>['error'=>'Entegrasyon kapalı.']];
-        $size = max(1, min(100, $size)); // Paraşüt max 100
+        $size = max(1, min(25, $size)); // Paraşüt API V4 hard limit: 25
         $url  = $this->endpoint('contacts') . '?page[number]=' . $page . '&page[size]=' . $size;
         foreach ($filter as $k => $v) {
             if ($v !== '' && $v !== null) $url .= '&filter[' . urlencode($k) . ']=' . urlencode((string)$v);
@@ -493,24 +496,23 @@ class Parasut {
 
     /**
      * Paraşüt'teki TÜM cari kayıtlarını otomatik pagination ile çek.
-     * Şirket başına 1000 kayıt sınırı (10 sayfa * 100). Bunun üstü için
-     * arama/filter kullanılmalı.
+     * 25 kayıt/sayfa x maxPages = max kayıt.
      */
-    public function listAllContacts(int $maxPages = 10): array {
+    public function listAllContacts(int $maxPages = 40): array {
         $all = [];
         for ($p = 1; $p <= $maxPages; $p++) {
-            $res = $this->listContacts($p, 100);
+            $res = $this->listContacts($p, 25);
             if (empty($res['data'])) break;
             $all = array_merge($all, $res['data']);
-            if (count($res['data']) < 100) break; // Son sayfa
+            if (count($res['data']) < 25) break; // Son sayfa
         }
         return $all;
     }
 
-    /** Paraşüt'teki tek sayfa ürün listesi */
-    public function listProducts(int $page = 1, int $size = 100, array $filter = []): array {
+    /** Paraşüt'teki tek sayfa ürün listesi (page size max 25) */
+    public function listProducts(int $page = 1, int $size = 25, array $filter = []): array {
         if (!$this->isEnabled()) return ['data'=>[], 'meta'=>['error'=>'Entegrasyon kapalı.']];
-        $size = max(1, min(100, $size));
+        $size = max(1, min(25, $size));
         $url  = $this->endpoint('products') . '?page[number]=' . $page . '&page[size]=' . $size;
         foreach ($filter as $k => $v) {
             if ($v !== '' && $v !== null) $url .= '&filter[' . urlencode($k) . ']=' . urlencode((string)$v);
@@ -524,13 +526,13 @@ class Parasut {
     }
 
     /** Paraşüt'teki TÜM ürünleri otomatik pagination ile çek */
-    public function listAllProducts(int $maxPages = 10): array {
+    public function listAllProducts(int $maxPages = 40): array {
         $all = [];
         for ($p = 1; $p <= $maxPages; $p++) {
-            $res = $this->listProducts($p, 100);
+            $res = $this->listProducts($p, 25);
             if (empty($res['data'])) break;
             $all = array_merge($all, $res['data']);
-            if (count($res['data']) < 100) break;
+            if (count($res['data']) < 25) break;
         }
         return $all;
     }
@@ -818,7 +820,7 @@ class Parasut {
     public function listAccounts(): array {
         if (!$this->isEnabled()) return [];
         try {
-            $r = $this->http('GET', $this->endpoint('accounts') . '?page[size]=100');
+            $r = $this->http('GET', $this->endpoint('accounts') . '?page[size]=25');
             return $r['data'] ?? [];
         } catch (\Throwable $e) {
             return [];

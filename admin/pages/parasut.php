@@ -109,6 +109,100 @@ if (isset($_GET['clear_token'])) {
     $msg = 'success:Token cache temizlendi. Bir sonraki istekte yeni token alınacak.';
 }
 
+// ── DETAYLI ENDPOINT TANI (her endpoint'i ayrı ayrı test et)
+$diagResult = null;
+if (isset($_GET['diag'])) {
+    $p = parasut();
+    $companyId = setting('parasut_company_id', '');
+
+    // Her endpoint için manuel http çağrısı yap, raw response ile dön
+    $tests = [];
+
+    // Test 1: /me (kim olduğunu söyle)
+    $tests['1_me'] = [
+        'label' => 'Kimlik Doğrulama (/v4/me)',
+        'desc'  => 'Token geçerli mi? Hangi kullanıcı olarak bağlandık?',
+    ];
+
+    // Test 2: /contacts (cari listesi)
+    $tests['2_contacts'] = [
+        'label' => 'Cariler (/v4/{cid}/contacts)',
+        'desc'  => 'Müşteri ve tedarikçi listesi okuma izni var mı?',
+    ];
+
+    // Test 3: /products (ürün listesi)
+    $tests['3_products'] = [
+        'label' => 'Ürünler (/v4/{cid}/products)',
+        'desc'  => 'Stok kayıtları okuma izni var mı?',
+    ];
+
+    // Test 4: /accounts (banka/kasa)
+    $tests['4_accounts'] = [
+        'label' => 'Hesaplar (/v4/{cid}/accounts)',
+        'desc'  => 'Banka ve kasa hesapları okuma izni var mı?',
+    ];
+
+    $diagResult = [];
+
+    try {
+        // Test 1: /me
+        $meRaw = $p->testConnection();
+        $diagResult['1_me'] = [
+            'label'    => $tests['1_me']['label'],
+            'desc'     => $tests['1_me']['desc'],
+            'http'     => $meRaw['__meta']['http_code'] ?? 0,
+            'ok'       => !empty($meRaw['data']),
+            'snippet'  => $meRaw['__meta']['raw_snippet'] ?? '',
+            'count'    => 1,
+        ];
+    } catch (\Throwable $e) {
+        $diagResult['1_me'] = ['label'=>$tests['1_me']['label'], 'ok'=>false, 'error'=>$e->getMessage()];
+    }
+
+    // Test 2: /contacts (sayfa 1, 25 kayıt)
+    try {
+        $contactRes = $p->listContacts(1, 25);
+        $diagResult['2_contacts'] = [
+            'label'   => $tests['2_contacts']['label'],
+            'desc'    => $tests['2_contacts']['desc'],
+            'http'    => $contactRes['meta']['__meta']['http_code'] ?? '?',
+            'ok'      => !empty($contactRes['data']),
+            'count'   => count($contactRes['data']),
+            'err'     => $contactRes['err'] ?? null,
+            'total_meta' => $contactRes['meta'] ?? [],
+        ];
+    } catch (\Throwable $e) {
+        $diagResult['2_contacts'] = ['label'=>$tests['2_contacts']['label'], 'ok'=>false, 'error'=>$e->getMessage()];
+    }
+
+    // Test 3: /products
+    try {
+        $prodRes = $p->listProducts(1, 25);
+        $diagResult['3_products'] = [
+            'label' => $tests['3_products']['label'],
+            'desc'  => $tests['3_products']['desc'],
+            'ok'    => !empty($prodRes['data']),
+            'count' => count($prodRes['data']),
+            'err'   => $prodRes['err'] ?? null,
+        ];
+    } catch (\Throwable $e) {
+        $diagResult['3_products'] = ['label'=>$tests['3_products']['label'], 'ok'=>false, 'error'=>$e->getMessage()];
+    }
+
+    // Test 4: /accounts
+    try {
+        $accs = $p->listAccounts();
+        $diagResult['4_accounts'] = [
+            'label' => $tests['4_accounts']['label'],
+            'desc'  => $tests['4_accounts']['desc'],
+            'ok'    => !empty($accs),
+            'count' => count($accs),
+        ];
+    } catch (\Throwable $e) {
+        $diagResult['4_accounts'] = ['label'=>$tests['4_accounts']['label'], 'ok'=>false, 'error'=>$e->getMessage()];
+    }
+}
+
 // ── Tüm ürünleri toplu senkronize et
 if (isPost() && ($_POST['action'] ?? '') === 'bulk_sync_products') {
     csrfCheck();
@@ -169,6 +263,7 @@ $tokenValid = $tokenExpiry && $tokenExpiry > time();
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap">
     <a href="?page=parasut&test=1" class="btn btn-secondary">🔌 Bağlantıyı Test Et</a>
+    <a href="?page=parasut&diag=1" class="btn btn-secondary" style="background:#7c3aed;color:#fff;border-color:#7c3aed">🩺 Endpoint Tanı</a>
     <?php if ($tokenCache): ?>
     <a href="?page=parasut&clear_token=1" class="btn btn-secondary" onclick="return confirm('Token cache temizlensin mi? Bir sonraki istekte yeniden alınır.');">🔄 Token Yenile</a>
     <?php endif; ?>
@@ -184,6 +279,84 @@ $tokenValid = $tokenExpiry && $tokenExpiry > time();
   <?php else: ?>
     <?= h($m) ?>
   <?php endif; ?>
+</div>
+<?php endif; ?>
+
+<?php if ($diagResult): ?>
+<!-- ─── Endpoint Tanı Sonuçları ─── -->
+<div class="card" style="margin-bottom:20px;border:2px solid #7c3aed">
+  <div class="card-header" style="background:linear-gradient(135deg,#ede9fe,#ddd6fe);color:#5b21b6">
+    <h3 class="card-title" style="display:flex;align-items:center;gap:8px;color:#5b21b6">
+      🩺 Endpoint Tanı Sonuçları
+    </h3>
+  </div>
+  <div class="card-body" style="padding:16px">
+    <p style="margin:0 0 14px;font-size:12px;color:var(--text-muted)">
+      Aşağıdaki test her Paraşüt API endpoint'ini ayrı ayrı çağırır. Sonuçlar sorunun yerini tespit etmenize yardımcı olur.
+    </p>
+    <?php foreach ($diagResult as $key => $r):
+        $ok = !empty($r['ok']);
+        $bg = $ok ? '#f0fdf4' : '#fef2f2';
+        $border = $ok ? '#86efac' : '#fca5a5';
+        $iconBg = $ok ? '#16a34a' : '#dc2626';
+        $icon = $ok ? '✓' : '✗';
+    ?>
+    <div style="background:<?= $bg ?>;border:1px solid <?= $border ?>;border-radius:8px;padding:12px 14px;margin-bottom:10px">
+      <div style="display:flex;align-items:flex-start;gap:12px">
+        <div style="background:<?= $iconBg ?>;color:#fff;width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">
+          <?= $icon ?>
+        </div>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:13px;color:#111"><?= h($r['label']) ?></div>
+          <?php if (!empty($r['desc'])): ?>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px"><?= h($r['desc']) ?></div>
+          <?php endif; ?>
+
+          <?php if ($ok): ?>
+            <div style="margin-top:6px;font-size:12px;color:#166534">
+              <strong><?= (int)($r['count'] ?? 0) ?></strong> kayıt çekildi
+              <?php if (isset($r['http'])): ?>
+              · HTTP <strong><?= h($r['http']) ?></strong>
+              <?php endif; ?>
+            </div>
+          <?php else: ?>
+            <div style="margin-top:6px;font-size:12px;color:#b91c1c">
+              <?php if (!empty($r['error'])): ?>
+              <strong>Exception:</strong> <?= h($r['error']) ?>
+              <?php endif; ?>
+              <?php if (!empty($r['err'])): ?>
+              <strong>API Hatası:</strong> <?= h($r['err']) ?>
+              <?php endif; ?>
+              <?php if (!empty($r['http']) && empty($r['error'])): ?>
+              · HTTP <strong><?= h($r['http']) ?></strong>
+              <?php endif; ?>
+            </div>
+            <?php if (!empty($r['snippet'])): ?>
+            <details style="margin-top:8px">
+              <summary style="cursor:pointer;font-size:11px;color:#7f1d1d;font-weight:600">📄 Ham yanıt göster</summary>
+              <pre style="background:#fff;border:1px solid #fca5a5;padding:8px;border-radius:4px;margin-top:6px;font-size:10px;overflow:auto;max-height:200px"><?= h($r['snippet']) ?></pre>
+            </details>
+            <?php endif; ?>
+          <?php endif; ?>
+        </div>
+      </div>
+    </div>
+    <?php endforeach; ?>
+
+    <!-- Yorumlama Kılavuzu -->
+    <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:10px 12px;margin-top:14px;font-size:12px;color:#78350f">
+      <strong>💡 Sonuç yorumu:</strong>
+      <ul style="margin:6px 0 0 18px;padding:0">
+        <li><strong>/me başarılı + diğerleri başarısız</strong> → Token doğru ama <code>parasut_company_id</code> yanlış veya kullanıcının o firma'ya erişimi yok</li>
+        <li><strong>/me başarısız</strong> → Token sorunu, "Token Yenile" butonuna basın</li>
+        <li><strong>/me + /contacts başarılı + 0 kayıt</strong> → Paraşüt hesabınız gerçekten boş (kayıt yok)</li>
+        <li><strong>HTTP 422</strong> → Parametre formatı yanlış (örn page[size] > 25)</li>
+        <li><strong>HTTP 401</strong> → Token süresi dolmuş veya geçersiz</li>
+        <li><strong>HTTP 403</strong> → Yetki yok (API kullanıcısı bu kaynağa erişemiyor)</li>
+        <li><strong>HTTP 404</strong> → Yanlış company_id veya endpoint bulunamadı</li>
+      </ul>
+    </div>
+  </div>
 </div>
 <?php endif; ?>
 

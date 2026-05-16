@@ -307,7 +307,8 @@ $apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
           <li><strong>Hesabınız boş:</strong> Paraşüt hesabınızda gerçekten kayıt yok</li>
         </ul>
         <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-          <a href="?page=parasut&test=1" class="btn btn-sm" style="background:#dc2626;color:#fff;border:none">🔌 Bağlantı Test Et</a>
+          <a href="?page=parasut&diag=1" class="btn btn-sm" style="background:#dc2626;color:#fff;border:none">🩺 Endpoint Tanı</a>
+          <a href="?page=parasut&test=1" class="btn btn-sm" style="background:#fff;color:#dc2626;border:1px solid #dc2626">🔌 Bağlantı Test Et</a>
           <a href="?page=parasut&clear_token=1" class="btn btn-sm" style="background:#fff;color:#dc2626;border:1px solid #dc2626" onclick="return confirm('Token cache temizlensin mi?');">🔄 Token Yenile</a>
           <a href="?page=settings&tab=parasut" class="btn btn-sm" style="background:#fff;color:#dc2626;border:1px solid #dc2626">⚙ Credentials Kontrol</a>
         </div>
