@@ -16,8 +16,21 @@ class Parasut {
         $this->companyId = setting('parasut_company_id');
     }
 
+    /**
+     * Entegrasyon kullanılabilir mi?
+     * Eski 'parasut_enabled' flag'i veya
+     * tüm gerekli credentials dolu ise true.
+     */
     public function isEnabled(): bool {
-        return $this->enabled && !empty($this->companyId);
+        // Ayrı bir 'enabled' flag'i set edilmişse onu kullan
+        if ($this->enabled) return !empty($this->companyId);
+
+        // Yoksa credentials varlığına bak — tüm gerekli alanlar doluysa aktif
+        return !empty($this->companyId)
+            && !empty(setting('parasut_email'))
+            && !empty(setting('parasut_password'))
+            && !empty(setting('parasut_client_id'))
+            && !empty(setting('parasut_client_secret'));
     }
 
     /**
