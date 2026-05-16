@@ -474,7 +474,7 @@ if ($tab === 'dealers') {
         <tr style="<?= $linked ? '' : 'background:#fffbeb' ?>">
           <td style="font-weight:600"><?= h($p['name']) ?></td>
           <td style="font-family:monospace;font-size:12px"><?= h($p['sku'] ?: '—') ?></td>
-          <td style="font-size:12px"><?= money((float)$p['base_price']) ?></td>
+          <td style="font-size:12px"><?= moneyInc((float)$p['base_price'], $p['vat_rate'] ?? 20) ?></td>
           <td style="font-size:12px">%<?= (int)($p['vat_rate'] ?? 20) ?></td>
           <td>
             <form method="post" style="display:flex;gap:6px;align-items:center">

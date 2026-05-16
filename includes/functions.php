@@ -503,6 +503,18 @@ function money(mixed $amount): string {
     return number_format((float)($amount ?? 0), 2, ',', '.') . ' ₺';
 }
 
+/**
+ * KDV Dahil tutar formatla.
+ * Net tutar + ürün KDV oranını alır, KDV Dahil çıktıyı verir.
+ * vatRate null ise settings'ten default_vat_rate (varsayılan %20) kullanır.
+ *
+ * Örnek: moneyInc(100, 20) → "120,00 ₺"
+ */
+function moneyInc(mixed $net, mixed $vatRate = null): string {
+    $rate = $vatRate !== null ? (float)$vatRate : (float)setting('default_vat_rate', '20');
+    return money((float)$net * (1 + $rate / 100));
+}
+
 /** Tarih formatla */
 function fmtDate(mixed $date): string {
     if (!$date || $date === '0000-00-00') return '—';

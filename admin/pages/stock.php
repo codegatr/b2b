@@ -169,7 +169,7 @@ $parasutEnabled = !empty(setting('parasut_email')) && !empty(setting('parasut_co
             <th style="width:60px">Ürün</th>
             <th>İsim / SKU</th>
             <th style="width:120px">Kategori</th>
-            <th style="width:110px">Baz Fiyat<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">KDV Hariç</span></th>
+            <th style="width:110px">Baz Fiyat<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">KDV Dahil</span></th>
             <th style="width:80px">Kritik</th>
             <th style="width:180px">Stok Durumu</th>
             <th style="width:110px">Son 30 Gün<br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">Satış / Gün</span></th>
@@ -226,9 +226,10 @@ $parasutEnabled = !empty(setting('parasut_email')) && !empty(setting('parasut_co
             <?php endif; ?>
           </td>
 
-          <!-- Baz Fiyat (KDV Hariç) -->
+          <!-- Baz Fiyat (KDV Dahil) -->
           <td style="font-weight:600;font-size:12px">
-            <?= money((float)$p['base_price']) ?>
+            <?= moneyInc((float)$p['base_price'], $p['vat_rate'] ?? 20) ?>
+            <div style="font-size:9px;color:var(--text-muted);font-weight:400">%<?= number_format((float)($p['vat_rate'] ?? 20), 0) ?> KDV</div>
           </td>
 
           <!-- Kritik Seviye -->
