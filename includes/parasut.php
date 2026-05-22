@@ -509,6 +509,32 @@ class Parasut {
         return $all;
     }
 
+    /**
+     * Cariler + metadata (total_count, sayfa bilgisi).
+     * Eksiklik tespiti için API'nin söylediği toplam sayıyı döner.
+     */
+    public function listAllContactsWithMeta(int $maxPages = 40, array $filter = []): array {
+        $all = []; $totalCount = 0; $totalPages = 0; $perPage = 25;
+        for ($p = 1; $p <= $maxPages; $p++) {
+            $res = $this->listContacts($p, 25, $filter);
+            if (empty($res['data'])) break;
+            $all = array_merge($all, $res['data']);
+            if ($p === 1 && !empty($res['meta'])) {
+                $totalCount = (int)($res['meta']['total_count'] ?? 0);
+                $totalPages = (int)($res['meta']['total_pages'] ?? 0);
+                $perPage    = (int)($res['meta']['per_page']    ?? 25);
+            }
+            if (count($res['data']) < 25) break;
+        }
+        return [
+            'data'        => $all,
+            'fetched'     => count($all),
+            'total_count' => $totalCount,
+            'total_pages' => $totalPages,
+            'per_page'    => $perPage,
+        ];
+    }
+
     /** Paraşüt'teki tek sayfa ürün listesi (page size max 25) */
     public function listProducts(int $page = 1, int $size = 25, array $filter = []): array {
         if (!$this->isEnabled()) return ['data'=>[], 'meta'=>['error'=>'Entegrasyon kapalı.']];
@@ -535,6 +561,31 @@ class Parasut {
             if (count($res['data']) < 25) break;
         }
         return $all;
+    }
+
+    /**
+     * Ürünler + metadata. archived ürünleri de almak için filter destekler.
+     */
+    public function listAllProductsWithMeta(int $maxPages = 40, array $filter = []): array {
+        $all = []; $totalCount = 0; $totalPages = 0; $perPage = 25;
+        for ($p = 1; $p <= $maxPages; $p++) {
+            $res = $this->listProducts($p, 25, $filter);
+            if (empty($res['data'])) break;
+            $all = array_merge($all, $res['data']);
+            if ($p === 1 && !empty($res['meta'])) {
+                $totalCount = (int)($res['meta']['total_count'] ?? 0);
+                $totalPages = (int)($res['meta']['total_pages'] ?? 0);
+                $perPage    = (int)($res['meta']['per_page']    ?? 25);
+            }
+            if (count($res['data']) < 25) break;
+        }
+        return [
+            'data'        => $all,
+            'fetched'     => count($all),
+            'total_count' => $totalCount,
+            'total_pages' => $totalPages,
+            'per_page'    => $perPage,
+        ];
     }
 
     // ──────────────────────────────────────────────────────────

@@ -316,8 +316,17 @@ if ($tab === 'dealers') {
                           FROM b2b_dealers WHERE is_active=1
                           ORDER BY (parasut_contact_id IS NOT NULL AND parasut_contact_id != '') DESC, display_name");
 
-    // Paraşüt'ten cari listesi
-    $parasutContacts = parasut()->listAllContacts();
+    // Paraşüt'ten cari listesi — aktif + arşivlenmiş ayrı ayrı
+    $activeRes = parasut()->listAllContactsWithMeta(40);
+    $archivedRes = parasut()->listAllContactsWithMeta(40, ['archived' => 'true']);
+    $parasutContacts = array_merge($activeRes['data'], $archivedRes['data']);
+
+    $parasutMeta = [
+        'active_total'   => $activeRes['total_count'],
+        'active_fetched' => $activeRes['fetched'],
+        'archived_total' => $archivedRes['total_count'],
+        'archived_fetched' => $archivedRes['fetched'],
+    ];
 
     // Hızlı lookup için ID→object map (string-key)
     $parasutContactsById = [];
@@ -354,12 +363,23 @@ if ($tab === 'dealers') {
     // products tab
     $b2bProducts = dbRows("SELECT id, name, sku, base_price, vat_rate, parasut_product_id FROM b2b_products WHERE is_active=1 ORDER BY name");
 
-    $parasutProducts = parasut()->listAllProducts();
+    // Paraşüt'ten ürün listesi — aktif + arşivlenmiş ayrı ayrı
+    $activeRes = parasut()->listAllProductsWithMeta(40);
+    $archivedRes = parasut()->listAllProductsWithMeta(40, ['archived' => 'true']);
+    $parasutProducts = array_merge($activeRes['data'], $archivedRes['data']);
+
+    $parasutMeta = [
+        'active_total'   => $activeRes['total_count'],
+        'active_fetched' => $activeRes['fetched'],
+        'archived_total' => $archivedRes['total_count'],
+        'archived_fetched' => $archivedRes['fetched'],
+    ];
 
     // Hızlı lookup için ID→object map (string-key)
     $parasutProductsById = [];
     foreach ($parasutProducts as $p) {
         $parasutProductsById[(string)$p['id']] = $p;
+    }
     }
 
     $usedProductIds = array_map('strval', array_filter(array_column($b2bProducts, 'parasut_product_id')));
@@ -451,9 +471,30 @@ $apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
   </div>
 </div>
 <?php else: ?>
-<!-- Sağlıklı durum - kısa bilgi -->
-<div style="background:#f0fdf4;border:1px solid #86efac;color:#166534;padding:8px 14px;border-radius:8px;margin-bottom:16px;font-size:12px">
-  ✓ Paraşüt'ten <strong><?= $apiCount ?></strong> <?= $apiKind ?> başarıyla çekildi.
+<!-- Sağlıklı durum - kısa bilgi + meta detayı -->
+<div style="background:#f0fdf4;border:1px solid #86efac;color:#166534;padding:10px 14px;border-radius:8px;margin-bottom:16px;font-size:12px">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+    <div>
+      ✓ Paraşüt'ten <strong><?= $apiCount ?></strong> <?= $apiKind ?> çekildi
+      <?php if (isset($parasutMeta)): ?>
+        <span style="color:#166534;margin-left:8px">
+          (<?= (int)$parasutMeta['active_fetched'] ?>/<?= (int)$parasutMeta['active_total'] ?> aktif
+          + <?= (int)$parasutMeta['archived_fetched'] ?>/<?= (int)$parasutMeta['archived_total'] ?> arşivli)
+        </span>
+      <?php endif; ?>
+    </div>
+    <?php
+    // Çekilen vs toplam fark var mı? (eksik kayıt tespiti)
+    if (isset($parasutMeta)) {
+        $expected = $parasutMeta['active_total'] + $parasutMeta['archived_total'];
+        $missing  = $expected - $apiCount;
+        if ($missing > 0):
+    ?>
+    <div style="background:#fef3c7;color:#92400e;padding:4px 10px;border-radius:6px;font-weight:600;font-size:11px">
+      ⚠️ <?= $missing ?> kayıt çekilemedi (sayfa limiti?)
+    </div>
+    <?php endif; } ?>
+  </div>
 </div>
 <?php endif; ?>
 
@@ -668,12 +709,18 @@ $apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
           <tbody>
             <?php foreach ($orphanContacts as $c):
               $a = $c['attributes'] ?? [];
+              $isArch = !empty($a['archived']);
             ?>
-            <tr>
+            <tr style="<?= $isArch ? 'background:#fafafa;color:#94a3b8' : '' ?>">
               <td style="text-align:center">
                 <input type="checkbox" name="parasut_ids[]" value="<?= h($c['id']) ?>" class="orphan-check">
               </td>
-              <td style="font-weight:600"><?= h($a['name'] ?? '—') ?></td>
+              <td style="font-weight:600">
+                <?= h($a['name'] ?? '—') ?>
+                <?php if ($isArch): ?>
+                  <span class="badge" style="background:#e5e7eb;color:#6b7280;font-size:9px;font-weight:600;margin-left:6px">ARŞİVLİ</span>
+                <?php endif; ?>
+              </td>
               <td style="font-family:monospace"><?= h($a['tax_number'] ?? '—') ?></td>
               <td><?= h($a['tax_office'] ?? '—') ?></td>
               <td><?= h($a['email'] ?? '—') ?></td>
@@ -836,12 +883,18 @@ $apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
           <tbody>
             <?php foreach ($orphanProducts as $pp):
               $a = $pp['attributes'] ?? [];
+              $isArch = !empty($a['archived']);
             ?>
-            <tr>
+            <tr style="<?= $isArch ? 'background:#fafafa;color:#94a3b8' : '' ?>">
               <td style="text-align:center">
                 <input type="checkbox" name="parasut_ids[]" value="<?= h($pp['id']) ?>" class="orphan-prod-check">
               </td>
-              <td style="font-weight:600"><?= h($a['name'] ?? '—') ?></td>
+              <td style="font-weight:600">
+                <?= h($a['name'] ?? '—') ?>
+                <?php if ($isArch): ?>
+                  <span class="badge" style="background:#e5e7eb;color:#6b7280;font-size:9px;font-weight:600;margin-left:6px">ARŞİVLİ</span>
+                <?php endif; ?>
+              </td>
               <td style="font-family:monospace"><?= h($a['code'] ?? '—') ?></td>
               <td>%<?= (int)($a['vat_rate'] ?? 0) ?></td>
               <td><?= isset($a['list_price']) ? money((float)$a['list_price']) : '—' ?></td>
