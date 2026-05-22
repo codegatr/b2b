@@ -380,7 +380,6 @@ if ($tab === 'dealers') {
     foreach ($parasutProducts as $p) {
         $parasutProductsById[(string)$p['id']] = $p;
     }
-    }
 
     $usedProductIds = array_map('strval', array_filter(array_column($b2bProducts, 'parasut_product_id')));
     $orphanProducts = [];
