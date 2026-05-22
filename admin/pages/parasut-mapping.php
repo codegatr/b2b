@@ -687,6 +687,11 @@ $apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
     <div style="background:#fffbeb;border-bottom:1px solid #fde68a;padding:10px 16px;font-size:12px;color:#78350f">
       ℹ️ Seçilen carileri B2B'ye <strong>yeni bayi</strong> olarak aktarın (parasut_contact_id otomatik bağlanır, çift kayıt olmaz). Karmaşa olmasın diye <strong>tek tek veya küçük gruplar</strong> halinde seçin.
     </div>
+    <!-- Arama kutusu -->
+    <div style="padding:12px 16px;border-bottom:1px solid var(--border);background:#fafafa">
+      <input type="search" id="orphanContactSearch" placeholder="🔍 İsim, VKN, e-mail veya ID ile ara…"
+             class="form-control" style="font-size:13px;padding:8px 12px">
+    </div>
     <form method="post" id="importContactsForm">
       <?= csrfField() ?>
       <input type="hidden" name="action" value="import-contacts">
@@ -709,8 +714,15 @@ $apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
             <?php foreach ($orphanContacts as $c):
               $a = $c['attributes'] ?? [];
               $isArch = !empty($a['archived']);
+              $searchText = mb_strtolower(
+                  ($a['name'] ?? '') . ' ' .
+                  ($a['tax_number'] ?? '') . ' ' .
+                  ($a['email'] ?? '') . ' ' .
+                  ($a['phone'] ?? '') . ' ' .
+                  $c['id']
+              );
             ?>
-            <tr style="<?= $isArch ? 'background:#fafafa;color:#94a3b8' : '' ?>">
+            <tr class="orphan-contact-row" data-search="<?= h($searchText) ?>" style="<?= $isArch ? 'background:#fafafa;color:#94a3b8' : '' ?>">
               <td style="text-align:center">
                 <input type="checkbox" name="parasut_ids[]" value="<?= h($c['id']) ?>" class="orphan-check">
               </td>
@@ -747,6 +759,8 @@ $apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
   const all = document.getElementById('orphanSelectAll');
   const cnt = document.getElementById('orphanCount');
   const btn = document.getElementById('importContactsBtn');
+  const search = document.getElementById('orphanContactSearch');
+
   function refresh() {
     const c = document.querySelectorAll('.orphan-check:checked').length;
     cnt.textContent = c;
@@ -754,9 +768,26 @@ $apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
   }
   cb.forEach(b => b.addEventListener('change', refresh));
   all.addEventListener('change', () => {
-    cb.forEach(b => b.checked = all.checked);
+    // Sadece görünür satırları seç (filtreden geçmişleri)
+    document.querySelectorAll('.orphan-contact-row').forEach(row => {
+      if (row.style.display !== 'none') {
+        const c = row.querySelector('.orphan-check');
+        if (c) c.checked = all.checked;
+      }
+    });
     refresh();
   });
+
+  // Arama
+  if (search) {
+    search.addEventListener('input', () => {
+      const q = search.value.trim().toLowerCase();
+      document.querySelectorAll('.orphan-contact-row').forEach(row => {
+        const txt = row.dataset.search || '';
+        row.style.display = (q === '' || txt.includes(q)) ? '' : 'none';
+      });
+    });
+  }
 })();
 </script>
 <?php endif; ?>
@@ -862,6 +893,11 @@ $apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
     <div style="background:#fffbeb;border-bottom:1px solid #fde68a;padding:10px 16px;font-size:12px;color:#78350f">
       ℹ️ Seçilen ürünleri B2B'ye <strong>yeni ürün</strong> olarak aktarın (parasut_product_id otomatik bağlanır). Stok 0 ve aktif olarak eklenir, sonra admin → Ürünler'den düzenleyin.
     </div>
+    <!-- Arama kutusu -->
+    <div style="padding:12px 16px;border-bottom:1px solid var(--border);background:#fafafa">
+      <input type="search" id="orphanProdSearch" placeholder="🔍 İsim, SKU/kod veya ID ile ara… (örn: G-01, tavuk, KNORR)"
+             class="form-control" style="font-size:13px;padding:8px 12px">
+    </div>
     <form method="post" id="importProductsForm">
       <?= csrfField() ?>
       <input type="hidden" name="action" value="import-products">
@@ -883,8 +919,13 @@ $apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
             <?php foreach ($orphanProducts as $pp):
               $a = $pp['attributes'] ?? [];
               $isArch = !empty($a['archived']);
+              $searchText = mb_strtolower(
+                  ($a['name'] ?? '') . ' ' .
+                  ($a['code'] ?? '') . ' ' .
+                  $pp['id']
+              );
             ?>
-            <tr style="<?= $isArch ? 'background:#fafafa;color:#94a3b8' : '' ?>">
+            <tr class="orphan-prod-row" data-search="<?= h($searchText) ?>" style="<?= $isArch ? 'background:#fafafa;color:#94a3b8' : '' ?>">
               <td style="text-align:center">
                 <input type="checkbox" name="parasut_ids[]" value="<?= h($pp['id']) ?>" class="orphan-prod-check">
               </td>
@@ -920,6 +961,8 @@ $apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
   const all = document.getElementById('orphanProdSelectAll');
   const cnt = document.getElementById('orphanProdCount');
   const btn = document.getElementById('importProductsBtn');
+  const search = document.getElementById('orphanProdSearch');
+
   function refresh() {
     const c = document.querySelectorAll('.orphan-prod-check:checked').length;
     cnt.textContent = c;
@@ -927,9 +970,24 @@ $apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
   }
   cb.forEach(b => b.addEventListener('change', refresh));
   all.addEventListener('change', () => {
-    cb.forEach(b => b.checked = all.checked);
+    document.querySelectorAll('.orphan-prod-row').forEach(row => {
+      if (row.style.display !== 'none') {
+        const c = row.querySelector('.orphan-prod-check');
+        if (c) c.checked = all.checked;
+      }
+    });
     refresh();
   });
+
+  if (search) {
+    search.addEventListener('input', () => {
+      const q = search.value.trim().toLowerCase();
+      document.querySelectorAll('.orphan-prod-row').forEach(row => {
+        const txt = row.dataset.search || '';
+        row.style.display = (q === '' || txt.includes(q)) ? '' : 'none';
+      });
+    });
+  }
 })();
 </script>
 <?php endif; ?>

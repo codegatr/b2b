@@ -477,15 +477,17 @@ class Parasut {
      *
      * NOT: Paraşüt API V4 page[size] MAX 25 — fazlası 422 hata verir.
      *
+     * @param string $sort Sıralama: 'name', '-name', 'created_at' vb (boş = default)
      * @return array{data: array, meta: array}
      */
-    public function listContacts(int $page = 1, int $size = 25, array $filter = []): array {
+    public function listContacts(int $page = 1, int $size = 25, array $filter = [], string $sort = ''): array {
         if (!$this->isEnabled()) return ['data'=>[], 'meta'=>['error'=>'Entegrasyon kapalı.']];
         $size = max(1, min(25, $size)); // Paraşüt API V4 hard limit: 25
         $url  = $this->endpoint('contacts') . '?page[number]=' . $page . '&page[size]=' . $size;
         foreach ($filter as $k => $v) {
             if ($v !== '' && $v !== null) $url .= '&filter[' . urlencode($k) . ']=' . urlencode((string)$v);
         }
+        if ($sort !== '') $url .= '&sort=' . urlencode($sort);
         $r = $this->http('GET', $url);
         return [
             'data' => $r['data'] ?? [],
@@ -501,7 +503,7 @@ class Parasut {
     public function listAllContacts(int $maxPages = 40): array {
         $all = [];
         for ($p = 1; $p <= $maxPages; $p++) {
-            $res = $this->listContacts($p, 25);
+            $res = $this->listContacts($p, 25, [], 'name');
             if (empty($res['data'])) break;
             $all = array_merge($all, $res['data']);
             if (count($res['data']) < 25) break; // Son sayfa
@@ -510,13 +512,12 @@ class Parasut {
     }
 
     /**
-     * Cariler + metadata (total_count, sayfa bilgisi).
-     * Eksiklik tespiti için API'nin söylediği toplam sayıyı döner.
+     * Cariler + metadata. Default sort=name (alfabetik).
      */
-    public function listAllContactsWithMeta(int $maxPages = 40, array $filter = []): array {
+    public function listAllContactsWithMeta(int $maxPages = 40, array $filter = [], string $sort = 'name'): array {
         $all = []; $totalCount = 0; $totalPages = 0; $perPage = 25;
         for ($p = 1; $p <= $maxPages; $p++) {
-            $res = $this->listContacts($p, 25, $filter);
+            $res = $this->listContacts($p, 25, $filter, $sort);
             if (empty($res['data'])) break;
             $all = array_merge($all, $res['data']);
             if ($p === 1 && !empty($res['meta'])) {
@@ -536,13 +537,14 @@ class Parasut {
     }
 
     /** Paraşüt'teki tek sayfa ürün listesi (page size max 25) */
-    public function listProducts(int $page = 1, int $size = 25, array $filter = []): array {
+    public function listProducts(int $page = 1, int $size = 25, array $filter = [], string $sort = ''): array {
         if (!$this->isEnabled()) return ['data'=>[], 'meta'=>['error'=>'Entegrasyon kapalı.']];
         $size = max(1, min(25, $size));
         $url  = $this->endpoint('products') . '?page[number]=' . $page . '&page[size]=' . $size;
         foreach ($filter as $k => $v) {
             if ($v !== '' && $v !== null) $url .= '&filter[' . urlencode($k) . ']=' . urlencode((string)$v);
         }
+        if ($sort !== '') $url .= '&sort=' . urlencode($sort);
         $r = $this->http('GET', $url);
         return [
             'data' => $r['data'] ?? [],
@@ -555,7 +557,7 @@ class Parasut {
     public function listAllProducts(int $maxPages = 40): array {
         $all = [];
         for ($p = 1; $p <= $maxPages; $p++) {
-            $res = $this->listProducts($p, 25);
+            $res = $this->listProducts($p, 25, [], 'name');
             if (empty($res['data'])) break;
             $all = array_merge($all, $res['data']);
             if (count($res['data']) < 25) break;
@@ -564,12 +566,12 @@ class Parasut {
     }
 
     /**
-     * Ürünler + metadata. archived ürünleri de almak için filter destekler.
+     * Ürünler + metadata. Default sort=name.
      */
-    public function listAllProductsWithMeta(int $maxPages = 40, array $filter = []): array {
+    public function listAllProductsWithMeta(int $maxPages = 40, array $filter = [], string $sort = 'name'): array {
         $all = []; $totalCount = 0; $totalPages = 0; $perPage = 25;
         for ($p = 1; $p <= $maxPages; $p++) {
-            $res = $this->listProducts($p, 25, $filter);
+            $res = $this->listProducts($p, 25, $filter, $sort);
             if (empty($res['data'])) break;
             $all = array_merge($all, $res['data']);
             if ($p === 1 && !empty($res['meta'])) {
