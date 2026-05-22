@@ -515,6 +515,104 @@ function moneyInc(mixed $net, mixed $vatRate = null): string {
     return money((float)$net * (1 + $rate / 100));
 }
 
+/**
+ * Sipariş penceresi durumu — bayiler şu an sipariş verebilir mi?
+ * Settings:
+ *   order_window_enabled (0/1) — kontrol etkin mi
+ *   order_window_start   (HH:MM, default 10:00)
+ *   order_window_end     (HH:MM, default 17:00)
+ *   order_window_days    (CSV: 1,2,3,4,5 → ISO Pzt-Cum)
+ *   order_window_message (özel kapalı mesajı, opsiyonel)
+ *
+ * @return array{
+ *   open: bool,            // şu an sipariş alınabilir mi
+ *   enabled: bool,         // kontrol aktif mi
+ *   start: string,         // 'HH:MM'
+ *   end: string,           // 'HH:MM'
+ *   today_open: bool,      // bugün açık günlerden mi
+ *   reason: string,        // kapalı sebebi: 'closed_day' | 'before_hours' | 'after_hours' | ''
+ *   next_open: ?string,    // bir sonraki açılış tarihi/saati (kullanıcıya bilgi)
+ *   message: string,       // gösterim mesajı
+ * }
+ */
+function orderWindowStatus(): array {
+    $enabled = setting('order_window_enabled', '0') === '1';
+    $start   = setting('order_window_start', '10:00');
+    $end     = setting('order_window_end',   '17:00');
+    $daysCsv = setting('order_window_days',  '1,2,3,4,5');
+    $msg     = setting('order_window_message', '');
+
+    $days = array_filter(array_map('trim', explode(',', $daysCsv)));
+
+    // Kontrol kapalıysa her zaman açık
+    if (!$enabled) {
+        return [
+            'open' => true, 'enabled' => false,
+            'start' => $start, 'end' => $end,
+            'today_open' => true, 'reason' => '', 'next_open' => null, 'message' => '',
+        ];
+    }
+
+    // ISO weekday: 1=Pzt ... 7=Paz
+    $dow      = (int)date('N');
+    $todayOk  = in_array((string)$dow, $days, true);
+    $nowMin   = (int)date('G') * 60 + (int)date('i');
+    [$sH,$sM] = array_map('intval', explode(':', $start));
+    [$eH,$eM] = array_map('intval', explode(':', $end));
+    $startMin = $sH * 60 + $sM;
+    $endMin   = $eH * 60 + $eM;
+
+    $open   = false;
+    $reason = '';
+
+    if (!$todayOk) {
+        $reason = 'closed_day';
+    } elseif ($nowMin < $startMin) {
+        $reason = 'before_hours';
+    } elseif ($nowMin > $endMin) {
+        $reason = 'after_hours';
+    } else {
+        $open = true;
+    }
+
+    // Sonraki açılış zamanı
+    $nextOpen = null;
+    if (!$open) {
+        $check = strtotime('today ' . $start);
+        if ($nowMin > $startMin && $todayOk) {
+            // Bugün geç olmuş, yarın bak
+            $check = strtotime('tomorrow ' . $start);
+        }
+        for ($i = 0; $i < 7; $i++) {
+            $checkDow = (int)date('N', $check);
+            if (in_array((string)$checkDow, $days, true)) {
+                $nextOpen = $check;
+                break;
+            }
+            $check = strtotime('+1 day', $check);
+        }
+    }
+
+    // Mesaj
+    $dayLabels = ['1'=>'Pzt','2'=>'Sal','3'=>'Çar','4'=>'Per','5'=>'Cum','6'=>'Cmt','7'=>'Paz'];
+    $openDayNames = [];
+    foreach ($days as $d) {
+        if (isset($dayLabels[$d])) $openDayNames[] = $dayLabels[$d];
+    }
+    $defaultMsg = 'Sipariş kabul saatleri: ' . implode(', ', $openDayNames) . ' günleri ' . $start . ' - ' . $end . '.';
+
+    return [
+        'open'       => $open,
+        'enabled'    => true,
+        'start'      => $start,
+        'end'        => $end,
+        'today_open' => $todayOk,
+        'reason'     => $reason,
+        'next_open'  => $nextOpen ? date('d.m.Y H:i', $nextOpen) : null,
+        'message'    => $msg !== '' ? $msg : $defaultMsg,
+    ];
+}
+
 /** Tarih formatla */
 function fmtDate(mixed $date): string {
     if (!$date || $date === '0000-00-00') return '—';

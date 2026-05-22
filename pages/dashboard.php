@@ -93,6 +93,33 @@ if (empty($announcements)) {
     <a href="?page=products" class="btn btn-primary">🛒 Sipariş Ver</a>
 </div>
 
+<!-- ─── Sipariş Penceresi Durumu ─── -->
+<?php $orderWin = orderWindowStatus(); ?>
+<?php if ($orderWin['enabled']): ?>
+<?php if (!$orderWin['open']): ?>
+<!-- KAPALI - kırmızı bant -->
+<div style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border:1px solid #fca5a5;border-left:4px solid #dc2626;border-radius:10px;padding:14px 18px;margin-bottom:20px;display:flex;align-items:center;gap:14px">
+  <div style="font-size:28px">🔒</div>
+  <div style="flex:1">
+    <div style="font-weight:700;font-size:14px;color:#b91c1c">Sipariş Sistemi Kapalı</div>
+    <div style="font-size:12px;color:#7f1d1d;margin-top:2px;line-height:1.5"><?= h($orderWin['message']) ?></div>
+  </div>
+  <?php if (!empty($orderWin['next_open'])): ?>
+  <div style="text-align:right;background:#fff;border:1px solid #fca5a5;border-radius:8px;padding:8px 12px;min-width:120px">
+    <div style="font-size:10px;color:#991b1b;text-transform:uppercase;letter-spacing:.5px;font-weight:600">Sonraki Açılış</div>
+    <div style="font-size:13px;color:#b91c1c;font-weight:700;margin-top:2px"><?= h($orderWin['next_open']) ?></div>
+  </div>
+  <?php endif; ?>
+</div>
+<?php else: ?>
+<!-- AÇIK - kısa yeşil bilgi -->
+<div style="background:#f0fdf4;border:1px solid #86efac;border-left:4px solid #16a34a;border-radius:10px;padding:10px 16px;margin-bottom:20px;display:flex;align-items:center;gap:10px;font-size:12px">
+  <span style="font-size:16px">✅</span>
+  <div style="color:#15803d;font-weight:600">Sipariş kabul açık · Bugün <?= h($orderWin['end']) ?>'e kadar</div>
+</div>
+<?php endif; ?>
+<?php endif; ?>
+
 <!-- ════════════════════ KAMPANYALI ÜRÜNLER — Düz grid ════════════════════ -->
 <?php if (!empty($featuredProducts)): ?>
 <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px 18px 16px;margin-bottom:20px">

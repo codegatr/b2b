@@ -252,6 +252,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($tab === 'order') {
         settingSave('order_auto_approve_limit', (string)floatval($_POST['order_auto_approve_limit'] ?? 0));
         settingSave('invoice_footer', trim($_POST['invoice_footer'] ?? ''));
+
+        // ─── Sipariş Saat Penceresi ───
+        settingSave('order_window_enabled', isset($_POST['order_window_enabled']) ? '1' : '0');
+        // HH:MM formatı doğrulaması
+        $start = trim($_POST['order_window_start'] ?? '10:00');
+        $end   = trim($_POST['order_window_end']   ?? '17:00');
+        if (!preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $start)) $start = '10:00';
+        if (!preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $end))   $end   = '17:00';
+        settingSave('order_window_start', $start);
+        settingSave('order_window_end',   $end);
+        // Aktif günler (1=Pzt ... 7=Paz, ISO format)
+        $days = $_POST['order_window_days'] ?? ['1','2','3','4','5'];
+        if (!is_array($days)) $days = [];
+        $days = array_values(array_unique(array_filter($days, fn($d) => in_array($d, ['1','2','3','4','5','6','7'], true))));
+        settingSave('order_window_days', implode(',', $days));
+        settingSave('order_window_message', trim($_POST['order_window_message'] ?? ''));
+
         settingClearCache();
         $success = 'Sipariş ayarları kaydedildi.';
     }
@@ -1093,7 +1110,59 @@ try {
         <label class="form-label">Fatura Alt Notu</label>
         <textarea name="invoice_footer" class="form-control" rows="3"><?= htmlspecialchars(setting('invoice_footer')) ?></textarea>
     </div>
-    <div class="form-actions"><button type="submit" class="btn btn-primary">Kaydet</button></div>
+
+    <!-- ─── Sipariş Saat Penceresi ─── -->
+    <hr style="margin:24px 0;border:0;border-top:1px solid var(--border)">
+
+    <h3 style="margin:0 0 8px;font-size:15px">🕐 Sipariş Saat Penceresi</h3>
+    <p style="font-size:12px;color:var(--text-muted);margin:0 0 14px">Bayilerin sipariş verebileceği saat aralığını sınırlandırın. Pencere dışında "kapalıdır" uyarısı gösterilir.</p>
+
+    <label style="display:flex;align-items:flex-start;gap:12px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px 14px;cursor:pointer;margin-bottom:14px">
+        <input type="checkbox" name="order_window_enabled" value="1" <?= setting('order_window_enabled')==='1'?'checked':'' ?> style="margin-top:2px">
+        <div>
+            <div style="font-weight:700;font-size:13px">Sipariş saat kısıtlamasını uygula</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Kapalıyken bayiler 7/24 sipariş verebilir</div>
+        </div>
+    </label>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div class="form-group">
+            <label class="form-label">Başlangıç Saati</label>
+            <input type="time" name="order_window_start" value="<?= htmlspecialchars(setting('order_window_start','10:00')) ?>" class="form-control" style="font-family:monospace;font-size:14px">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Bitiş Saati</label>
+            <input type="time" name="order_window_end" value="<?= htmlspecialchars(setting('order_window_end','17:00')) ?>" class="form-control" style="font-family:monospace;font-size:14px">
+        </div>
+    </div>
+
+    <?php
+    $activeDays = explode(',', setting('order_window_days', '1,2,3,4,5'));
+    $dayLabels = ['1'=>'Pzt','2'=>'Sal','3'=>'Çar','4'=>'Per','5'=>'Cum','6'=>'Cmt','7'=>'Paz'];
+    ?>
+    <div class="form-group">
+        <label class="form-label">Sipariş Açık Günler</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+            <?php foreach ($dayLabels as $key => $label):
+                $isWeekend = in_array($key, ['6','7'], true);
+                $checked = in_array($key, $activeDays, true);
+            ?>
+            <label style="display:flex;align-items:center;gap:6px;padding:8px 12px;background:<?= $checked ? '#dcfce7' : '#fafafa' ?>;border:1px solid <?= $checked ? '#86efac' : '#e5e7eb' ?>;border-radius:8px;cursor:pointer;font-weight:600;font-size:12px;color:<?= $checked ? '#15803d' : ($isWeekend ? '#94a3b8' : 'var(--text)') ?>">
+                <input type="checkbox" name="order_window_days[]" value="<?= $key ?>" <?= $checked ? 'checked' : '' ?> style="margin:0">
+                <?= $label ?>
+            </label>
+            <?php endforeach; ?>
+        </div>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Seçili günlerde belirtilen saat aralığında sipariş alınır</p>
+    </div>
+
+    <div class="form-group">
+        <label class="form-label">Kapalı Durumda Gösterilecek Mesaj</label>
+        <textarea name="order_window_message" class="form-control" rows="2" placeholder="Örn: Siparişler yalnızca Pzt-Cum 10:00-17:00 arası alınır. Lütfen mesai saatleri içinde tekrar deneyin."><?= htmlspecialchars(setting('order_window_message','')) ?></textarea>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Boş bırakırsanız varsayılan mesaj kullanılır</p>
+    </div>
+
+    <div class="form-actions"><button type="submit" class="btn btn-primary">💾 Kaydet</button></div>
 </form>
 </div></div>
 

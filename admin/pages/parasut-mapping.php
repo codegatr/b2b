@@ -189,6 +189,123 @@ if (isPost() && ($_POST['action'] ?? '') === 'create-product') {
     }
 }
 
+// ─── Paraşüt'ten seçilen carileri B2B'ye aktar ──
+if (isPost() && ($_POST['action'] ?? '') === 'import-contacts') {
+    csrfCheck();
+    $ids = $_POST['parasut_ids'] ?? [];
+    if (!is_array($ids) || empty($ids)) {
+        $msg = 'error:Lütfen aktarılacak cari(leri) seçin.';
+    } else {
+        // Paraşüt cari listesini bir kere çek, lookup yap
+        $allContacts = parasut()->listAllContacts();
+        $byId = [];
+        foreach ($allContacts as $c) $byId[(string)$c['id']] = $c;
+
+        $created = 0; $skipped = 0; $errors = [];
+        foreach ($ids as $pid) {
+            $pid = (string)$pid;
+            if (!isset($byId[$pid])) { $skipped++; continue; }
+
+            $c = $byId[$pid];
+            $a = $c['attributes'] ?? [];
+
+            // Aynı parasut_contact_id zaten varsa atla
+            $exists = dbVal("SELECT COUNT(*) FROM b2b_dealers WHERE parasut_contact_id=?", [$pid]);
+            if ($exists > 0) { $skipped++; continue; }
+
+            $name    = trim($a['name'] ?? '');
+            $taxNo   = trim($a['tax_number'] ?? '');
+            $taxOff  = trim($a['tax_office'] ?? '');
+            $email   = trim($a['email'] ?? '');
+            $phone   = trim($a['phone'] ?? '');
+            $address = trim(($a['address'] ?? '') ?: ($a['address1'] ?? ''));
+            $city    = trim($a['city'] ?? '');
+
+            if ($name === '') { $skipped++; continue; }
+
+            // Bayi tipi — VKN 10 hane ise kurumsal, 11 ise bireysel
+            $type = (strlen($taxNo) === 11) ? 'bireysel' : 'kurumsal';
+
+            try {
+                $code = 'PAR' . substr(uniqid(), -6);
+                dbExec(
+                    "INSERT INTO b2b_dealers
+                     (dealer_code, type, company_name, first_name, last_name, email, phone, address, city,
+                      tax_number, tax_office, parasut_contact_id, is_active, created_at)
+                     VALUES (?, ?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, 1, NOW())",
+                    [$code, $type, $name, $email, $phone, $address, $city, $taxNo, $taxOff, $pid]
+                );
+                $created++;
+            } catch (\Throwable $e) {
+                $errors[] = $name . ': ' . $e->getMessage();
+            }
+        }
+
+        auditLog('parasut_contacts_imported', 'b2b_dealers', 0, ['created'=>$created, 'skipped'=>$skipped]);
+        $parts = [];
+        if ($created > 0) $parts[] = "{$created} bayi oluşturuldu";
+        if ($skipped > 0) $parts[] = "{$skipped} kayıt atlandı (zaten var veya geçersiz)";
+        if (!empty($errors)) $parts[] = 'hatalar: ' . implode(' | ', array_slice($errors, 0, 3));
+        $msg = 'success:✓ Aktarım tamamlandı — ' . implode(' · ', $parts);
+    }
+}
+
+// ─── Paraşüt'ten seçilen ürünleri B2B'ye aktar ──
+if (isPost() && ($_POST['action'] ?? '') === 'import-products') {
+    csrfCheck();
+    $ids = $_POST['parasut_ids'] ?? [];
+    if (!is_array($ids) || empty($ids)) {
+        $msg = 'error:Lütfen aktarılacak ürün(leri) seçin.';
+    } else {
+        $allProds = parasut()->listAllProducts();
+        $byId = [];
+        foreach ($allProds as $p) $byId[(string)$p['id']] = $p;
+
+        $created = 0; $skipped = 0; $errors = [];
+        foreach ($ids as $pid) {
+            $pid = (string)$pid;
+            if (!isset($byId[$pid])) { $skipped++; continue; }
+
+            $p = $byId[$pid];
+            $a = $p['attributes'] ?? [];
+
+            $exists = dbVal("SELECT COUNT(*) FROM b2b_products WHERE parasut_product_id=?", [$pid]);
+            if ($exists > 0) { $skipped++; continue; }
+
+            $name = trim($a['name'] ?? '');
+            $code = trim($a['code'] ?? '');
+            if ($name === '') { $skipped++; continue; }
+
+            $vatRate = (float)($a['vat_rate'] ?? 20);
+            $price   = (float)($a['list_price'] ?? 0);
+            // Paraşüt list_price KDV Dahil — net'e çevir
+            if ($vatRate > 0 && $price > 0) {
+                $price = round($price / (1 + $vatRate / 100), 4);
+            }
+
+            try {
+                dbExec(
+                    "INSERT INTO b2b_products
+                     (name, sku, base_price, vat_rate, stock, stock_critical, is_active,
+                      parasut_product_id, created_at)
+                     VALUES (?, ?, ?, ?, 0, 5, 1, ?, NOW())",
+                    [$name, $code, $price, $vatRate, $pid]
+                );
+                $created++;
+            } catch (\Throwable $e) {
+                $errors[] = $name . ': ' . $e->getMessage();
+            }
+        }
+
+        auditLog('parasut_products_imported', 'b2b_products', 0, ['created'=>$created, 'skipped'=>$skipped]);
+        $parts = [];
+        if ($created > 0) $parts[] = "{$created} ürün oluşturuldu";
+        if ($skipped > 0) $parts[] = "{$skipped} kayıt atlandı (zaten var veya geçersiz)";
+        if (!empty($errors)) $parts[] = 'hatalar: ' . implode(' | ', array_slice($errors, 0, 3));
+        $msg = 'success:✓ Aktarım tamamlandı — ' . implode(' · ', $parts);
+    }
+}
+
 // ──────────────────────────────────────────────────────────────
 // DATA HAZIRLA (her render'da)
 // ──────────────────────────────────────────────────────────────
@@ -521,31 +638,81 @@ $apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
 </div>
 
 <?php if (!empty($orphanContacts)): ?>
-<details style="margin-top:20px">
-  <summary style="cursor:pointer;padding:12px 16px;background:#f3f4f6;border-radius:8px;font-weight:600">
-    📋 Sadece Paraşüt'te Var (B2B'de yok) — <?= count($orphanContacts) ?> kayıt
-  </summary>
-  <div style="padding:12px 4px;font-size:12px;color:var(--text-muted);margin-bottom:8px">
-    Aşağıdaki Paraşüt cari kayıtlarının B2B sistemde karşılığı yok. Eğer bunlardan birini bir B2B bayisiyle eşleştirmek istiyorsanız, yukarıdaki tabloda ilgili bayinin dropdown'undan seçin.
+<div class="card" style="margin-top:20px;border:2px solid #0ea5e9">
+  <div class="card-header" style="background:linear-gradient(135deg,#e0f2fe,#bae6fd);color:#075985;display:flex;justify-content:space-between;align-items:center">
+    <h3 class="card-title" style="color:#075985">📥 Paraşüt'ten B2B'ye Aktarılabilir Cariler — <?= count($orphanContacts) ?> kayıt</h3>
+    <div style="font-size:11px;color:#0c4a6e">Bu kayıtlar Paraşüt'te var, B2B'de yok</div>
   </div>
-  <div class="table-wrap">
-    <table class="table" style="font-size:12px">
-      <thead>
-        <tr><th>Paraşüt Adı</th><th>Vergi No</th><th>E-posta</th><th>Paraşüt ID</th></tr>
-      </thead>
-      <tbody>
-        <?php foreach ($orphanContacts as $c): ?>
-        <tr>
-          <td><?= h($c['attributes']['name'] ?? '') ?></td>
-          <td style="font-family:monospace"><?= h($c['attributes']['tax_number'] ?? '—') ?></td>
-          <td><?= h($c['attributes']['email'] ?? '—') ?></td>
-          <td style="font-family:monospace"><?= h($c['id']) ?></td>
-        </tr>
-        <?php endforeach; ?>
-      </tbody>
-    </table>
+  <div class="card-body" style="padding:0">
+    <div style="background:#fffbeb;border-bottom:1px solid #fde68a;padding:10px 16px;font-size:12px;color:#78350f">
+      ℹ️ Seçilen carileri B2B'ye <strong>yeni bayi</strong> olarak aktarın (parasut_contact_id otomatik bağlanır, çift kayıt olmaz). Karmaşa olmasın diye <strong>tek tek veya küçük gruplar</strong> halinde seçin.
+    </div>
+    <form method="post" id="importContactsForm">
+      <?= csrfField() ?>
+      <input type="hidden" name="action" value="import-contacts">
+      <div class="table-wrap">
+        <table class="table" style="font-size:12px;margin:0">
+          <thead>
+            <tr style="background:#f9fafb">
+              <th style="width:40px;text-align:center">
+                <input type="checkbox" id="orphanSelectAll" title="Tümünü seç/kaldır">
+              </th>
+              <th>Paraşüt Adı</th>
+              <th>Vergi No</th>
+              <th>Vergi Dairesi</th>
+              <th>E-posta</th>
+              <th>Telefon</th>
+              <th>Paraşüt ID</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($orphanContacts as $c):
+              $a = $c['attributes'] ?? [];
+            ?>
+            <tr>
+              <td style="text-align:center">
+                <input type="checkbox" name="parasut_ids[]" value="<?= h($c['id']) ?>" class="orphan-check">
+              </td>
+              <td style="font-weight:600"><?= h($a['name'] ?? '—') ?></td>
+              <td style="font-family:monospace"><?= h($a['tax_number'] ?? '—') ?></td>
+              <td><?= h($a['tax_office'] ?? '—') ?></td>
+              <td><?= h($a['email'] ?? '—') ?></td>
+              <td><?= h($a['phone'] ?? '—') ?></td>
+              <td style="font-family:monospace;color:var(--text-muted)"><?= h($c['id']) ?></td>
+            </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+      <div style="padding:14px 16px;background:#f9fafb;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <div style="font-size:12px;color:var(--text-muted)">
+          <span id="orphanCount">0</span> kayıt seçildi
+        </div>
+        <button type="submit" class="btn btn-primary" id="importContactsBtn" disabled style="background:#0ea5e9;border-color:#0ea5e9" onclick="return confirm('Seçilen ' + document.querySelectorAll('.orphan-check:checked').length + ' cariyi B2B\'ye yeni bayi olarak aktarmak istediğinize emin misiniz?\n\nHer biri için yeni bir b2b_dealers kaydı oluşturulur, Paraşüt ID otomatik bağlanır.');">
+          📥 Seçilenleri B2B'ye Aktar
+        </button>
+      </div>
+    </form>
   </div>
-</details>
+</div>
+<script>
+(function(){
+  const cb = document.querySelectorAll('.orphan-check');
+  const all = document.getElementById('orphanSelectAll');
+  const cnt = document.getElementById('orphanCount');
+  const btn = document.getElementById('importContactsBtn');
+  function refresh() {
+    const c = document.querySelectorAll('.orphan-check:checked').length;
+    cnt.textContent = c;
+    btn.disabled = c === 0;
+  }
+  cb.forEach(b => b.addEventListener('change', refresh));
+  all.addEventListener('change', () => {
+    cb.forEach(b => b.checked = all.checked);
+    refresh();
+  });
+})();
+</script>
 <?php endif; ?>
 
 <?php else: ?>
@@ -640,31 +807,79 @@ $apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
 </div>
 
 <?php if (!empty($orphanProducts)): ?>
-<details style="margin-top:20px">
-  <summary style="cursor:pointer;padding:12px 16px;background:#f3f4f6;border-radius:8px;font-weight:600">
-    📋 Sadece Paraşüt'te Var (B2B'de yok) — <?= count($orphanProducts) ?> kayıt
-  </summary>
-  <div style="padding:12px 4px;font-size:12px;color:var(--text-muted);margin-bottom:8px">
-    Aşağıdaki Paraşüt stok kayıtlarının B2B sistemde karşılığı yok. Bu ürünler Paraşüt'te ek olarak var (eski faturalar, B2B dışı satış, vs).
+<div class="card" style="margin-top:20px;border:2px solid #0ea5e9">
+  <div class="card-header" style="background:linear-gradient(135deg,#e0f2fe,#bae6fd);color:#075985;display:flex;justify-content:space-between;align-items:center">
+    <h3 class="card-title" style="color:#075985">📥 Paraşüt'ten B2B'ye Aktarılabilir Ürünler — <?= count($orphanProducts) ?> kayıt</h3>
+    <div style="font-size:11px;color:#0c4a6e">Bu ürünler Paraşüt'te var, B2B'de yok</div>
   </div>
-  <div class="table-wrap">
-    <table class="table" style="font-size:12px">
-      <thead>
-        <tr><th>Paraşüt Adı</th><th>Stok Kodu</th><th>KDV</th><th>Paraşüt ID</th></tr>
-      </thead>
-      <tbody>
-        <?php foreach ($orphanProducts as $pp): ?>
-        <tr>
-          <td><?= h($pp['attributes']['name'] ?? '') ?></td>
-          <td style="font-family:monospace"><?= h($pp['attributes']['code'] ?? '—') ?></td>
-          <td>%<?= (int)($pp['attributes']['vat_rate'] ?? 0) ?></td>
-          <td style="font-family:monospace"><?= h($pp['id']) ?></td>
-        </tr>
-        <?php endforeach; ?>
-      </tbody>
-    </table>
+  <div class="card-body" style="padding:0">
+    <div style="background:#fffbeb;border-bottom:1px solid #fde68a;padding:10px 16px;font-size:12px;color:#78350f">
+      ℹ️ Seçilen ürünleri B2B'ye <strong>yeni ürün</strong> olarak aktarın (parasut_product_id otomatik bağlanır). Stok 0 ve aktif olarak eklenir, sonra admin → Ürünler'den düzenleyin.
+    </div>
+    <form method="post" id="importProductsForm">
+      <?= csrfField() ?>
+      <input type="hidden" name="action" value="import-products">
+      <div class="table-wrap">
+        <table class="table" style="font-size:12px;margin:0">
+          <thead>
+            <tr style="background:#f9fafb">
+              <th style="width:40px;text-align:center">
+                <input type="checkbox" id="orphanProdSelectAll" title="Tümünü seç/kaldır">
+              </th>
+              <th>Paraşüt Adı</th>
+              <th>Stok Kodu</th>
+              <th>KDV</th>
+              <th>Birim Fiyat</th>
+              <th>Paraşüt ID</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($orphanProducts as $pp):
+              $a = $pp['attributes'] ?? [];
+            ?>
+            <tr>
+              <td style="text-align:center">
+                <input type="checkbox" name="parasut_ids[]" value="<?= h($pp['id']) ?>" class="orphan-prod-check">
+              </td>
+              <td style="font-weight:600"><?= h($a['name'] ?? '—') ?></td>
+              <td style="font-family:monospace"><?= h($a['code'] ?? '—') ?></td>
+              <td>%<?= (int)($a['vat_rate'] ?? 0) ?></td>
+              <td><?= isset($a['list_price']) ? money((float)$a['list_price']) : '—' ?></td>
+              <td style="font-family:monospace;color:var(--text-muted)"><?= h($pp['id']) ?></td>
+            </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+      <div style="padding:14px 16px;background:#f9fafb;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <div style="font-size:12px;color:var(--text-muted)">
+          <span id="orphanProdCount">0</span> ürün seçildi
+        </div>
+        <button type="submit" class="btn btn-primary" id="importProductsBtn" disabled style="background:#0ea5e9;border-color:#0ea5e9" onclick="return confirm('Seçilen ' + document.querySelectorAll('.orphan-prod-check:checked').length + ' ürünü B2B\'ye yeni ürün olarak aktarmak istediğinize emin misiniz?\n\nHer biri için yeni b2b_products kaydı oluşturulur, Paraşüt ID otomatik bağlanır.');">
+          📥 Seçilenleri B2B'ye Aktar
+        </button>
+      </div>
+    </form>
   </div>
-</details>
+</div>
+<script>
+(function(){
+  const cb = document.querySelectorAll('.orphan-prod-check');
+  const all = document.getElementById('orphanProdSelectAll');
+  const cnt = document.getElementById('orphanProdCount');
+  const btn = document.getElementById('importProductsBtn');
+  function refresh() {
+    const c = document.querySelectorAll('.orphan-prod-check:checked').length;
+    cnt.textContent = c;
+    btn.disabled = c === 0;
+  }
+  cb.forEach(b => b.addEventListener('change', refresh));
+  all.addEventListener('change', () => {
+    cb.forEach(b => b.checked = all.checked);
+    refresh();
+  });
+})();
+</script>
 <?php endif; ?>
 
 <?php endif; ?>
