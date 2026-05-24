@@ -7,6 +7,23 @@ Format: `## v[X.Y.Z] — Açıklama (YYYY-MM-DD)`
 
 ---
 
+## v1.1.68 — Kart Ödeme Görünmüyor + Paraşüt Ürün İsim Sorunu (2026-05-24)
+
+### 🐛 Düzeltme — KRİTİK
+- **"Kart ile Hemen Öde" butonu görünmüyordu**: Dashboard ve account.php'de `setting('rubikpara_enabled') === '1'` kullanılıyordu ama bu ayar yok. Doğru kontrol: `rubikpara()->ayarliMi()`
+- **Paraşüt ürün isimleri düzgün gelmiyordu**: API'dan `name` boş gelirse `[Adsız - Kod: X]` veya `[Adsız - ID: Y]` fallback gösteriliyor (kırmızı vurgu)
+
+### 📦 Paraşüt
+- `listProducts` çağrısı `&include=category` ile yapılıyor — kategori adı da geliyor
+- Ürün adının yanına **📁 Kategori Badge** (sarı, Paraşüt UI uyumlu)
+- Hem dropdown'larda hem orphan tablolarında
+
+### 🔧 İyileştirme
+- Aktarım listelerinin arama kutusu artık **kategori adını da** kapsıyor
+- "Adsız" gösterimi kırmızı vurgu ile dikkat çeker (Paraşüt'te düzeltmesi gerekir)
+
+---
+
 ## v1.1.67 — Bayi Dashboard Borç Bildirimi (2026-05-24)
 
 ### ✨ Yeni

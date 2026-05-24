@@ -913,12 +913,22 @@ $apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
                 <option value="<?= h($linkedId) ?>" selected style="color:#dc2626">⚠️ KAYIP ID: <?= h($linkedId) ?> (Paraşüt'te yok)</option>
                 <?php endif; ?>
                 <?php foreach ($parasutProducts as $pp):
-                    $ppName = $pp['attributes']['name'] ?? '?';
-                    $ppCode = $pp['attributes']['code'] ?? '';
+                    $ppAttr  = $pp['attributes'] ?? [];
+                    $ppName  = trim($ppAttr['name'] ?? '');
+                    $ppCode  = trim($ppAttr['code'] ?? '');
+                    $ppCat   = trim($ppAttr['_category_name'] ?? '');
+                    // Fallback chain — ürün adı boşsa kod, o da yoksa ID
+                    $display = $ppName !== '' ? $ppName
+                             : ($ppCode !== '' ? '[Adsız - ' . $ppCode . ']'
+                             : '[Adsız - ID: ' . $pp['id'] . ']');
                     $isSel = (string)($p['parasut_product_id'] ?? '') === (string)$pp['id'];
                 ?>
                 <option value="<?= h($pp['id']) ?>"<?= $isSel ? ' selected' : '' ?>>
-                  <?= h($ppName) ?><?= $ppCode ? ' [Kod: ' . h($ppCode) . ']' : '' ?> (ID: <?= h($pp['id']) ?>)
+                  <?= h($display) ?><?php
+                    if ($ppName !== '' && $ppCode !== '') echo ' [' . h($ppCode) . ']';
+                    if ($ppCat !== '') echo ' — ' . h($ppCat);
+                    echo ' (ID: ' . h($pp['id']) . ')';
+                  ?>
                 </option>
                 <?php endforeach; ?>
               </select>
@@ -980,26 +990,38 @@ $apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
             <?php foreach ($orphanProducts as $pp):
               $a = $pp['attributes'] ?? [];
               $isArch = !empty($a['archived']);
+              // İsim fallback chain
+              $rawName = trim($a['name'] ?? '');
+              $code    = trim($a['code'] ?? '');
+              $catName = trim($a['_category_name'] ?? '');
+              $display = $rawName !== '' ? $rawName
+                       : ($code !== '' ? '[Adsız - Kod: ' . $code . ']'
+                       : '[Adsız - ID: ' . $pp['id'] . ']');
               $searchText = mb_strtolower(
-                  ($a['name'] ?? '') . ' ' .
-                  ($a['code'] ?? '') . ' ' .
-                  $pp['id']
+                  $rawName . ' ' . $code . ' ' . $catName . ' ' . $pp['id']
               );
             ?>
             <tr class="orphan-prod-row" data-search="<?= h($searchText) ?>" style="<?= $isArch ? 'background:#fafafa;color:#94a3b8' : '' ?>">
               <td style="text-align:center">
                 <input type="checkbox" name="parasut_ids[]" value="<?= h($pp['id']) ?>" class="orphan-prod-check">
               </td>
-              <td style="font-weight:600">
-                <?= h($a['name'] ?? '—') ?>
-                <?php if ($isArch): ?>
-                  <span class="badge" style="background:#e5e7eb;color:#6b7280;font-size:9px;font-weight:600;margin-left:6px">ARŞİVLİ</span>
+              <td>
+                <div style="font-weight:600;color:<?= $rawName === '' ? '#dc2626' : 'inherit' ?>">
+                  <?= h($display) ?>
+                  <?php if ($isArch): ?>
+                    <span class="badge" style="background:#e5e7eb;color:#6b7280;font-size:9px;font-weight:600;margin-left:6px">ARŞİVLİ</span>
+                  <?php endif; ?>
+                </div>
+                <?php if ($catName !== ''): ?>
+                <div style="margin-top:3px">
+                  <span class="badge" style="background:#fef3c7;color:#92400e;font-size:9px;font-weight:600;padding:2px 6px;border-radius:3px;text-transform:uppercase;letter-spacing:.3px">📁 <?= h($catName) ?></span>
+                </div>
                 <?php endif; ?>
               </td>
-              <td style="font-family:monospace"><?= h($a['code'] ?? '—') ?></td>
+              <td style="font-family:monospace"><?= h($code ?: '—') ?></td>
               <td>%<?= (int)($a['vat_rate'] ?? 0) ?></td>
               <td><?= isset($a['list_price']) ? money((float)$a['list_price']) : '—' ?></td>
-              <td style="font-family:monospace;color:var(--text-muted)"><?= h($pp['id']) ?></td>
+              <td style="font-family:monospace;color:var(--text-muted);font-size:11px"><?= h($pp['id']) ?></td>
             </tr>
             <?php endforeach; ?>
           </tbody>

@@ -17,8 +17,8 @@ $payments = dbVal("SELECT COALESCE(SUM(amount),0) FROM b2b_payments WHERE dealer
 ?>
 
 <?php
-// Kart ödemesi etkin mi? settings'ten kontrol
-$cardEnabled = setting('rubikpara_enabled') === '1';
+// Kart ödemesi etkin mi? rubikpara credentials dolu mu kontrol
+$cardEnabled = function_exists('rubikpara') && rubikpara()->ayarliMi();
 ?>
 
 <div class="page-header">

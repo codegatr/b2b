@@ -540,16 +540,33 @@ class Parasut {
     public function listProducts(int $page = 1, int $size = 25, array $filter = [], string $sort = ''): array {
         if (!$this->isEnabled()) return ['data'=>[], 'meta'=>['error'=>'Entegrasyon kapalı.']];
         $size = max(1, min(25, $size));
-        $url  = $this->endpoint('products') . '?page[number]=' . $page . '&page[size]=' . $size;
+        $url  = $this->endpoint('products') . '?page[number]=' . $page . '&page[size]=' . $size . '&include=category';
         foreach ($filter as $k => $v) {
             if ($v !== '' && $v !== null) $url .= '&filter[' . urlencode($k) . ']=' . urlencode((string)$v);
         }
         if ($sort !== '') $url .= '&sort=' . urlencode($sort);
         $r = $this->http('GET', $url);
+
+        // included[] (kategoriler) ile data'yı zenginleştir
+        $catById = [];
+        foreach (($r['included'] ?? []) as $inc) {
+            if (($inc['type'] ?? '') === 'item_categories') {
+                $catById[(string)$inc['id']] = $inc['attributes']['name'] ?? '';
+            }
+        }
+        $data = $r['data'] ?? [];
+        foreach ($data as &$d) {
+            $catId = $d['relationships']['category']['data']['id'] ?? null;
+            if ($catId && isset($catById[(string)$catId])) {
+                $d['attributes']['_category_name'] = $catById[(string)$catId];
+            }
+        }
+        unset($d);
+
         return [
-            'data' => $r['data'] ?? [],
+            'data' => $data,
             'meta' => $r['meta'] ?? [],
-            'err'  => empty($r['data']) ? $this->getErrorDetail($r) : null,
+            'err'  => empty($data) ? $this->getErrorDetail($r) : null,
         ];
     }
 

@@ -125,7 +125,7 @@ if (empty($announcements)) {
 // Tediye makbuzları (alacak/ödeme kayıtları) zaten formüle dahil:
 // SUM(CASE WHEN borc THEN +amount ELSE -amount END) is_closed=0
 // Yani: kalan borç = açık borç - ödenmiş tediye
-$cardEnabled = setting('rubikpara_enabled') === '1';
+$cardEnabled = function_exists('rubikpara') && rubikpara()->ayarliMi();
 if ($openBalance > 0):
     // Durum belirleme
     if ($overdueAmount > 0) {
