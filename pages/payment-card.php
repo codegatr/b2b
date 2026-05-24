@@ -59,6 +59,10 @@ $dealer = currentDealer();
 
 // ── PENDING MODE: ?pending=1 → order DB'de yok, sepet snapshot session'da
 $pending = isset($_GET['pending']) && $_GET['pending'] === '1';
+// ── BALANCE MODE: ?balance=1&amount=X → açık bakiye serbest ödeme
+$balanceMode = isset($_GET['balance']) && $_GET['balance'] === '1';
+$balanceAmount = $balanceMode ? round((float)($_GET['amount'] ?? 0), 2) : 0;
+
 $pendingSnap = null;
 if ($pending) {
     $pendingSnap = $_SESSION['pending_card'][(int)$dealer['id']] ?? null;
@@ -84,6 +88,37 @@ if ($pending) {
         'company_name'   => $dealer['company_name']     ?? '',
         'first_name'     => $dealer['first_name']       ?? '',
         'last_name'      => $dealer['last_name']        ?? '',
+    ];
+} elseif ($balanceMode) {
+    // Açık bakiye ödeme — order_id yok, ledger'a alacak yazılacak
+    $openBalance = (float)dbVal(
+        "SELECT COALESCE(SUM(CASE WHEN type='borc' THEN amount ELSE -amount END), 0)
+         FROM b2b_ledger WHERE dealer_id=? AND is_closed=0",
+        [(int)$dealer['id']]
+    );
+    if ($balanceAmount <= 0 || $balanceAmount > $openBalance + 0.01) {
+        echo '<div style="margin:30px;padding:20px;background:#fee2e2;border:2px solid #dc2626;border-radius:10px;color:#991b1b">';
+        echo '<h3>Geçersiz Tutar</h3>';
+        echo '<p>Ödeme tutarı 0\'dan büyük ve açık bakiyenizi (' . money($openBalance) . ') aşmamalıdır.</p>';
+        echo '<p><a href="?page=account">← Cari hesaba dön</a></p>';
+        echo '</div>';
+        exit;
+    }
+    // Yapay $order — açık bakiye için
+    $order = [
+        'id'             => 0,
+        'order_no'       => 'BAKIYE-' . date('YmdHis'),
+        'dealer_id'      => $dealer['id'],
+        'subtotal'       => $balanceAmount,
+        'vat_total'      => 0,
+        'discount_total' => 0,
+        'grand_total'    => $balanceAmount,
+        'payment_status' => 'odenmedi',
+        'status'         => 'bekliyor',
+        'company_name'   => $dealer['company_name']     ?? '',
+        'first_name'     => $dealer['first_name']       ?? '',
+        'last_name'      => $dealer['last_name']        ?? '',
+        '_balance_mode'  => true,
     ];
 } else {
     $order = $orderId ? dbRow(
@@ -207,6 +242,10 @@ if ($step === 'callback' && isset($_POST['ThreeDSessionId'])) {
                         sendOrderStatusEmail($newOrderId, 'onaylandi');
                         // orderId'yi yeni order'a yönlendir (sonraki INSERT'lerde kullanılacak)
                         $orderId = $newOrderId;
+                    } elseif ($balanceMode) {
+                        // BALANCE MODE: açık bakiye ödeme — sipariş yok, sepet yok, stok yok
+                        // Sadece b2b_payments + ledger alacak kaydı yapılacak (aşağıda)
+                        $orderId = 0; // INSERT'lerde NULL/0 olarak işaretle
                     } else {
                         // NORMAL (eski) MODE: order zaten DB'de var, stok düş + sepet temizle
                         $orderItems = dbRows("SELECT product_id, qty FROM b2b_order_items WHERE order_id=?", [$orderId]);
@@ -224,8 +263,8 @@ if ($step === 'callback' && isset($_POST['ThreeDSessionId'])) {
                         }
                     }
 
-                    // Paraşüt fatura (otomatik onaylıysa, her iki mod için)
-                    if ($autoApprove && function_exists('parasut')) {
+                    // Paraşüt fatura (otomatik onaylıysa, balance mode HARİÇ)
+                    if ($autoApprove && !$balanceMode && function_exists('parasut')) {
                         try { parasut()->syncInvoice($orderId); } catch (\Throwable $e) {}
                     }
 
@@ -235,33 +274,52 @@ if ($step === 'callback' && isset($_POST['ThreeDSessionId'])) {
                          (dealer_id,order_id,amount,type,status,payment_date,bank_name,transaction_ref,dealer_note,approved_at,approved_by)
                          VALUES (?,?,?,'kredi_karti','onaylandi',NOW(),'Rubikpara',?,?,NOW(),0)",
                         [
-                            $dealer['id'], $orderId,
+                            $dealer['id'],
+                            $balanceMode ? null : $orderId,
                             $finalAmount,
                             $prov['transactionId'] ?? $sessionId,
-                            $note,
+                            $balanceMode ? ('Açık bakiye ödemesi — ' . $note) : $note,
                         ]
                     );
                     $paymentId = (int)db()->lastInsertId();
-                    // Cariye sadece sipariş tutarı kadar alacak (komisyon bayinin sırtında)
-                    // ref_id artık DOĞRU payment_id (eskiden yanlışlıkla orderId yazılıyordu —
-                    //  delete_entry'de bağlı payment'ı bulamıyordu).
+                    // Cariye sadece sipariş/bakiye tutarı kadar alacak (komisyon bayinin sırtında)
                     ledgerAdd($dealer['id'], 'alacak', $baseAmount,
-                        'Kart ödemesi — Rubikpara (' . $note . ')',
+                        ($balanceMode ? 'Bakiye ödemesi — Rubikpara (' : 'Kart ödemesi — Rubikpara (') . $note . ')',
                         'payment', $paymentId);
-                    // Sipariş ödeme durumu
-                    dbExec("UPDATE b2b_orders SET payment_status='odendi' WHERE id=?", [$orderId]);
-                    closeOrderLedgerIfPaid($orderId);
+                    // Sipariş ödeme durumu — sadece sipariş bazlı modlarda
+                    if (!$balanceMode) {
+                        dbExec("UPDATE b2b_orders SET payment_status='odendi' WHERE id=?", [$orderId]);
+                        closeOrderLedgerIfPaid($orderId);
 
-                    // Aynı sipariş için bekleyen havale/EFT/diğer bildirimleri otomatik reddet
-                    dbExec(
-                        "UPDATE b2b_payments
-                         SET status='reddedildi',
-                             admin_note=CONCAT(COALESCE(admin_note,''),
-                                IF(admin_note IS NULL OR admin_note='','','\n'),
-                                '[Otomatik] Sipariş kart ile ödendi, bu bildirim geçersiz.')
-                         WHERE order_id=? AND status='bekliyor' AND type<>'kredi_karti'",
-                        [$orderId]
-                    );
+                        // Aynı sipariş için bekleyen havale/EFT/diğer bildirimleri otomatik reddet
+                        dbExec(
+                            "UPDATE b2b_payments
+                             SET status='reddedildi',
+                                 admin_note=CONCAT(COALESCE(admin_note,''),
+                                    IF(admin_note IS NULL OR admin_note='','','\n'),
+                                    '[Otomatik] Sipariş kart ile ödendi, bu bildirim geçersiz.')
+                             WHERE order_id=? AND status='bekliyor' AND type<>'kredi_karti'",
+                            [$orderId]
+                        );
+                    } else {
+                        // Balance modunda: açık ledger kayıtlarını kapat (en eskiden yenisine doğru)
+                        // Ödeme tutarı kadar açık borç kaydı kapatılır (FIFO).
+                        $remaining = $baseAmount;
+                        $openDebts = dbRows(
+                            "SELECT id, amount FROM b2b_ledger
+                             WHERE dealer_id=? AND type='borc' AND (is_closed=0 OR is_closed IS NULL)
+                             ORDER BY created_at ASC",
+                            [$dealer['id']]
+                        );
+                        foreach ($openDebts as $d) {
+                            if ($remaining <= 0) break;
+                            $amt = (float)$d['amount'];
+                            if ($amt <= $remaining + 0.01) {
+                                dbExec("UPDATE b2b_ledger SET is_closed=1 WHERE id=?", [$d['id']]);
+                                $remaining -= $amt;
+                            }
+                        }
+                    }
 
                     unset($_SESSION['rk_pay'][$orderId]);
                     // DB-fallback kaydını da temizle
@@ -270,14 +328,18 @@ if ($step === 'callback' && isset($_POST['ThreeDSessionId'])) {
                     } catch (\Throwable $e) {
                         error_log('payment-card DB-fallback cleanup hatası: ' . $e->getMessage());
                     }
-                    $_SESSION['flash'] = ['type'=>'success','msg'=>'Ödeme başarıyla tamamlandı! Sipariş oluşturuldu.'];
-                    $successUrl = '?page=orders&action=detail&id=' . $orderId;
+                    $_SESSION['flash'] = ['type'=>'success','msg'=> $balanceMode
+                        ? 'Açık bakiye ödemesi başarıyla tamamlandı!'
+                        : 'Ödeme başarıyla tamamlandı! Sipariş oluşturuldu.'];
+                    $successUrl = $balanceMode
+                        ? '?page=account'
+                        : '?page=orders&action=detail&id=' . $orderId;
                     echo '<!DOCTYPE html><html><head><meta charset="utf-8">';
                     echo '<meta http-equiv="refresh" content="0;url=' . htmlspecialchars($successUrl) . '">';
                     echo '<script>window.location.replace(' . json_encode($successUrl) . ');</script>';
                     echo '</head><body style="font-family:system-ui;padding:40px;text-align:center">';
                     echo '<h2 style="color:#16a34a">✓ Ödeme Başarılı</h2>';
-                    echo '<p>Siparişiniz oluşturuldu, yönlendiriliyorsunuz...</p>';
+                    echo '<p>' . ($balanceMode ? 'Bakiyeniz güncellendi' : 'Siparişiniz oluşturuldu') . ', yönlendiriliyorsunuz...</p>';
                     echo '<p><a href="' . htmlspecialchars($successUrl) . '">Otomatik gitmezse buraya tıklayın</a></p>';
                     echo '</body></html>';
                     exit;
@@ -419,7 +481,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $step === 'card') {
             // 3DS başlat
             $stage       = '3ds-baslat';
             $callbackUrl = B2B_URL . '/?page=payment-card'
-                . ($pending ? '&pending=1' : '&order_id=' . $orderId)
+                . ($pending ? '&pending=1' : ($balanceMode ? '&balance=1&amount=' . number_format($balanceAmount, 2, '.', '') : '&order_id=' . $orderId))
                 . '&step=callback';
             $clientIp    = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
             $initRes     = $rb->threeDSBaslat($sessionId, $callbackUrl, $holderName, $clientIp);
@@ -477,7 +539,7 @@ $initialSingle = $initialList[0];
 <div class="card">
   <div class="card-header"><h3 class="card-title">Kart Bilgileri</h3></div>
   <div class="card-body">
-    <form method="POST" action="?page=payment-card<?= $pending ? '&pending=1' : '&order_id='.$orderId ?>&step=card" id="cardForm">
+    <form method="POST" action="?page=payment-card<?= $pending ? '&pending=1' : ($balanceMode ? '&balance=1&amount=' . number_format($balanceAmount, 2, '.', '') : '&order_id='.$orderId) ?>&step=card" id="cardForm">
       <?= csrfField() ?>
 
       <!-- Kart görsel önizleme -->
