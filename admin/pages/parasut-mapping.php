@@ -306,6 +306,57 @@ if (isPost() && ($_POST['action'] ?? '') === 'import-products') {
     }
 }
 
+// ─── TOPLU KAYIP EŞLEŞMELERİ SIFIRLA ──
+// Paraşüt'te bulunamayan ID'lere sahip tüm B2B kayıtlarının
+// parasut_*_id alanlarını NULL yapar. Sonra yeniden eşleme yapılabilir.
+if (isPost() && ($_POST['action'] ?? '') === 'reset-lost-matches') {
+    csrfCheck();
+    $type = $_POST['type'] ?? '';
+
+    if ($type === 'dealers') {
+        // Tüm B2B bayilerin parasut_contact_id'sini al, Paraşüt listesinde olmayanları sıfırla
+        $allContacts = parasut()->listAllContacts();
+        $existingIds = array_map(fn($c) => (string)$c['id'], $allContacts);
+
+        $allDealers = dbRows("SELECT id, parasut_contact_id FROM b2b_dealers
+                              WHERE is_active=1 AND parasut_contact_id IS NOT NULL AND parasut_contact_id != ''");
+        $resetIds = [];
+        foreach ($allDealers as $d) {
+            if (!in_array((string)$d['parasut_contact_id'], $existingIds, true)) {
+                $resetIds[] = (int)$d['id'];
+            }
+        }
+        if (!empty($resetIds)) {
+            $placeholders = implode(',', array_fill(0, count($resetIds), '?'));
+            dbExec("UPDATE b2b_dealers SET parasut_contact_id=NULL WHERE id IN ({$placeholders})", $resetIds);
+            auditLog('parasut_lost_dealer_matches_reset', 'b2b_dealers', 0, ['count'=>count($resetIds)]);
+            $msg = 'success:✓ ' . count($resetIds) . ' kayıp bayi eşleşmesi sıfırlandı. Şimdi "🤖 Otomatik Eşleştir" ile yeniden bağlayın.';
+        } else {
+            $msg = 'success:Kayıp eşleşme bulunamadı, hepsi geçerli.';
+        }
+    } elseif ($type === 'products') {
+        $allProds = parasut()->listAllProducts();
+        $existingIds = array_map(fn($p) => (string)$p['id'], $allProds);
+
+        $allP = dbRows("SELECT id, parasut_product_id FROM b2b_products
+                        WHERE is_active=1 AND parasut_product_id IS NOT NULL AND parasut_product_id != ''");
+        $resetIds = [];
+        foreach ($allP as $p) {
+            if (!in_array((string)$p['parasut_product_id'], $existingIds, true)) {
+                $resetIds[] = (int)$p['id'];
+            }
+        }
+        if (!empty($resetIds)) {
+            $placeholders = implode(',', array_fill(0, count($resetIds), '?'));
+            dbExec("UPDATE b2b_products SET parasut_product_id=NULL WHERE id IN ({$placeholders})", $resetIds);
+            auditLog('parasut_lost_product_matches_reset', 'b2b_products', 0, ['count'=>count($resetIds)]);
+            $msg = 'success:✓ ' . count($resetIds) . ' kayıp ürün eşleşmesi sıfırlandı. Şimdi "🤖 Otomatik Eşleştir" ile yeniden bağlayın.';
+        } else {
+            $msg = 'success:Kayıp eşleşme bulunamadı, hepsi geçerli.';
+        }
+    }
+}
+
 // ──────────────────────────────────────────────────────────────
 // DATA HAZIRLA (her render'da)
 // ──────────────────────────────────────────────────────────────
@@ -464,7 +515,17 @@ $apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
       <div style="font-size:12px;line-height:1.5;margin-top:4px">
         <?= $missingMatches ?> <?= $apiKind ?> için kayıtlı Paraşüt ID'si var, ancak Paraşüt'ten gelen listede bulunamadı.
         Bu kayıtlar Paraşüt'te silinmiş veya başka bir hesapta olabilir.
-        <strong>Kırmızı işaretli</strong> satırlarda eşlemeyi sıfırlayıp yeniden bağlayın.
+      </div>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <form method="post" onsubmit="return confirm('⚠️ TOPLU SIFIRLAMA\n\n<?= $missingMatches ?> kayıp <?= $apiKind ?> eşleşmesinin parasut_<?= $tab === 'dealers' ? 'contact' : 'product' ?>_id alanları NULL yapılacak.\n\nBu işlem GERİ ALINAMAZ. Sonra \"Otomatik Eşleştir\" ile yeniden bağlayabilirsiniz.\n\nDevam edilsin mi?');">
+          <?= csrfField() ?>
+          <input type="hidden" name="action" value="reset-lost-matches">
+          <input type="hidden" name="type" value="<?= $tab === 'dealers' ? 'dealers' : 'products' ?>">
+          <button type="submit" class="btn btn-sm" style="background:#dc2626;color:#fff;border:none">
+            🧹 Hepsini Sıfırla (<?= $missingMatches ?>)
+          </button>
+        </form>
+        <span style="font-size:11px;color:#78350f">Sonra ⬇ aşağıdan 🤖 Otomatik Eşleştir tıkla</span>
       </div>
     </div>
   </div>

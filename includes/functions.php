@@ -516,6 +516,107 @@ function moneyInc(mixed $net, mixed $vatRate = null): string {
 }
 
 /**
+ * Bir bayinin cari kredi durumunu hesapla — sipariş verebilir mi?
+ *
+ * Mantık:
+ * - open_balance: bayinin AÇIK borç toplamı (kapatılmamış 'borc' kayıtları
+ *   eksi kapatılmamış 'alacak' kayıtları)
+ * - overdue: vadesi geçmiş açık borç
+ * - credit_limit: bayiye tanınan limit (b2b_dealers.credit_limit)
+ *
+ * Settings:
+ *   block_on_debt        — herhangi açık borç varsa engelle
+ *   block_on_overdue     — vadesi geçmiş borç varsa engelle
+ *   block_over_limit     — açık bakiye kredi limitini aşarsa engelle
+ *   debt_block_message   — kapalı durumda gösterilen mesaj
+ *
+ * @return array{
+ *   blocked: bool,
+ *   reason: string,
+ *   open_balance: float,
+ *   overdue: float,
+ *   credit_limit: float,
+ *   message: string,
+ * }
+ */
+function dealerCreditStatus(int $dealerId): array {
+    $blockOnDebt    = setting('block_on_debt',     '0') === '1';
+    $blockOnOverdue = setting('block_on_overdue',  '0') === '1';
+    $blockOverLimit = setting('block_over_limit',  '0') === '1';
+    $customMsg      = trim(setting('debt_block_message', ''));
+
+    $result = [
+        'blocked'      => false,
+        'reason'       => '',
+        'open_balance' => 0.0,
+        'overdue'      => 0.0,
+        'credit_limit' => 0.0,
+        'message'      => '',
+    ];
+
+    if (!$blockOnDebt && !$blockOnOverdue && !$blockOverLimit) {
+        return $result; // Hiçbir kontrol aktif değil
+    }
+
+    // Açık ledger kayıtlarını topla
+    $openRow = dbRow(
+        "SELECT
+           COALESCE(SUM(CASE WHEN type='borc'   AND (is_closed=0 OR is_closed IS NULL) THEN amount ELSE 0 END), 0) AS borc,
+           COALESCE(SUM(CASE WHEN type='alacak' AND (is_closed=0 OR is_closed IS NULL) THEN amount ELSE 0 END), 0) AS alacak
+         FROM b2b_ledger
+         WHERE dealer_id=?",
+        [$dealerId]
+    );
+    $borc        = (float)($openRow['borc'] ?? 0);
+    $alacak      = (float)($openRow['alacak'] ?? 0);
+    $openBalance = max(0, $borc - $alacak); // sadece pozitif borç
+    $result['open_balance'] = $openBalance;
+
+    // Vadesi geçmiş borç (vade tarihi geçmiş, kapatılmamış)
+    $overdueRow = dbRow(
+        "SELECT COALESCE(SUM(amount), 0) AS total
+         FROM b2b_ledger
+         WHERE dealer_id=?
+           AND type='borc'
+           AND (is_closed=0 OR is_closed IS NULL)
+           AND due_date IS NOT NULL AND due_date < CURDATE()",
+        [$dealerId]
+    );
+    $overdue = (float)($overdueRow['total'] ?? 0);
+    $result['overdue'] = $overdue;
+
+    // Bayi kredi limiti
+    $dealer = dbRow("SELECT credit_limit FROM b2b_dealers WHERE id=?", [$dealerId]);
+    $limit  = (float)($dealer['credit_limit'] ?? 0);
+    $result['credit_limit'] = $limit;
+
+    // Kontroller (sıraya göre, ilki bulunca dur)
+    if ($blockOnOverdue && $overdue > 0) {
+        $result['blocked'] = true;
+        $result['reason']  = 'overdue';
+        $result['message'] = $customMsg !== '' ? $customMsg
+            : 'Vadesi geçmiş ' . money($overdue) . ' borcunuz var. Ödeme yapılana kadar yeni sipariş verilemez.';
+        return $result;
+    }
+    if ($blockOverLimit && $limit > 0 && $openBalance > $limit) {
+        $result['blocked'] = true;
+        $result['reason']  = 'over_limit';
+        $result['message'] = $customMsg !== '' ? $customMsg
+            : 'Açık bakiyeniz (' . money($openBalance) . ') kredi limitinizi (' . money($limit) . ') aştı. Ödeme yapılmadan yeni sipariş verilemez.';
+        return $result;
+    }
+    if ($blockOnDebt && $openBalance > 0) {
+        $result['blocked'] = true;
+        $result['reason']  = 'has_debt';
+        $result['message'] = $customMsg !== '' ? $customMsg
+            : 'Açık ' . money($openBalance) . ' borcunuz var. Ödeme yapılana kadar yeni sipariş verilemez.';
+        return $result;
+    }
+
+    return $result;
+}
+
+/**
  * Sipariş penceresi durumu — bayiler şu an sipariş verebilir mi?
  * Settings:
  *   order_window_enabled (0/1) — kontrol etkin mi

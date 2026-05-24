@@ -42,6 +42,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
             $error .= ' Sonraki açılış: ' . $win['next_open'];
         }
     }
+
+    // ─── Borçlu Cari Kontrolü ───
+    if (empty($error)) {
+        $credit = dealerCreditStatus((int)$dealer['id']);
+        if ($credit['blocked']) {
+            $error = '🔒 ' . $credit['message'];
+        }
+    }
+
     if (empty($error)):
     $notes = trim($_POST['notes'] ?? '');
 
@@ -392,6 +401,9 @@ $grand = $subtotal + $vatTotal;
         <input type="hidden" name="checkout" value="1">
 
         <?php $orderWin = orderWindowStatus(); ?>
+        <?php $creditStatus = dealerCreditStatus((int)$dealer['id']); ?>
+        <?php $isBlocked = !$orderWin['open'] || $creditStatus['blocked']; ?>
+
         <?php if (!$orderWin['open']): ?>
         <!-- Sipariş penceresi kapalı uyarısı -->
         <div style="background:#fef2f2;border:2px solid #fca5a5;border-radius:10px;padding:14px;margin-bottom:14px">
@@ -408,9 +420,31 @@ $grand = $subtotal + $vatTotal;
         </div>
         <?php endif; ?>
 
+        <?php if ($creditStatus['blocked']): ?>
+        <!-- Borçlu cari engelleme -->
+        <div style="background:#fef2f2;border:2px solid #fca5a5;border-radius:10px;padding:14px;margin-bottom:14px">
+          <div style="display:flex;align-items:flex-start;gap:10px">
+            <div style="font-size:20px">💳</div>
+            <div style="flex:1">
+              <div style="font-weight:700;font-size:13px;color:#b91c1c">Cari Borç Engellemesi</div>
+              <div style="font-size:12px;color:#7f1d1d;margin-top:4px;line-height:1.5"><?= h($creditStatus['message']) ?></div>
+              <?php if ($creditStatus['credit_limit'] > 0): ?>
+              <div style="font-size:11px;color:#991b1b;margin-top:6px">
+                Kredi limiti: <strong><?= money($creditStatus['credit_limit']) ?></strong> ·
+                Açık bakiye: <strong><?= money($creditStatus['open_balance']) ?></strong>
+              </div>
+              <?php endif; ?>
+              <div style="margin-top:8px">
+                <a href="?page=payments" style="color:#b91c1c;font-weight:600;font-size:12px;text-decoration:underline">→ Tahsilat Yap</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <?php endif; ?>
+
         <div class="form-group">
           <label class="form-label">Sipariş Notu</label>
-          <textarea name="notes" class="form-control" rows="2" placeholder="Opsiyonel not..." <?= !$orderWin['open'] ? 'disabled' : '' ?>></textarea>
+          <textarea name="notes" class="form-control" rows="2" placeholder="Opsiyonel not..." <?= $isBlocked ? 'disabled' : '' ?>></textarea>
         </div>
 
         <?php if ($cardEnabled || $bankEnabled): ?>
@@ -418,8 +452,8 @@ $grand = $subtotal + $vatTotal;
           <label class="form-label" style="margin-bottom:8px">Ödeme Yöntemi</label>
 
           <?php if ($bankEnabled): ?>
-          <label style="display:flex;align-items:flex-start;gap:10px;padding:12px;margin-bottom:8px;border:2px solid var(--border);border-radius:10px;cursor:pointer;background:#fff<?= !$orderWin['open'] ? ';opacity:.5;cursor:not-allowed' : '' ?>" onclick="if(!this.querySelector('input').disabled)this.querySelector('input').checked=true">
-            <input type="radio" name="payment_method_choice" value="havale_eft" <?= $cardEnabled ? '' : 'checked' ?> required style="margin-top:3px;cursor:pointer" <?= !$orderWin['open'] ? 'disabled' : '' ?>>
+          <label style="display:flex;align-items:flex-start;gap:10px;padding:12px;margin-bottom:8px;border:2px solid var(--border);border-radius:10px;cursor:pointer;background:#fff<?= $isBlocked ? ';opacity:.5;cursor:not-allowed' : '' ?>" onclick="if(!this.querySelector('input').disabled)this.querySelector('input').checked=true">
+            <input type="radio" name="payment_method_choice" value="havale_eft" <?= $cardEnabled ? '' : 'checked' ?> required style="margin-top:3px;cursor:pointer" <?= $isBlocked ? 'disabled' : '' ?>>
             <div style="flex:1">
               <div style="font-weight:700;font-size:13px;color:var(--text)">🏦 Havale / EFT</div>
               <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Banka hesabımıza havale yapın, dekontu yükleyin.</div>
@@ -428,8 +462,8 @@ $grand = $subtotal + $vatTotal;
           <?php endif; ?>
 
           <?php if ($cardEnabled): ?>
-          <label style="display:flex;align-items:flex-start;gap:10px;padding:12px;margin-bottom:8px;border:2px solid var(--border);border-radius:10px;cursor:pointer;background:#fff<?= !$orderWin['open'] ? ';opacity:.5;cursor:not-allowed' : '' ?>" onclick="if(!this.querySelector('input').disabled)this.querySelector('input').checked=true">
-            <input type="radio" name="payment_method_choice" value="kredi_karti" <?= !$bankEnabled ? 'checked' : '' ?> required style="margin-top:3px;cursor:pointer" <?= !$orderWin['open'] ? 'disabled' : '' ?>>
+          <label style="display:flex;align-items:flex-start;gap:10px;padding:12px;margin-bottom:8px;border:2px solid var(--border);border-radius:10px;cursor:pointer;background:#fff<?= $isBlocked ? ';opacity:.5;cursor:not-allowed' : '' ?>" onclick="if(!this.querySelector('input').disabled)this.querySelector('input').checked=true">
+            <input type="radio" name="payment_method_choice" value="kredi_karti" <?= !$bankEnabled ? 'checked' : '' ?> required style="margin-top:3px;cursor:pointer" <?= $isBlocked ? 'disabled' : '' ?>>
             <div style="flex:1">
               <div style="font-weight:700;font-size:13px;color:var(--text)">💳 Kredi Kartı (3D Secure)</div>
               <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Anında ödeme. Tek çekim veya taksit.</div>
@@ -439,10 +473,27 @@ $grand = $subtotal + $vatTotal;
         </div>
         <?php endif; ?>
 
-        <button type="submit" class="btn btn-primary" style="width:100%;height:44px;font-size:14px<?= !$orderWin['open'] ? ';opacity:.4;cursor:not-allowed' : '' ?>" <?= !$orderWin['open'] ? 'disabled title="Sipariş kabul saatleri dışında"' : '' ?>>
-          <?= $orderWin['open'] ? 'Siparişi Tamamla →' : '🔒 Sipariş Saatleri Dışında' ?>
+        <button type="submit" id="checkoutBtn" class="btn btn-primary" style="width:100%;height:44px;font-size:14px<?= $isBlocked ? ';opacity:.4;cursor:not-allowed' : '' ?>" <?= $isBlocked ? 'disabled' : '' ?>>
+          <?php
+          if (!$orderWin['open']) echo '🔒 Sipariş Saatleri Dışında';
+          elseif ($creditStatus['blocked']) echo '💳 Borç Nedeniyle Sipariş Veremezsiniz';
+          else echo 'Siparişi Tamamla →';
+          ?>
         </button>
       </form>
+
+      <script>
+      // Double-submit koruması — buton bir kez tıklandıktan sonra disable
+      document.getElementById('checkoutForm')?.addEventListener('submit', function(e){
+        const btn = document.getElementById('checkoutBtn');
+        if (btn && !btn.disabled) {
+          setTimeout(() => {
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Sipariş oluşturuluyor...';
+          }, 10);
+        }
+      });
+      </script>
     </div>
   </div>
 </div>

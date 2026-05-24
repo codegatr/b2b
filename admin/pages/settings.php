@@ -269,6 +269,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         settingSave('order_window_days', implode(',', $days));
         settingSave('order_window_message', trim($_POST['order_window_message'] ?? ''));
 
+        // ─── Borç Kontrolü ───
+        settingSave('block_on_debt',     isset($_POST['block_on_debt'])    ? '1' : '0');
+        settingSave('block_on_overdue',  isset($_POST['block_on_overdue']) ? '1' : '0');
+        settingSave('block_over_limit',  isset($_POST['block_over_limit']) ? '1' : '0');
+        settingSave('debt_block_message', trim($_POST['debt_block_message'] ?? ''));
+
         settingClearCache();
         $success = 'Sipariş ayarları kaydedildi.';
     }
@@ -1160,6 +1166,42 @@ try {
         <label class="form-label">Kapalı Durumda Gösterilecek Mesaj</label>
         <textarea name="order_window_message" class="form-control" rows="2" placeholder="Örn: Siparişler yalnızca Pzt-Cum 10:00-17:00 arası alınır. Lütfen mesai saatleri içinde tekrar deneyin."><?= htmlspecialchars(setting('order_window_message','')) ?></textarea>
         <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Boş bırakırsanız varsayılan mesaj kullanılır</p>
+    </div>
+
+    <!-- ─── Borçlu Cari Engellemesi ─── -->
+    <hr style="margin:24px 0;border:0;border-top:1px solid var(--border)">
+
+    <h3 style="margin:0 0 8px;font-size:15px">💳 Borçlu Cari Engellemesi</h3>
+    <p style="font-size:12px;color:var(--text-muted);margin:0 0 14px">Bayinin açık borcuna göre yeni sipariş vermesini engelleyin. Kuralları tek tek aç/kapat — en sert kontrol önceliklidir.</p>
+
+    <label style="display:flex;align-items:flex-start;gap:12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:12px 14px;cursor:pointer;margin-bottom:8px">
+        <input type="checkbox" name="block_on_overdue" value="1" <?= setting('block_on_overdue')==='1'?'checked':'' ?> style="margin-top:2px">
+        <div style="flex:1">
+            <div style="font-weight:700;font-size:13px;color:#9a3412">🔴 Vadesi geçmiş borç varsa engelle</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">En sert kural. Vadesi geçmiş tek bir kayıt bile varsa bayi sipariş veremez.</div>
+        </div>
+    </label>
+
+    <label style="display:flex;align-items:flex-start;gap:12px;background:#fefce8;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;cursor:pointer;margin-bottom:8px">
+        <input type="checkbox" name="block_over_limit" value="1" <?= setting('block_over_limit')==='1'?'checked':'' ?> style="margin-top:2px">
+        <div style="flex:1">
+            <div style="font-weight:700;font-size:13px;color:#854d0e">🟡 Kredi limiti aşılırsa engelle</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Bayinin <code>credit_limit</code> alanı dolu olmalı. Açık bakiye limiti aşarsa engelle.</div>
+        </div>
+    </label>
+
+    <label style="display:flex;align-items:flex-start;gap:12px;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:12px 14px;cursor:pointer;margin-bottom:14px">
+        <input type="checkbox" name="block_on_debt" value="1" <?= setting('block_on_debt')==='1'?'checked':'' ?> style="margin-top:2px">
+        <div style="flex:1">
+            <div style="font-weight:700;font-size:13px;color:#7f1d1d">⛔ Herhangi açık borç varsa engelle (en katı)</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Bayi 1 ₺ bile borçluysa sipariş veremez. Sadece açık hesap çalışan bayilerde önerilir.</div>
+        </div>
+    </label>
+
+    <div class="form-group">
+        <label class="form-label">Borç Engellemesi Mesajı</label>
+        <textarea name="debt_block_message" class="form-control" rows="2" placeholder="Boş bırakırsanız sistem otomatik mesaj üretir (borç tutarı + öneri)."><?= htmlspecialchars(setting('debt_block_message','')) ?></textarea>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Boş = otomatik dinamik mesaj. Doluysa: tüm engelleme türlerinde aynı özel mesaj gösterilir.</p>
     </div>
 
     <div class="form-actions"><button type="submit" class="btn btn-primary">💾 Kaydet</button></div>

@@ -276,9 +276,26 @@ if ($action === 'list') {
     $w = implode(' AND ', $where);
     $total    = dbVal("SELECT COUNT(*) FROM b2b_payments p WHERE $w", $params);
     $payments = dbRows(
-        "SELECT p.*, d.company_name FROM b2b_payments p JOIN b2b_dealers d ON d.id=p.dealer_id WHERE $w ORDER BY p.created_at DESC LIMIT $perPage OFFSET $offset",
+        "SELECT p.*, d.company_name, o.order_no, o.grand_total AS order_total
+         FROM b2b_payments p
+         JOIN b2b_dealers d ON d.id=p.dealer_id
+         LEFT JOIN b2b_orders o ON o.id=p.order_id
+         WHERE $w
+         ORDER BY p.created_at DESC LIMIT $perPage OFFSET $offset",
         $params
     );
+    // Duplicate tespiti: aynı bayi + tutar + status (bekliyor) + son 7 gün
+    $dupKeys = [];
+    foreach ($payments as $p) {
+        if (($p['status'] ?? '') !== 'bekliyor') continue;
+        $k = $p['dealer_id'] . '|' . round((float)$p['amount'], 2) . '|' . ($p['order_id'] ?: 'noord');
+        $dupKeys[$k] = ($dupKeys[$k] ?? 0) + 1;
+    }
+    $dupFlags = [];
+    foreach ($payments as $p) {
+        $k = $p['dealer_id'] . '|' . round((float)$p['amount'], 2) . '|' . ($p['order_id'] ?: 'noord');
+        $dupFlags[$p['id']] = ($dupKeys[$k] ?? 0) > 1;
+    }
     $pager = pagination($total, $perPage, $page, "?page=payments&status=$status&dealer_id=$dealerId&p=");
     $pendingSum = dbVal("SELECT COALESCE(SUM(amount),0) FROM b2b_payments WHERE status='bekliyor'", []);
     $dealers    = dbRows("SELECT id, company_name FROM b2b_dealers WHERE is_active=1 ORDER BY company_name");
@@ -341,12 +358,27 @@ $_tabs = ['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','reddedildi'=>'Reddedi
 
 <div class="card">
 <table class="table">
-    <thead><tr><th>Tarih</th><th>Bayi</th><th>Tutar</th><th>Yöntem</th><th>Dekont</th><th>Durum</th><th>İşlem</th></tr></thead>
+    <thead><tr><th>Tarih</th><th>Bayi</th><th>Sipariş</th><th>Tutar</th><th>Yöntem</th><th>Dekont</th><th>Durum</th><th>İşlem</th></tr></thead>
     <tbody>
-    <?php foreach ($payments as $p): ?>
-    <tr>
+    <?php foreach ($payments as $p):
+        $isDup = !empty($dupFlags[$p['id']]);
+    ?>
+    <tr style="<?= $isDup ? 'background:#fef3c7' : '' ?>">
         <td><?= fmtDate($p['created_at']) ?></td>
         <td><a href="?page=dealers&action=detail&id=<?= $p['dealer_id'] ?>"><?= h($p['company_name']) ?></a></td>
+        <td>
+            <?php if (!empty($p['order_no'])): ?>
+                <a href="?page=orders&id=<?= (int)$p['order_id'] ?>&action=detail" style="font-family:monospace;font-size:12px"><?= h($p['order_no']) ?></a>
+                <?php if (!empty($p['order_total']) && abs((float)$p['order_total'] - (float)$p['amount']) > 0.01): ?>
+                    <div style="font-size:10px;color:var(--text-muted)">Sipariş toplamı: <?= money($p['order_total']) ?></div>
+                <?php endif; ?>
+            <?php else: ?>
+                <span class="text-muted text-sm">Sipariş yok</span>
+            <?php endif; ?>
+            <?php if ($isDup): ?>
+                <div style="margin-top:3px"><span class="badge" style="background:#fcd34d;color:#78350f;font-size:9px;font-weight:700">⚠️ ŞÜPHE: DUPLICATE</span></div>
+            <?php endif; ?>
+        </td>
         <td class="font-medium text-success"><?= money($p['amount']) ?></td>
         <td><?= h(paymentMethodLabel($p["type"] ?? "")) ?></td>
         <td>
@@ -382,11 +414,11 @@ $_tabs = ['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','reddedildi'=>'Reddedi
     </tr>
     <?php if ($p['dealer_note']): ?>
     <tr class="row-sub">
-        <td colspan="7" class="text-sm text-muted pl-6">Not: <?= h($p['dealer_note']) ?> <?= $p['admin_note'] ? '| Red: '.h($p['admin_note']) : '' ?></td>
+        <td colspan="8" class="text-sm text-muted pl-6">Not: <?= h($p['dealer_note']) ?> <?= $p['admin_note'] ? '| Red: '.h($p['admin_note']) : '' ?></td>
     </tr>
     <?php endif; ?>
     <?php endforeach; ?>
-    <?php if (empty($payments)): ?><tr><td colspan="7" class="text-center text-muted py-8">Kayıt yok.</td></tr><?php endif; ?>
+    <?php if (empty($payments)): ?><tr><td colspan="8" class="text-center text-muted py-8">Kayıt yok.</td></tr><?php endif; ?>
     </tbody>
 </table>
 </div>
