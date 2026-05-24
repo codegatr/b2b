@@ -646,3 +646,60 @@ Teşekkür ederim,
   </div>
   <?php endif; ?>
 </div>
+
+<!-- ─── Paraşüt API V4 Kapsam ─── -->
+<details style="margin-top:20px;background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden">
+  <summary style="cursor:pointer;padding:14px 18px;background:#f8fafc;font-weight:700;font-size:14px;display:flex;align-items:center;gap:10px">
+    <span style="font-size:18px">🔌</span>
+    Paraşüt API V4 Kapsam — Entegrasyon Durumu
+    <span style="margin-left:auto;font-size:12px;color:var(--text-muted);font-weight:400">Hangi endpoint'ler aktif</span>
+  </summary>
+  <div style="padding:16px 18px">
+    <p style="font-size:12px;color:var(--text-muted);margin:0 0 14px">
+      Aşağıda Paraşüt API V4'ün tüm temel endpoint'leri ve B2B sistemindeki entegrasyon durumu listelenmiştir.
+    </p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">
+      <?php
+      $apiCoverage = [
+          ['name'=>'Cariler (contacts)',          'method'=>'listAllContacts',           'desc'=>'Müşteri/tedarikçi listesi',      'status'=>'active'],
+          ['name'=>'Ürünler (products)',           'method'=>'listAllProducts',           'desc'=>'Stok kayıtları',                  'status'=>'active'],
+          ['name'=>'Satış Faturaları (sales_invoices)','method'=>'syncInvoice',           'desc'=>'B2B sipariş → fatura',            'status'=>'active'],
+          ['name'=>'E-Arşiv (e_archives)',         'method'=>'createEArchive',            'desc'=>'B2C tüketici faturası',          'status'=>'active'],
+          ['name'=>'E-Fatura (e_invoices)',        'method'=>'createEInvoice',            'desc'=>'B2B kurumsal fatura',            'status'=>'active'],
+          ['name'=>'E-Fatura Kayıtlı Kontrol',     'method'=>'isEInvoiceUser',            'desc'=>'VKN e-fatura mükellefi mi?',      'status'=>'active'],
+          ['name'=>'Ödemeler (payments)',          'method'=>'createPayment',             'desc'=>'Banka tahsilatı kaydı',          'status'=>'active'],
+          ['name'=>'Cari Bakiye',                  'method'=>'getContactBalance',         'desc'=>'Bayi açık bakiye sorgu',         'status'=>'active'],
+          ['name'=>'Banka/Kasa Hesapları',         'method'=>'listAccounts',              'desc'=>'Ödeme yapılacak hesap seçimi',  'status'=>'active'],
+          ['name'=>'Manuel Borç/Alacak',           'method'=>'debit/creditContact',       'desc'=>'Cari hareket girişi',            'status'=>'active'],
+          ['name'=>'Kategoriler (item_categories)','method'=>'listCategories',            'desc'=>'Ürün/cari kategorileri',         'status'=>'new'],
+          ['name'=>'Etiketler (tags)',             'method'=>'listTags',                  'desc'=>'Renk/etiket yönetimi',           'status'=>'new'],
+          ['name'=>'Satış Teklifleri (sales_offers)','method'=>'listSalesOffers',         'desc'=>'Teklif → siparişe dönüşüm',     'status'=>'new'],
+          ['name'=>'İrsaliyeler (shipment_documents)','method'=>'create/listShipmentDocuments','desc'=>'Sipariş sevkiyat irsaliyesi','status'=>'new'],
+          ['name'=>'Stok Seviyesi (inventory)',    'method'=>'getProductInventory',       'desc'=>'Paraşüt → B2B stok senkron',     'status'=>'new'],
+          ['name'=>'Async İş Takibi (trackable_jobs)','method'=>'getTrackableJob, waitForJob','desc'=>'E-belge oluşturma durum',     'status'=>'new'],
+          ['name'=>'Webhook (real-time)',          'method'=>'list/create/deleteWebhook', 'desc'=>'Paraşüt → B2B canlı event',      'status'=>'new'],
+          ['name'=>'Cari Arşivleme',               'method'=>'archive/unarchiveContact',  'desc'=>'Silmek yerine pasif yap',        'status'=>'new'],
+      ];
+      foreach ($apiCoverage as $a):
+          $statusInfo = match($a['status']) {
+              'active' => ['bg'=>'#f0fdf4','border'=>'#86efac','color'=>'#15803d','icon'=>'✓','label'=>'AKTİF'],
+              'new'    => ['bg'=>'#eff6ff','border'=>'#93c5fd','color'=>'#1d4ed8','icon'=>'✨','label'=>'YENİ'],
+              default  => ['bg'=>'#fef3c7','border'=>'#fcd34d','color'=>'#92400e','icon'=>'?','label'=>'PASİF'],
+          };
+      ?>
+      <div style="background:<?= $statusInfo['bg'] ?>;border:1px solid <?= $statusInfo['border'] ?>;border-radius:8px;padding:10px 12px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <span style="background:<?= $statusInfo['color'] ?>;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px"><?= $statusInfo['icon'] ?> <?= $statusInfo['label'] ?></span>
+        </div>
+        <div style="font-weight:700;font-size:12px;color:#111"><?= h($a['name']) ?></div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:2px"><?= h($a['desc']) ?></div>
+        <code style="font-size:10px;color:<?= $statusInfo['color'] ?>;display:block;margin-top:4px;background:#fff;padding:2px 6px;border-radius:3px"><?= h($a['method']) ?></code>
+      </div>
+      <?php endforeach; ?>
+    </div>
+
+    <div style="margin-top:16px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:10px 14px;font-size:12px;color:#075985">
+      <strong>📚 Doküman:</strong> <a href="https://apidocs.parasut.com/" target="_blank" style="color:#075985;text-decoration:underline">apidocs.parasut.com</a> — Paraşüt API V4 resmi dokümantasyonu
+    </div>
+  </div>
+</details>

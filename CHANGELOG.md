@@ -7,6 +7,27 @@ Format: `## v[X.Y.Z] — Açıklama (YYYY-MM-DD)`
 
 ---
 
+## v1.1.66 — Paraşüt API V4 Tam Kapsam (2026-05-24)
+
+### 📦 Paraşüt — 11 yeni metod
+- `listCategories(type)` — ürün/cari kategorileri (item_categories)
+- `listTags()` — etiket yönetimi
+- `listSalesOffers()` — satış teklifleri (teklif → sipariş dönüşüm için temel)
+- `listShipmentDocuments()` — irsaliye listesi
+- `createShipmentDocument()` — sipariş için irsaliye oluştur
+- `getProductInventory()` — Paraşüt stok seviyesi (B2B senkronu için)
+- `getTrackableJob()` + `waitForJob()` — async iş takibi (e-belge oluşturma vb.)
+- `listWebhooks()` + `createWebhook()` + `deleteWebhook()` — Paraşüt → B2B canlı event
+- `isEInvoiceUser(vkn)` — VKN e-fatura mükellefi mi (e-arşiv vs e-fatura kararı için)
+- `archiveContact()` + `unarchiveContact()` — cari pasifleştirme
+
+### ✨ Yeni
+- Paraşüt admin sayfasında **"Paraşüt API V4 Kapsam"** detaylı panel
+- 18 endpoint için durum kartları (AKTİF / YENİ) + her birinin metod adı
+- apidocs.parasut.com linkine yönlendirme
+
+---
+
 ## v1.1.65 — Açık Bakiye Kart Ödeme + CHANGELOG (2026-05-24)
 
 ### ✨ Yeni

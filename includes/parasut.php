@@ -989,6 +989,288 @@ class Parasut {
             return null;
         }
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // V4 API GENİŞLETMELER (categories, shipment_documents, sales_offers,
+    // inventory_levels, trackable_jobs, webhooks, tags, e_invoice_inboxes)
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * Paraşüt'teki kategorileri çek. Ürün/cari kategorileri.
+     * @param string $type 'Product' | 'Contact' | 'SalesInvoice' | 'PurchaseBill' | '' (hepsi)
+     */
+    public function listCategories(string $type = ''): array {
+        if (!$this->isEnabled()) return [];
+        $url = $this->endpoint('item_categories') . '?page[size]=25&sort=name';
+        if ($type !== '') $url .= '&filter[category_type]=' . urlencode($type);
+        $all = [];
+        for ($p = 1; $p <= 10; $p++) {
+            $r = $this->http('GET', $url . '&page[number]=' . $p);
+            $data = $r['data'] ?? [];
+            if (empty($data)) break;
+            $all = array_merge($all, $data);
+            if (count($data) < 25) break;
+        }
+        return $all;
+    }
+
+    /**
+     * Etiket (tag) listesini çek.
+     */
+    public function listTags(): array {
+        if (!$this->isEnabled()) return [];
+        $all = [];
+        for ($p = 1; $p <= 10; $p++) {
+            $r = $this->http('GET', $this->endpoint('tags') . '?page[size]=25&page[number]=' . $p);
+            $data = $r['data'] ?? [];
+            if (empty($data)) break;
+            $all = array_merge($all, $data);
+            if (count($data) < 25) break;
+        }
+        return $all;
+    }
+
+    /**
+     * Satış teklifleri (sales_offers) — taslak/teklif yönetimi.
+     */
+    public function listSalesOffers(int $page = 1, int $size = 25, array $filter = []): array {
+        if (!$this->isEnabled()) return ['data'=>[], 'meta'=>[]];
+        $size = max(1, min(25, $size));
+        $url  = $this->endpoint('sales_offers') . '?page[number]=' . $page . '&page[size]=' . $size;
+        foreach ($filter as $k => $v) {
+            if ($v !== '' && $v !== null) $url .= '&filter[' . urlencode($k) . ']=' . urlencode((string)$v);
+        }
+        $r = $this->http('GET', $url);
+        return ['data' => $r['data'] ?? [], 'meta' => $r['meta'] ?? []];
+    }
+
+    /**
+     * İrsaliye (shipment_documents) listele.
+     * Sipariş onaylandığında otomatik irsaliye oluşturma için temel.
+     */
+    public function listShipmentDocuments(int $page = 1, int $size = 25, array $filter = []): array {
+        if (!$this->isEnabled()) return ['data'=>[], 'meta'=>[]];
+        $size = max(1, min(25, $size));
+        $url  = $this->endpoint('shipment_documents') . '?page[number]=' . $page . '&page[size]=' . $size;
+        foreach ($filter as $k => $v) {
+            if ($v !== '' && $v !== null) $url .= '&filter[' . urlencode($k) . ']=' . urlencode((string)$v);
+        }
+        $r = $this->http('GET', $url);
+        return ['data' => $r['data'] ?? [], 'meta' => $r['meta'] ?? []];
+    }
+
+    /**
+     * Yeni irsaliye oluştur (basit yapı — bir sipariş için).
+     *
+     * @param int    $contactId       Paraşüt cari ID
+     * @param array  $items           [['product_id'=>X, 'quantity'=>Y, 'unit_price'=>Z, 'vat_rate'=>20], ...]
+     * @param string $issueDate       'YYYY-MM-DD'
+     * @param string $description     İrsaliye açıklaması
+     * @return ?string Oluşan irsaliye ID
+     */
+    public function createShipmentDocument(int $contactId, array $items, string $issueDate = '', string $description = ''): ?string {
+        if (!$this->isEnabled()) return null;
+        if ($issueDate === '') $issueDate = date('Y-m-d');
+
+        $details = [];
+        foreach ($items as $i => $it) {
+            $details[] = [
+                'type'       => 'shipment_document_details',
+                'attributes' => [
+                    'quantity'   => (float)($it['quantity'] ?? 1),
+                    'unit_price' => (float)($it['unit_price'] ?? 0),
+                    'vat_rate'   => (float)($it['vat_rate'] ?? 20),
+                ],
+                'relationships' => [
+                    'product' => ['data' => ['id'=>(string)$it['product_id'], 'type'=>'products']],
+                ],
+            ];
+        }
+
+        $body = [
+            'data' => [
+                'type' => 'shipment_documents',
+                'attributes' => [
+                    'issue_date'  => $issueDate,
+                    'description' => $description,
+                ],
+                'relationships' => [
+                    'contact' => ['data' => ['id'=>(string)$contactId, 'type'=>'contacts']],
+                    'details' => ['data' => $details],
+                ],
+            ],
+        ];
+
+        try {
+            $r = $this->http('POST', $this->endpoint('shipment_documents'), $body);
+            return $r['data']['id'] ?? null;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Stok envanter seviyesi (inventory_levels) bir ürün için.
+     * Paraşüt'teki gerçek stok miktarını B2B'ye senkronlamak için.
+     *
+     * @return ?float Mevcut stok miktarı (Paraşüt tarafında)
+     */
+    public function getProductInventory(string $productId): ?float {
+        if (!$this->isEnabled()) return null;
+        try {
+            $r = $this->http('GET', $this->endpoint("products/{$productId}") . '?include=inventory_levels');
+            $included = $r['included'] ?? [];
+            $total = 0;
+            $found = false;
+            foreach ($included as $inc) {
+                if (($inc['type'] ?? '') === 'inventory_levels') {
+                    $total += (float)($inc['attributes']['total_quantity'] ?? 0);
+                    $found = true;
+                }
+            }
+            return $found ? $total : null;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Trackable job (asenkron iş) durumu sorgula.
+     * E-fatura/E-arşiv oluşturma sonrası iş kuyruğa girer, status bu metodla takip edilir.
+     *
+     * @return array{status: string, errors: array}
+     */
+    public function getTrackableJob(string $jobId): array {
+        if (!$this->isEnabled()) return ['status' => 'unknown', 'errors' => []];
+        try {
+            $r = $this->http('GET', $this->endpoint("trackable_jobs/{$jobId}"));
+            $a = $r['data']['attributes'] ?? [];
+            return [
+                'status' => $a['status'] ?? 'unknown',
+                'errors' => $a['errors'] ?? [],
+            ];
+        } catch (\Throwable $e) {
+            return ['status' => 'error', 'errors' => [$e->getMessage()]];
+        }
+    }
+
+    /**
+     * Bekleyen async işin tamamlanmasını bekle (polling, max 30 saniye).
+     */
+    public function waitForJob(string $jobId, int $maxSeconds = 30): array {
+        $deadline = time() + $maxSeconds;
+        $result = ['status' => 'pending', 'errors' => []];
+        while (time() < $deadline) {
+            $result = $this->getTrackableJob($jobId);
+            if (in_array($result['status'], ['done', 'completed', 'failed', 'error'], true)) break;
+            sleep(1);
+        }
+        return $result;
+    }
+
+    /**
+     * Webhook listesi - aktif olarak kayıtlı webhook'ları döner.
+     */
+    public function listWebhooks(): array {
+        if (!$this->isEnabled()) return [];
+        try {
+            $r = $this->http('GET', $this->endpoint('webhooks'));
+            return $r['data'] ?? [];
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    /**
+     * Yeni webhook oluştur.
+     *
+     * @param string $url    Bizim endpoint (örn https://b2b.site.com/parasut-webhook)
+     * @param array  $events ['Contact.create', 'Product.update', 'SalesInvoice.archive', ...]
+     */
+    public function createWebhook(string $url, array $events): ?string {
+        if (!$this->isEnabled()) return null;
+        $body = [
+            'data' => [
+                'type' => 'webhooks',
+                'attributes' => [
+                    'url'           => $url,
+                    'event_filters' => $events,
+                ],
+            ],
+        ];
+        try {
+            $r = $this->http('POST', $this->endpoint('webhooks'), $body);
+            return $r['data']['id'] ?? null;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /** Webhook sil */
+    public function deleteWebhook(string $webhookId): bool {
+        if (!$this->isEnabled()) return false;
+        try {
+            $this->http('DELETE', $this->endpoint("webhooks/{$webhookId}"));
+            return true;
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    /**
+     * E-Fatura kayıtlı kullanıcı kontrolü (e_invoice_inboxes).
+     * Bir VKN/TCKN'nin e-fatura mükellefi olup olmadığını sorgular.
+     *
+     * @return bool true = e-fatura mükellefi, false = e-arşiv'a düşmeli
+     */
+    public function isEInvoiceUser(string $vkn): bool {
+        if (!$this->isEnabled()) return false;
+        try {
+            $r = $this->http('GET', $this->endpoint("e_invoice_inboxes") . '?filter[vkn]=' . urlencode($vkn));
+            $data = $r['data'] ?? [];
+            return !empty($data);
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Cari arşivleme (silmek yerine pasif yap). Paraşüt UX uyumu için.
+     */
+    public function archiveContact(string $contactId): bool {
+        if (!$this->isEnabled()) return false;
+        $body = [
+            'data' => [
+                'id'         => $contactId,
+                'type'       => 'contacts',
+                'attributes' => ['archived' => true],
+            ],
+        ];
+        try {
+            $this->http('PUT', $this->endpoint("contacts/{$contactId}"), $body);
+            return true;
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    /** Cari arşivden çıkar (aktifleştir) */
+    public function unarchiveContact(string $contactId): bool {
+        if (!$this->isEnabled()) return false;
+        $body = [
+            'data' => [
+                'id'         => $contactId,
+                'type'       => 'contacts',
+                'attributes' => ['archived' => false],
+            ],
+        ];
+        try {
+            $this->http('PUT', $this->endpoint("contacts/{$contactId}"), $body);
+            return true;
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
 }
 
 /** Global paraşüt instance */
