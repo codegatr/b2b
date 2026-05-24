@@ -7,6 +7,18 @@ Format: `## v[X.Y.Z] — Açıklama (YYYY-MM-DD)`
 
 ---
 
+## v1.1.67 — Bayi Dashboard Borç Bildirimi (2026-05-24)
+
+### ✨ Yeni
+- Bayi dashboard'da açık bakiye varsa **prominent borç bildirimi kartı**
+- Tediye makbuzları (alacak kayıtları) zaten hesaba dahildi — gerçek kalan borç gösterilir
+- 2 seviye: 🚨 vadesi geçmiş (kırmızı) · 💰 açık bakiye (sarı/altın)
+- Vadesi geçmiş tutar ayrı bir gösterge olarak görünür
+- 3 buton: **💳 Kart ile Hemen Öde** (Rubikpara 3D Secure) · 🏦 Havale ile Öde · Cari hesap detayları
+- Açık bakiye tutarı dinamik olarak Rubikpara'ya iletilir (?balance=1&amount=X)
+
+---
+
 ## v1.1.66 — Paraşüt API V4 Tam Kapsam (2026-05-24)
 
 ### 📦 Paraşüt — 11 yeni metod

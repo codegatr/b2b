@@ -120,6 +120,67 @@ if (empty($announcements)) {
 <?php endif; ?>
 <?php endif; ?>
 
+<!-- ─── Açık Bakiye / Borç Bildirimi ─── -->
+<?php
+// Tediye makbuzları (alacak/ödeme kayıtları) zaten formüle dahil:
+// SUM(CASE WHEN borc THEN +amount ELSE -amount END) is_closed=0
+// Yani: kalan borç = açık borç - ödenmiş tediye
+$cardEnabled = setting('rubikpara_enabled') === '1';
+if ($openBalance > 0):
+    // Durum belirleme
+    if ($overdueAmount > 0) {
+        $severity = 'danger'; // Kırmızı: vadesi geçmiş
+        $bg = '#fef2f2'; $border = '#fca5a5'; $accent = '#dc2626'; $titleColor = '#b91c1c'; $textColor = '#7f1d1d';
+        $icon = '🚨'; $title = 'Vadesi Geçmiş Borcunuz Var';
+        $sub = number_format($overdueAmount, 2, ',', '.') . ' ₺ vadesi geçti — lütfen en kısa sürede ödeme yapın';
+    } else {
+        $severity = 'warning'; // Sarı: borç var ama vadesi geçmemiş
+        $bg = '#fffbeb'; $border = '#fcd34d'; $accent = '#d97706'; $titleColor = '#92400e'; $textColor = '#78350f';
+        $icon = '💰'; $title = 'Açık Bakiye Bildirimi';
+        $sub = 'Cari hesabınızda ödenmemiş borç bulunmaktadır';
+    }
+?>
+<div style="background:linear-gradient(135deg,<?= $bg ?>,#ffffff);border:1px solid <?= $border ?>;border-left:5px solid <?= $accent ?>;border-radius:12px;padding:18px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+    <div style="font-size:36px"><?= $icon ?></div>
+    <div style="flex:1;min-width:240px">
+      <div style="font-weight:700;font-size:15px;color:<?= $titleColor ?>"><?= h($title) ?></div>
+      <div style="font-size:12px;color:<?= $textColor ?>;margin-top:2px;line-height:1.5"><?= h($sub) ?></div>
+      <div style="margin-top:10px;display:flex;gap:18px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:10px;color:<?= $textColor ?>;text-transform:uppercase;letter-spacing:.5px;font-weight:600">Toplam Açık Bakiye</div>
+          <div style="font-size:22px;font-weight:800;color:<?= $accent ?>;font-family:system-ui;letter-spacing:-.5px"><?= money($openBalance) ?></div>
+        </div>
+        <?php if ($overdueAmount > 0): ?>
+        <div>
+          <div style="font-size:10px;color:<?= $textColor ?>;text-transform:uppercase;letter-spacing:.5px;font-weight:600">Vadesi Geçmiş</div>
+          <div style="font-size:22px;font-weight:800;color:#dc2626;font-family:system-ui;letter-spacing:-.5px"><?= money($overdueAmount) ?></div>
+        </div>
+        <?php endif; ?>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;min-width:200px">
+      <?php if ($cardEnabled): ?>
+      <a href="?page=payment-card&balance=1&amount=<?= number_format((float)$openBalance, 2, '.', '') ?>"
+         class="btn"
+         style="background:#16a34a;color:#fff;border:none;padding:12px 20px;font-weight:700;font-size:13px;border-radius:10px;text-align:center;white-space:nowrap;box-shadow:0 2px 8px rgba(22,163,74,.3)">
+        💳 Kart ile Hemen Öde
+      </a>
+      <?php endif; ?>
+      <a href="?page=payments&action=new"
+         class="btn btn-secondary"
+         style="padding:10px 20px;font-weight:600;font-size:12px;border-radius:10px;text-align:center;white-space:nowrap">
+        🏦 Havale ile Öde
+      </a>
+      <a href="?page=account"
+         style="font-size:11px;color:<?= $textColor ?>;text-decoration:underline;text-align:center;font-weight:500">
+        Cari hesap detayları →
+      </a>
+    </div>
+  </div>
+</div>
+<?php endif; ?>
+
 <!-- ════════════════════ KAMPANYALI ÜRÜNLER — Düz grid ════════════════════ -->
 <?php if (!empty($featuredProducts)): ?>
 <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px 18px 16px;margin-bottom:20px">
