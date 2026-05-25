@@ -7,6 +7,26 @@ Format: `## v[X.Y.Z] — Açıklama (YYYY-MM-DD)`
 
 ---
 
+## v1.1.72 — Paraşüt Ürün Tanı Paneli (2026-05-24)
+
+### Sorun
+"Bazı stoklar gelmiyor sanki" — eksik tespiti için kanıt aracı yok.
+
+### Yeni
+- **🩺 Tanı butonu** — Paraşüt ürün çekiminin sayfa sayfa detayını gösterir
+- Her sayfada kaç kayıt geldi, hata var mı görülür
+- Paraşüt'ün söylediği `meta.total_count` vs bizim çektiğimiz toplam karşılaştırması
+- "X ürün eksik kalıyor!" net uyarı
+
+### Düzeltme
+- `listAllProductsWithMeta` artık `page_log` döner (her sayfanın detayı)
+- `listProducts` meta'sına `_url`, `_http`, `_returned` dahil
+
+### Kullanım
+Paraşüt → Eşleme → Ürünler → 🩺 Tanı → sonucu paylaş
+
+---
+
 ## v1.1.71 — Paraşüt Server-Side Arama + maxPages 80 (2026-05-24)
 
 ### Sorun (Image kanıtı)

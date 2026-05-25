@@ -1030,6 +1030,9 @@ $apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
         <a href="?page=parasut-mapping&tab=products<?= $parasutMeta['show_all'] ? '&show_all=1' : '' ?>"
            class="btn btn-secondary btn-sm" style="height:36px">✕ Aramayı Temizle</a>
         <?php endif; ?>
+        <a href="?page=parasut-mapping&tab=products&diag_products=1" class="btn btn-sm" style="background:#7c3aed;color:#fff;border:none;height:36px;padding:0 16px;font-size:12px" title="Sayfa sayfa çekim detayını gör">
+          🩺 Tanı
+        </a>
       </form>
       <?php if ($parasutMeta['search_query'] !== ''): ?>
       <div style="margin-top:8px;font-size:11px;color:#1e40af;background:#eff6ff;border-left:3px solid #1e40af;padding:6px 10px;border-radius:4px">
@@ -1038,6 +1041,106 @@ $apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
       </div>
       <?php endif; ?>
     </div>
+
+    <?php
+    // ─── DETAYLI TANI PANELİ ───
+    if (isset($_GET['diag_products'])) {
+        $diagActive   = parasut()->listAllProductsWithMeta(80);
+        $diagArchived = parasut()->listAllProductsWithMeta(80, ['archived' => 'true']);
+    ?>
+    <div style="background:#faf5ff;border-top:3px solid #7c3aed;border-bottom:3px solid #7c3aed;padding:18px 20px;font-size:12px">
+      <h3 style="margin:0 0 12px;font-size:14px;color:#5b21b6">🩺 Paraşüt Ürün Çekimi — Detaylı Tanı</h3>
+
+      <!-- AKTİF ÇEKİM -->
+      <div style="background:#fff;border-radius:8px;padding:12px;margin-bottom:10px">
+        <div style="font-weight:700;color:#15803d;margin-bottom:8px">✅ Aktif Ürünler</div>
+        <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:11px;margin-bottom:8px">
+          <div><strong>Paraşüt diyor:</strong> <?= (int)$diagActive['total_count'] ?> aktif ürün var</div>
+          <div><strong>Biz çektik:</strong> <?= (int)$diagActive['fetched'] ?> ürün</div>
+          <div><strong>Toplam sayfa:</strong> <?= (int)$diagActive['total_pages'] ?></div>
+          <?php
+          $fark = (int)$diagActive['total_count'] - (int)$diagActive['fetched'];
+          ?>
+          <?php if ($fark > 0): ?>
+          <div style="color:#dc2626;font-weight:700">⚠️ <?= $fark ?> ürün eksik!</div>
+          <?php else: ?>
+          <div style="color:#15803d;font-weight:700">✓ Tam çekildi</div>
+          <?php endif; ?>
+        </div>
+        <details>
+          <summary style="cursor:pointer;font-size:11px;color:#6b21a8">Sayfa sayfa detay göster</summary>
+          <table style="width:100%;margin-top:8px;font-size:10px;font-family:monospace">
+            <thead><tr style="background:#f3f4f6"><th style="text-align:left;padding:4px">Sayfa</th><th style="text-align:left;padding:4px">Gelen kayıt</th><th style="text-align:left;padding:4px">Hata</th></tr></thead>
+            <tbody>
+              <?php foreach (($diagActive['page_log'] ?? []) as $pl): ?>
+              <tr style="border-bottom:1px solid #f3f4f6">
+                <td style="padding:4px">Sayfa #<?= $pl['page'] ?></td>
+                <td style="padding:4px"><strong><?= $pl['count'] ?></strong> kayıt</td>
+                <td style="padding:4px;color:#dc2626"><?= $pl['err'] ? h($pl['err']) : '—' ?></td>
+              </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </details>
+      </div>
+
+      <!-- ARŞİVLİ ÇEKİM -->
+      <div style="background:#fff;border-radius:8px;padding:12px;margin-bottom:10px">
+        <div style="font-weight:700;color:#6b7280;margin-bottom:8px">📁 Arşivli Ürünler</div>
+        <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:11px;margin-bottom:8px">
+          <div><strong>Paraşüt diyor:</strong> <?= (int)$diagArchived['total_count'] ?> arşivli ürün var</div>
+          <div><strong>Biz çektik:</strong> <?= (int)$diagArchived['fetched'] ?> ürün</div>
+          <?php
+          $fark2 = (int)$diagArchived['total_count'] - (int)$diagArchived['fetched'];
+          ?>
+          <?php if ($fark2 > 0): ?>
+          <div style="color:#dc2626;font-weight:700">⚠️ <?= $fark2 ?> ürün eksik!</div>
+          <?php else: ?>
+          <div style="color:#15803d;font-weight:700">✓ Tam çekildi</div>
+          <?php endif; ?>
+        </div>
+        <details>
+          <summary style="cursor:pointer;font-size:11px;color:#6b21a8">Sayfa sayfa detay göster</summary>
+          <table style="width:100%;margin-top:8px;font-size:10px;font-family:monospace">
+            <thead><tr style="background:#f3f4f6"><th style="text-align:left;padding:4px">Sayfa</th><th style="text-align:left;padding:4px">Gelen kayıt</th><th style="text-align:left;padding:4px">Hata</th></tr></thead>
+            <tbody>
+              <?php foreach (($diagArchived['page_log'] ?? []) as $pl): ?>
+              <tr style="border-bottom:1px solid #f3f4f6">
+                <td style="padding:4px">Sayfa #<?= $pl['page'] ?></td>
+                <td style="padding:4px"><strong><?= $pl['count'] ?></strong> kayıt</td>
+                <td style="padding:4px;color:#dc2626"><?= $pl['err'] ? h($pl['err']) : '—' ?></td>
+              </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </details>
+      </div>
+
+      <!-- ÖZET -->
+      <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:12px;font-size:11px;color:#78350f">
+        <strong>💡 Yorum:</strong>
+        <?php
+        $totalApi = (int)$diagActive['total_count'] + (int)$diagArchived['total_count'];
+        $totalUs  = (int)$diagActive['fetched'] + (int)$diagArchived['fetched'];
+        ?>
+        <ul style="margin:6px 0 0 18px;padding:0">
+          <li>Paraşüt'ün söylediği <strong>TOPLAM</strong>: <?= $totalApi ?> ürün</li>
+          <li>Biz çekebildik: <strong><?= $totalUs ?></strong> ürün</li>
+          <?php if ($totalApi > $totalUs): ?>
+          <li style="color:#b91c1c"><strong>⚠️ <?= ($totalApi - $totalUs) ?> ürün eksik kalıyor!</strong>
+              Olası sebepler: pagination kesilmesi, draft/silinmiş ürünler, custom statü</li>
+          <?php else: ?>
+          <li style="color:#15803d"><strong>✓ Tüm ürünler çekildi.</strong>
+              Eğer hâlâ aradığın bir ürünü göremiyorsan, yukarıdan "Paraşüt'te direkt ara" kutusunu kullan.</li>
+          <?php endif; ?>
+        </ul>
+      </div>
+
+      <div style="margin-top:10px">
+        <a href="?page=parasut-mapping&tab=products" class="btn btn-sm btn-secondary" style="font-size:11px">← Tanı'yı Kapat</a>
+      </div>
+    </div>
+    <?php } ?>
 
     <div style="background:#eff6ff;border-bottom:1px solid #bfdbfe;padding:10px 16px;font-size:12px;color:#1e40af;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
       <div>

@@ -542,7 +542,6 @@ class Parasut {
         $size = max(1, min(25, $size));
         $url  = $this->endpoint('products') . '?page[number]=' . $page . '&page[size]=' . $size . '&include=category';
         foreach ($filter as $k => $v) {
-            // 'name' veya 'code' boş gönderilirse atla (Paraşüt 422 veriyor)
             if ($v !== '' && $v !== null) $url .= '&filter[' . urlencode($k) . ']=' . urlencode((string)$v);
         }
         if ($sort !== '') $url .= '&sort=' . urlencode($sort);
@@ -564,9 +563,15 @@ class Parasut {
         }
         unset($d);
 
+        // Meta'ya çağrı bilgisi de yansıt
+        $meta = $r['meta'] ?? [];
+        $meta['_url']      = $url;
+        $meta['_http']     = $r['__meta']['http_code'] ?? null;
+        $meta['_returned'] = count($data);
+
         return [
             'data' => $data,
-            'meta' => $r['meta'] ?? [],
+            'meta' => $meta,
             'err'  => empty($data) ? $this->getErrorDetail($r) : null,
         ];
     }
@@ -584,13 +589,21 @@ class Parasut {
     }
 
     /**
-     * Ürünler + metadata. SORT YOK (Paraşüt default sıralama).
+     * Ürünler + metadata + sayfa sayfa log (debug için).
      * maxPages 80 = 2000 kayıt destek.
      */
     public function listAllProductsWithMeta(int $maxPages = 80, array $filter = [], string $sort = ''): array {
         $all = []; $totalCount = 0; $totalPages = 0; $perPage = 25;
+        $pageLog = []; // sayfa sayfa tanı bilgisi
+
         for ($p = 1; $p <= $maxPages; $p++) {
             $res = $this->listProducts($p, 25, $filter, $sort);
+            $cnt = count($res['data'] ?? []);
+            $pageLog[] = [
+                'page'  => $p,
+                'count' => $cnt,
+                'err'   => $res['err'] ?? null,
+            ];
             if (empty($res['data'])) break;
             $all = array_merge($all, $res['data']);
             if ($p === 1 && !empty($res['meta'])) {
@@ -598,7 +611,7 @@ class Parasut {
                 $totalPages = (int)($res['meta']['total_pages'] ?? 0);
                 $perPage    = (int)($res['meta']['per_page']    ?? 25);
             }
-            if (count($res['data']) < 25) break;
+            if ($cnt < 25) break;
         }
         return [
             'data'        => $all,
@@ -606,6 +619,7 @@ class Parasut {
             'total_count' => $totalCount,
             'total_pages' => $totalPages,
             'per_page'    => $perPage,
+            'page_log'    => $pageLog,
         ];
     }
 
