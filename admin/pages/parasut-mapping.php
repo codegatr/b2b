@@ -414,22 +414,51 @@ if ($tab === 'dealers') {
     // products tab
     $b2bProducts = dbRows("SELECT id, name, sku, base_price, vat_rate, parasut_product_id FROM b2b_products WHERE is_active=1 ORDER BY name");
 
-    // Paraşüt'ten ürün listesi — varsayılan: sadece stok takipli ürünler
-    // ?show_all=1 ile muhasebe kalemleri (hesap planı kodları) dahil edilir
-    $showAll = isset($_GET['show_all']) && $_GET['show_all'] === '1';
-    $extraFilter = $showAll ? ['inventory_tracking' => 'all'] : [];
+    // Paraşüt'ten tüm ürünler — aktif + arşivli
+    $activeRes = parasut()->listAllProductsWithMeta(40);
+    $archivedRes = parasut()->listAllProductsWithMeta(40, ['archived' => 'true']);
+    $rawProducts = array_merge($activeRes['data'], $archivedRes['data']);
 
-    $activeRes = parasut()->listAllProductsWithMeta(40, $extraFilter);
-    $archivedFilter = array_merge($extraFilter, ['archived' => 'true']);
-    $archivedRes = parasut()->listAllProductsWithMeta(40, $archivedFilter);
-    $parasutProducts = array_merge($activeRes['data'], $archivedRes['data']);
+    // ?show_all=1 — muhasebe hesap kalemleri dahil
+    $showAll = isset($_GET['show_all']) && $_GET['show_all'] === '1';
+
+    /**
+     * Muhasebe kalemi tespit fonksiyonu
+     * Aşağıdaki gibi kayıtlar gizlenir (B2B ürünü değil, TDHP/e-defter):
+     *   01.3.01.0.004.762
+     *   02.6.06.0.042.169
+     *
+     * Mantık: ürün adı (veya kod) SADECE rakam ve nokta içeriyorsa muhasebe kalemi
+     */
+    $isAccountingItem = function($attrs) {
+        $name = trim($attrs['name'] ?? '');
+        $code = trim($attrs['code'] ?? '');
+        // Hem name hem code rakam+nokta formatında ise muhasebe kalemi
+        $namePattern = $name !== '' && preg_match('/^[\d.]+$/', $name);
+        $codePattern = $code !== '' && preg_match('/^[\d.]+$/', $code);
+        // Sadece name'i dene; code da boşsa name'e güven
+        if ($code === '') return $namePattern;
+        // Hem code hem name aynı tip kod formatında ise muhasebe
+        return $namePattern || $codePattern;
+    };
+
+    $parasutProducts = [];
+    $filteredCount = 0;
+    foreach ($rawProducts as $p) {
+        if (!$showAll && $isAccountingItem($p['attributes'] ?? [])) {
+            $filteredCount++;
+            continue;
+        }
+        $parasutProducts[] = $p;
+    }
 
     $parasutMeta = [
-        'active_total'   => $activeRes['total_count'],
-        'active_fetched' => $activeRes['fetched'],
-        'archived_total' => $archivedRes['total_count'],
-        'archived_fetched' => $archivedRes['fetched'],
-        'show_all'       => $showAll,
+        'active_total'    => $activeRes['total_count'],
+        'active_fetched'  => $activeRes['fetched'],
+        'archived_total'  => $archivedRes['total_count'],
+        'archived_fetched'=> $archivedRes['fetched'],
+        'show_all'        => $showAll,
+        'filtered_count'  => $filteredCount,
     ];
 
     // Hızlı lookup için ID→object map (string-key)
@@ -979,11 +1008,14 @@ $apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
         ⚠️ <strong>TÜM kayıtlar gösteriliyor</strong> — stok takipsiz muhasebe kalemleri (örn: <code>01.3.01.0.004.762</code>) dahil
       </div>
       <a href="?page=parasut-mapping&tab=products" class="btn btn-sm" style="background:#1e40af;color:#fff;border:none;font-size:11px">
-        📦 Sadece Stoklu Ürünleri Göster
+        📦 Sadece Gerçek Ürünleri Göster
       </a>
       <?php else: ?>
       <div>
-        📦 <strong>Sadece stok takipli ürünler</strong> gösteriliyor — muhasebe hesap kalemleri (kod formatlı kayıtlar) gizli
+        📦 <strong>Gerçek ürünler</strong> gösteriliyor
+        <?php if ($parasutMeta['filtered_count'] > 0): ?>
+        · <strong><?= (int)$parasutMeta['filtered_count'] ?></strong> muhasebe hesap kalemi (TDHP) gizlendi
+        <?php endif; ?>
       </div>
       <a href="?page=parasut-mapping&tab=products&show_all=1" class="btn btn-sm" style="background:#fff;color:#1e40af;border:1px solid #1e40af;font-size:11px">
         📋 Tüm Kayıtları Göster
