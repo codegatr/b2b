@@ -46,7 +46,26 @@ class Parasut {
             $items = dbRows("SELECT * FROM b2b_order_items WHERE order_id=?", [$orderId]);
             $dealer = dbRow("SELECT * FROM b2b_dealers WHERE id=?", [$order['dealer_id']]);
             if (!$dealer) return null;
-            return $this->createInvoice($order, $items, $dealer);
+
+            $res = $this->createInvoiceFull($order, $items, $dealer);
+            if (!$res || empty($res['id'])) return null;
+
+            // parasut_invoice_id güncelle (eski mantık)
+            dbExec("UPDATE b2b_orders SET parasut_invoice_id=?, parasut_synced_at=NOW() WHERE id=?",
+                [$res['id'], $orderId]);
+
+            // Fatura no varsa otomatik kaydet (manuel yoksa)
+            if (!empty($res['invoice_no'])) {
+                $existing = dbRow("SELECT invoice_no, invoice_no_source FROM b2b_orders WHERE id=?", [$orderId]);
+                // Sadece henüz invoice_no boşsa veya zaten parasut kaynaklıysa güncelle
+                if (empty($existing['invoice_no']) || $existing['invoice_no_source'] === 'parasut') {
+                    dbExec(
+                        "UPDATE b2b_orders SET invoice_no=?, invoice_no_source='parasut', invoice_no_updated_at=NOW(), invoice_no_updated_by=NULL WHERE id=?",
+                        [$res['invoice_no'], $orderId]
+                    );
+                }
+            }
+            return $res['id'];
         } catch (\Throwable $e) {
             error_log('Parasut::syncInvoice hatası: ' . $e->getMessage());
             return null;
@@ -265,7 +284,11 @@ class Parasut {
     // ──────────────────────────────────────────────────────────
 
     /** Sipariş onaylandığında satış faturası oluştur */
-    public function createInvoice(array $order, array $items, array $dealer): ?string {
+    /**
+     * Paraşüt'te SalesInvoice oluştur.
+     * @return array|null ['id'=>'12345', 'invoice_no'=>'SLS2026...'] veya null
+     */
+    public function createInvoiceFull(array $order, array $items, array $dealer): ?array {
         if (!$this->isEnabled()) return null;
 
         // Müşteri Paraşüt'te yoksa oluştur
@@ -316,7 +339,17 @@ class Parasut {
         ]]];
 
         $res = $this->http('POST', $this->endpoint('sales_invoices'), $body);
-        return $res['data']['id'] ?? null;
+        if (empty($res['data']['id'])) return null;
+        return [
+            'id'         => $res['data']['id'],
+            'invoice_no' => $res['data']['attributes']['invoice_no'] ?? null,
+        ];
+    }
+
+    /** Geriye uyumluluk — sadece ID döner */
+    public function createInvoice(array $order, array $items, array $dealer): ?string {
+        $r = $this->createInvoiceFull($order, $items, $dealer);
+        return $r['id'] ?? null;
     }
 
     // ──────────────────────────────────────────────────────────

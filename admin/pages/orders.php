@@ -26,6 +26,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrfCheck();
     $act = $_POST['form_action'] ?? '';
 
+    // ─── Fatura no manuel kaydetme ───
+    if ($act === 'set_invoice_no') {
+        $oid = intval($_POST['order_id'] ?? 0);
+        $invNo = trim($_POST['invoice_no'] ?? '');
+        if ($oid) {
+            if ($invNo === '') {
+                // Boş gönderildi → sil
+                dbExec("UPDATE b2b_orders SET invoice_no=NULL, invoice_no_source=NULL, invoice_no_updated_at=NULL, invoice_no_updated_by=NULL WHERE id=?", [$oid]);
+                $success = 'Fatura numarası silindi.';
+            } else {
+                // Doldur (manuel kaynaklı olarak işaretle)
+                dbExec(
+                    "UPDATE b2b_orders SET invoice_no=?, invoice_no_source='manual', invoice_no_updated_at=NOW(), invoice_no_updated_by=? WHERE id=?",
+                    [$invNo, adminId(), $oid]
+                );
+                auditLog('invoice_no_set', 'b2b_orders', $oid, ['invoice_no' => $invNo, 'source' => 'manual']);
+                $success = 'Fatura numarası kaydedildi: ' . $invNo;
+            }
+        }
+        // Liste sayfasına geri dön (URL'i koruyarak)
+        $back = '?page=orders';
+        if (!empty($_POST['return_q']))      $back .= '&q='      . urlencode($_POST['return_q']);
+        if (!empty($_POST['return_status'])) $back .= '&status=' . urlencode($_POST['return_status']);
+        $_SESSION['flash'] = ['type'=>'success', 'msg'=>$success];
+        redirect($back);
+    }
+
     // Teslim miktarlarını güncelle (her kalem için ayrı veya hepsi tek seferde)
     if ($act === 'update_delivered_qty') {
         $oid = intval($_POST['order_id'] ?? 0);
@@ -637,7 +664,7 @@ $completedNotArchived = (int)dbVal(
 <div class="card">
 <div class="table-wrap">
 <table class="table">
-  <thead><tr><th>Sipariş No</th><th>Bayi</th><th>Tarih</th><th style="text-align:right">Tutar</th><th style="min-width:170px">Durum</th><th>Ödeme</th><th></th></tr></thead>
+  <thead><tr><th>Sipariş No</th><th>Bayi</th><th>Tarih</th><th style="text-align:right">Tutar</th><th style="min-width:170px">Durum</th><th style="min-width:160px">Fatura No</th><th>Ödeme</th><th></th></tr></thead>
   <tbody>
   <?php
   // Durum hızlı geçiş için tüm status'ler ve label'ları
@@ -684,6 +711,45 @@ $completedNotArchived = (int)dbVal(
       <?php endif; ?>
     </td>
     <td>
+      <!-- Fatura No - inline edit -->
+      <?php
+        $invNo = trim($o['invoice_no'] ?? '');
+        $invSrc = $o['invoice_no_source'] ?? '';
+        $hasParasut = !empty($o['parasut_invoice_id']);
+      ?>
+      <?php if ($invNo !== ''): ?>
+        <!-- Fatura no DOLU -->
+        <div style="display:flex;align-items:center;gap:6px">
+          <span class="badge" style="background:<?= $invSrc==='parasut'?'#dcfce7':'#dbeafe' ?>;color:<?= $invSrc==='parasut'?'#15803d':'#1e40af' ?>;font-size:11px;font-weight:700;padding:3px 8px;border-radius:4px;font-family:monospace">
+            <?= $invSrc==='parasut'?'📄':'✏️' ?> <?= h($invNo) ?>
+          </span>
+          <button type="button" onclick="document.getElementById('invForm-<?= (int)$o['id'] ?>').style.display='flex'" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:11px" title="Düzenle">✎</button>
+        </div>
+      <?php else: ?>
+        <!-- Fatura no BOŞ -->
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:10px;color:var(--text-muted);font-style:italic">— Fatura yok —</span>
+          <button type="button" onclick="document.getElementById('invForm-<?= (int)$o['id'] ?>').style.display='flex'" style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:4px;cursor:pointer;color:#475569;font-size:10px;padding:2px 6px" title="Manuel ekle">+ Ekle</button>
+        </div>
+      <?php endif; ?>
+      <!-- Inline edit form -->
+      <form method="post" id="invForm-<?= (int)$o['id'] ?>" style="display:none;margin-top:6px;gap:4px;align-items:center" onsubmit="return true">
+        <?= csrfField() ?>
+        <input type="hidden" name="form_action" value="set_invoice_no">
+        <input type="hidden" name="order_id" value="<?= (int)$o['id'] ?>">
+        <input type="text" name="invoice_no" value="<?= h($invNo) ?>" placeholder="örn: SLS2026000123"
+               style="font-family:monospace;font-size:11px;padding:3px 6px;border:1px solid #cbd5e1;border-radius:4px;width:130px">
+        <button type="submit" style="background:#16a34a;color:#fff;border:none;border-radius:4px;font-size:10px;padding:3px 8px;cursor:pointer">✓</button>
+        <button type="button" onclick="this.form.style.display='none'" style="background:#e5e7eb;color:#475569;border:none;border-radius:4px;font-size:10px;padding:3px 6px;cursor:pointer">✕</button>
+      </form>
+      <?php if (!empty($o['invoice_no_updated_at'])): ?>
+      <div style="font-size:9px;color:var(--text-muted);margin-top:2px">
+        <?= date('d.m.Y H:i', strtotime($o['invoice_no_updated_at'])) ?>
+        <?= $invSrc==='parasut'?'· Paraşüt':'· Manuel' ?>
+      </div>
+      <?php endif; ?>
+    </td>
+    <td>
       <?php $ps = $o['payment_status'] ?? 'odenmedi';
       $pstyle = match($ps) { 'odendi'=>'success', 'kismi_odeme'=>'warning', default=>'neutral' };
       $plabel = match($ps) { 'odendi'=>'Ödendi', 'kismi_odeme'=>'Kısmen', default=>'Bekliyor' };
@@ -704,7 +770,7 @@ $completedNotArchived = (int)dbVal(
     </td>
   </tr>
   <?php endforeach; ?>
-  <?php if (empty($orders)): ?><tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-muted)">Sipariş bulunamadı.</td></tr><?php endif; ?>
+  <?php if (empty($orders)): ?><tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-muted)">Sipariş bulunamadı.</td></tr><?php endif; ?>
   </tbody>
 </table>
 </div>
@@ -1006,6 +1072,58 @@ $completedNotArchived = (int)dbVal(
     ];
     $stat = $statusLabels[$pStatus] ?? null;
   ?>
+  <!-- ─── Görünür Fatura Numarası Kartı ─── -->
+  <?php
+    $invNo = trim($order['invoice_no'] ?? '');
+    $invSrc = $order['invoice_no_source'] ?? '';
+    $invUpdAt = $order['invoice_no_updated_at'] ?? null;
+  ?>
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-header" style="background:linear-gradient(135deg,<?= $invNo!=='' ? '#f0fdf4,#dcfce7' : '#fef3c7,#fde68a' ?>)">
+      <h3 class="card-title" style="display:flex;align-items:center;gap:8px;color:<?= $invNo!=='' ? '#15803d' : '#92400e' ?>">
+        <span><?= $invNo!=='' ? '✓' : '📝' ?></span> Fatura Numarası
+      </h3>
+    </div>
+    <div class="card-body">
+      <?php if ($invNo !== ''): ?>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+          <div style="font-family:monospace;font-size:18px;font-weight:700;color:#15803d;background:#f0fdf4;padding:8px 14px;border:1px solid #86efac;border-radius:8px;letter-spacing:.5px">
+            <?= h($invNo) ?>
+          </div>
+          <span class="badge" style="background:<?= $invSrc==='parasut'?'#ddd6fe':'#dbeafe' ?>;color:<?= $invSrc==='parasut'?'#5b21b6':'#1e40af' ?>;font-size:10px;font-weight:700;padding:4px 8px">
+            <?= $invSrc==='parasut' ? '📄 Paraşüt' : '✏️ Manuel' ?>
+          </span>
+          <?php if ($invUpdAt): ?>
+          <span style="font-size:11px;color:var(--text-muted)">
+            <?= date('d.m.Y H:i', strtotime($invUpdAt)) ?>
+          </span>
+          <?php endif; ?>
+        </div>
+      <?php else: ?>
+        <div style="font-size:12px;color:#92400e;margin-bottom:12px;background:#fffbeb;padding:8px 12px;border-radius:6px">
+          Henüz fatura numarası girilmedi. Aşağıdan manuel girebilir veya Paraşüt'ten otomatik fatura kestirebilirsiniz.
+        </div>
+      <?php endif; ?>
+
+      <form method="post" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <?= csrfField() ?>
+        <input type="hidden" name="form_action" value="set_invoice_no">
+        <input type="hidden" name="order_id" value="<?= (int)$order['id'] ?>">
+        <input type="text" name="invoice_no" value="<?= h($invNo) ?>" placeholder="örn: SLS2026000123"
+               style="font-family:monospace;font-size:13px;padding:8px 12px;border:1px solid #cbd5e1;border-radius:6px;flex:1;min-width:200px;font-weight:600">
+        <button type="submit" class="btn btn-sm btn-primary" style="height:36px;padding:0 16px">
+          💾 <?= $invNo!==''?'Güncelle':'Kaydet' ?>
+        </button>
+        <?php if ($invNo !== ''): ?>
+        <button type="submit" name="invoice_no" value="" class="btn btn-sm" style="background:#fee2e2;color:#991b1b;border:1px solid #fecaca;height:36px;padding:0 12px"
+                onclick="return confirm('Fatura numarası silinsin mi?')">
+          🗑 Sil
+        </button>
+        <?php endif; ?>
+      </form>
+    </div>
+  </div>
+
   <div class="card" style="margin-bottom:12px">
     <div class="card-header" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7)">
       <h3 class="card-title" style="display:flex;align-items:center;gap:8px;color:#15803d">
