@@ -414,10 +414,21 @@ if ($tab === 'dealers') {
     // products tab
     $b2bProducts = dbRows("SELECT id, name, sku, base_price, vat_rate, parasut_product_id FROM b2b_products WHERE is_active=1 ORDER BY name");
 
-    // Paraşüt'ten tüm ürünler — aktif + arşivli
-    $activeRes = parasut()->listAllProductsWithMeta(40);
-    $archivedRes = parasut()->listAllProductsWithMeta(40, ['archived' => 'true']);
-    $rawProducts = array_merge($activeRes['data'], $archivedRes['data']);
+    // ?q=XXX — server-side arama (kullanıcı G-14 gibi spesifik ürün ararken)
+    $searchQuery = trim($_GET['q'] ?? '');
+
+    if ($searchQuery !== '') {
+        // Direkt Paraşüt API ile filter[name]= sorgusu
+        $searchResults = parasut()->searchProducts($searchQuery, 100);
+        $rawProducts = $searchResults;
+        $activeRes = ['total_count' => 0, 'fetched' => count($searchResults)];
+        $archivedRes = ['total_count' => 0, 'fetched' => 0];
+    } else {
+        // Normal akış — tüm ürünleri çek (aktif + arşivli)
+        $activeRes = parasut()->listAllProductsWithMeta(80);
+        $archivedRes = parasut()->listAllProductsWithMeta(80, ['archived' => 'true']);
+        $rawProducts = array_merge($activeRes['data'], $archivedRes['data']);
+    }
 
     // ?show_all=1 — muhasebe hesap kalemleri dahil
     $showAll = isset($_GET['show_all']) && $_GET['show_all'] === '1';
@@ -433,12 +444,9 @@ if ($tab === 'dealers') {
     $isAccountingItem = function($attrs) {
         $name = trim($attrs['name'] ?? '');
         $code = trim($attrs['code'] ?? '');
-        // Hem name hem code rakam+nokta formatında ise muhasebe kalemi
         $namePattern = $name !== '' && preg_match('/^[\d.]+$/', $name);
         $codePattern = $code !== '' && preg_match('/^[\d.]+$/', $code);
-        // Sadece name'i dene; code da boşsa name'e güven
         if ($code === '') return $namePattern;
-        // Hem code hem name aynı tip kod formatında ise muhasebe
         return $namePattern || $codePattern;
     };
 
@@ -453,12 +461,13 @@ if ($tab === 'dealers') {
     }
 
     $parasutMeta = [
-        'active_total'    => $activeRes['total_count'],
-        'active_fetched'  => $activeRes['fetched'],
-        'archived_total'  => $archivedRes['total_count'],
-        'archived_fetched'=> $archivedRes['fetched'],
+        'active_total'    => $activeRes['total_count'] ?? 0,
+        'active_fetched'  => $activeRes['fetched'] ?? 0,
+        'archived_total'  => $archivedRes['total_count'] ?? 0,
+        'archived_fetched'=> $archivedRes['fetched'] ?? 0,
         'show_all'        => $showAll,
         'filtered_count'  => $filteredCount,
+        'search_query'    => $searchQuery,
     ];
 
     // Hızlı lookup için ID→object map (string-key)
@@ -1002,24 +1011,53 @@ $apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
 
     <!-- Filtre durumu -->
     <?php if (isset($parasutMeta) && $tab === 'products'): ?>
-    <div style="background:#eff6ff;border-bottom:1px solid #bfdbfe;padding:10px 16px;font-size:12px;color:#1e40af;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
-      <?php if (!empty($parasutMeta['show_all'])): ?>
-      <div>
-        ⚠️ <strong>TÜM kayıtlar gösteriliyor</strong> — stok takipsiz muhasebe kalemleri (örn: <code>01.3.01.0.004.762</code>) dahil
+
+    <!-- Server-side arama formu - Paraşüt'te direkt sorgu -->
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border);background:#f8fafc">
+      <form method="get" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="hidden" name="page" value="parasut-mapping">
+        <input type="hidden" name="tab" value="products">
+        <?php if ($parasutMeta['show_all']): ?><input type="hidden" name="show_all" value="1"><?php endif; ?>
+        <div style="flex:1;min-width:240px">
+          <input type="search" name="q" value="<?= h($parasutMeta['search_query']) ?>"
+                 placeholder="🔎 Paraşüt'te direkt ara (örn: G-14, churros, tavuk)..."
+                 class="form-control" style="font-size:13px;padding:8px 12px">
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm" style="height:36px;padding:0 16px">
+          🔎 Paraşüt'te Ara
+        </button>
+        <?php if ($parasutMeta['search_query'] !== ''): ?>
+        <a href="?page=parasut-mapping&tab=products<?= $parasutMeta['show_all'] ? '&show_all=1' : '' ?>"
+           class="btn btn-secondary btn-sm" style="height:36px">✕ Aramayı Temizle</a>
+        <?php endif; ?>
+      </form>
+      <?php if ($parasutMeta['search_query'] !== ''): ?>
+      <div style="margin-top:8px;font-size:11px;color:#1e40af;background:#eff6ff;border-left:3px solid #1e40af;padding:6px 10px;border-radius:4px">
+        🔎 <strong>"<?= h($parasutMeta['search_query']) ?>"</strong> için Paraşüt'te <strong><?= count($parasutProducts) ?></strong> ürün bulundu
+        (toplam <?= $parasutMeta['active_fetched'] ?> kayıt çekildi).
       </div>
-      <a href="?page=parasut-mapping&tab=products" class="btn btn-sm" style="background:#1e40af;color:#fff;border:none;font-size:11px">
-        📦 Sadece Gerçek Ürünleri Göster
-      </a>
-      <?php else: ?>
+      <?php endif; ?>
+    </div>
+
+    <div style="background:#eff6ff;border-bottom:1px solid #bfdbfe;padding:10px 16px;font-size:12px;color:#1e40af;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
       <div>
+        <?php if (!empty($parasutMeta['show_all'])): ?>
+        ⚠️ <strong>TÜM kayıtlar gösteriliyor</strong> — muhasebe kalemleri (TDHP) dahil
+        <?php else: ?>
         📦 <strong>Gerçek ürünler</strong> gösteriliyor
         <?php if ($parasutMeta['filtered_count'] > 0): ?>
-        · <strong><?= (int)$parasutMeta['filtered_count'] ?></strong> muhasebe hesap kalemi (TDHP) gizlendi
+        · <strong><?= (int)$parasutMeta['filtered_count'] ?></strong> muhasebe kalemi gizlendi
         <?php endif; ?>
+        <?php endif; ?>
+        ·
+        <strong>Paraşüt toplam:</strong>
+        <?= (int)($parasutMeta['active_total'] ?: $parasutMeta['active_fetched']) ?> aktif +
+        <?= (int)($parasutMeta['archived_total'] ?: $parasutMeta['archived_fetched']) ?> arşivli
       </div>
-      <a href="?page=parasut-mapping&tab=products&show_all=1" class="btn btn-sm" style="background:#fff;color:#1e40af;border:1px solid #1e40af;font-size:11px">
-        📋 Tüm Kayıtları Göster
-      </a>
+      <?php if (!empty($parasutMeta['show_all'])): ?>
+      <a href="?page=parasut-mapping&tab=products<?= $parasutMeta['search_query'] !== '' ? '&q=' . urlencode($parasutMeta['search_query']) : '' ?>" class="btn btn-sm" style="background:#1e40af;color:#fff;border:none;font-size:11px">📦 Sadece Gerçek Ürünler</a>
+      <?php else: ?>
+      <a href="?page=parasut-mapping&tab=products&show_all=1<?= $parasutMeta['search_query'] !== '' ? '&q=' . urlencode($parasutMeta['search_query']) : '' ?>" class="btn btn-sm" style="background:#fff;color:#1e40af;border:1px solid #1e40af;font-size:11px">📋 Tüm Kayıtlar</a>
       <?php endif; ?>
     </div>
     <?php endif; ?>

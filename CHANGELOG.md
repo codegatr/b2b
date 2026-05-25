@@ -7,6 +7,27 @@ Format: `## v[X.Y.Z] — Açıklama (YYYY-MM-DD)`
 
 ---
 
+## v1.1.71 — Paraşüt Server-Side Arama + maxPages 80 (2026-05-24)
+
+### Sorun (Image kanıtı)
+- 176 ürün çekildi ama G-14 CHURROS (ID 152326928) listede yok
+- Frontend "g-" araması 0 sonuç döndürüyor
+- Paraşüt'te 4 sayfa ürün var, biz hepsini çekemiyoruz
+
+### Düzeltme
+- listProducts'tan sort=name kaldırıldı (Paraşüt default sıralama)
+- maxPages 40 → 80 (2000 kayıt destek)
+- Yeni metod: searchProducts(query) — server-side arama (filter[name]=)
+- Eşleme sayfasına 🔎 "Paraşüt'te direkt ara" butonu
+- "G-14" yazılınca Paraşüt API'ya direkt sorgu, kesin sonuç
+
+### UI
+- Server-side arama formu (mavi)
+- Toplam ürün sayısı bilgisi: "X aktif + Y arşivli"
+- Arama yapılırken muhasebe filter de aktif
+
+---
+
 ## v1.1.70 — Muhasebe Kalemi Regex Filter (2026-05-24)
 
 ### 🐛 Düzeltme - KRİTİK

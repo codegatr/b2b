@@ -542,6 +542,7 @@ class Parasut {
         $size = max(1, min(25, $size));
         $url  = $this->endpoint('products') . '?page[number]=' . $page . '&page[size]=' . $size . '&include=category';
         foreach ($filter as $k => $v) {
+            // 'name' veya 'code' boş gönderilirse atla (Paraşüt 422 veriyor)
             if ($v !== '' && $v !== null) $url .= '&filter[' . urlencode($k) . ']=' . urlencode((string)$v);
         }
         if ($sort !== '') $url .= '&sort=' . urlencode($sort);
@@ -570,11 +571,11 @@ class Parasut {
         ];
     }
 
-    /** Paraşüt'teki TÜM ürünleri otomatik pagination ile çek (sort=name) */
-    public function listAllProducts(int $maxPages = 40): array {
+    /** Paraşüt'teki TÜM ürünleri otomatik pagination ile çek (sort YOK - default davranış) */
+    public function listAllProducts(int $maxPages = 80): array {
         $all = [];
         for ($p = 1; $p <= $maxPages; $p++) {
-            $res = $this->listProducts($p, 25, [], 'name');
+            $res = $this->listProducts($p, 25);
             if (empty($res['data'])) break;
             $all = array_merge($all, $res['data']);
             if (count($res['data']) < 25) break;
@@ -583,11 +584,10 @@ class Parasut {
     }
 
     /**
-     * Ürünler + metadata. Default sort=name.
-     * Filtre Paraşüt API tarafında değil, PHP tarafında 'inventory_tracking'
-     * ile yapılır (Paraşüt filter desteği güvenilir değil bu alanda).
+     * Ürünler + metadata. SORT YOK (Paraşüt default sıralama).
+     * maxPages 80 = 2000 kayıt destek.
      */
-    public function listAllProductsWithMeta(int $maxPages = 40, array $filter = [], string $sort = 'name'): array {
+    public function listAllProductsWithMeta(int $maxPages = 80, array $filter = [], string $sort = ''): array {
         $all = []; $totalCount = 0; $totalPages = 0; $perPage = 25;
         for ($p = 1; $p <= $maxPages; $p++) {
             $res = $this->listProducts($p, 25, $filter, $sort);
@@ -607,6 +607,25 @@ class Parasut {
             'total_pages' => $totalPages,
             'per_page'    => $perPage,
         ];
+    }
+
+    /**
+     * Paraşüt'te isimle arama — server-side, direkt API sorgusu.
+     * Kullanıcı "g-" yazdığında bunu çağırırız.
+     * filter[name] = ürün adında geçen metin
+     */
+    public function searchProducts(string $query, int $maxResults = 50): array {
+        if (!$this->isEnabled() || trim($query) === '') return [];
+        $all = [];
+        // page[size]=25 ile birkaç sayfa çek
+        for ($p = 1; $p <= 4; $p++) { // max 100 sonuç (4 × 25)
+            $res = $this->listProducts($p, 25, ['name' => $query]);
+            if (empty($res['data'])) break;
+            $all = array_merge($all, $res['data']);
+            if (count($all) >= $maxResults) break;
+            if (count($res['data']) < 25) break;
+        }
+        return array_slice($all, 0, $maxResults);
     }
 
     // ──────────────────────────────────────────────────────────
