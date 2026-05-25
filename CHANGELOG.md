@@ -7,6 +7,29 @@ Format: `## v[X.Y.Z] — Açıklama (YYYY-MM-DD)`
 
 ---
 
+## v1.1.73 — Paraşüt Arama Mantığı Kökten Düzeltildi (2026-05-24)
+
+### Sorun (Image kanıtı)
+URL `?q=G-14` → "Paraşüt'ten ürün listesi BOŞ döndü" sert kırmızı uyarı + stat: "0 Paraşüt'te Toplam"
+
+**Kök sebep**: Paraşüt API V4'ün `filter[name]=` parametresi **EXACT match** yapıyor, "contains" değil. "G-14" yazınca "G-14 CHURROS" bulunamıyor.
+
+### Düzeltme
+- `searchProducts()` artık **PHP-side fuzzy** arama yapar (`str_contains` ile)
+  - Tüm aktif + arşivli ürünleri çek
+  - `mb_strtolower` + `str_contains` ile name + code üzerinde tarama
+  - Paraşüt filter desteğine bağımlı değil
+- **Arama yapılırken** sert kırmızı uyarı ARTIK ÇIKMAZ
+  - Yeni sarı bilgilendirme: "X araması Paraşüt'te eşleşme bulamadı"
+  - "Aramayı Temizle" + "Tanı Aç" butonları
+
+### Genel Sağlık Kontrolü
+- ✓ Tüm PHP dosyaları syntax temiz
+- ✓ Conflict marker yok
+- ✓ Tüm kritik metodlar mevcut
+
+---
+
 ## v1.1.72 — Paraşüt Ürün Tanı Paneli (2026-05-24)
 
 ### Sorun

@@ -519,9 +519,11 @@ if ($tab === 'dealers') {
 <?php
 $apiCount = ($tab === 'dealers') ? count($parasutContacts) : count($parasutProducts);
 $apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
+$activeSearchQuery = ($tab === 'products') ? trim($parasutMeta['search_query'] ?? '') : '';
+$isSearching = $activeSearchQuery !== '';
 ?>
-<?php if ($apiCount === 0): ?>
-<!-- Paraşüt'ten HİÇ veri gelmedi - SERT UYARI -->
+<?php if ($apiCount === 0 && !$isSearching): ?>
+<!-- Paraşüt'ten HİÇ veri gelmedi (arama YOKKEN) - SERT UYARI -->
 <div class="alert" style="background:#fef2f2;border:2px solid #dc2626;color:#7f1d1d;padding:14px 16px;margin-bottom:16px">
   <div style="display:flex;align-items:flex-start;gap:12px">
     <div style="font-size:24px">🚨</div>
@@ -542,6 +544,30 @@ $apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
           <a href="?page=parasut&test=1" class="btn btn-sm" style="background:#fff;color:#dc2626;border:1px solid #dc2626">🔌 Bağlantı Test Et</a>
           <a href="?page=parasut&clear_token=1" class="btn btn-sm" style="background:#fff;color:#dc2626;border:1px solid #dc2626" onclick="return confirm('Token cache temizlensin mi?');">🔄 Token Yenile</a>
           <a href="?page=settings&tab=parasut" class="btn btn-sm" style="background:#fff;color:#dc2626;border:1px solid #dc2626">⚙ Credentials Kontrol</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<?php elseif ($apiCount === 0 && $isSearching): ?>
+<!-- Arama yapıldı, ürün bulunamadı (Paraşüt veritabanı boş DEĞİL!) -->
+<div class="alert" style="background:#fefce8;border:2px solid #fde68a;color:#713f12;padding:14px 16px;margin-bottom:16px">
+  <div style="display:flex;align-items:flex-start;gap:12px">
+    <div style="font-size:24px">🔍</div>
+    <div style="flex:1">
+      <div style="font-weight:700;font-size:14px;color:#854d0e;margin-bottom:4px">
+        "<?= h($activeSearchQuery) ?>" araması Paraşüt'te eşleşme bulamadı
+      </div>
+      <div style="font-size:12px;line-height:1.6">
+        Paraşüt'te bu ada/koda sahip <strong>aktif veya arşivli ürün yok</strong>. Şunları deneyin:
+        <ul style="margin:6px 0 0 18px;padding:0">
+          <li>Aramayı temizleyip <strong>tüm ürünleri görün</strong></li>
+          <li>Daha kısa anahtar kelime deneyin (örn "tavuk" → "tav")</li>
+          <li>Paraşüt'te ürünün gerçek adını kontrol edin</li>
+        </ul>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <a href="?page=parasut-mapping&tab=products" class="btn btn-sm" style="background:#854d0e;color:#fff;border:none">✕ Aramayı Temizle</a>
+          <a href="?page=parasut-mapping&tab=products&diag_products=1" class="btn btn-sm" style="background:#fff;color:#854d0e;border:1px solid #854d0e">🩺 Tanı Aç</a>
         </div>
       </div>
     </div>

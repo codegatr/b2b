@@ -624,22 +624,33 @@ class Parasut {
     }
 
     /**
-     * Paraşüt'te isimle arama — server-side, direkt API sorgusu.
-     * Kullanıcı "g-" yazdığında bunu çağırırız.
-     * filter[name] = ürün adında geçen metin
+     * Paraşüt'te ad/kod ile FUZZY arama — PHP-side filter (Paraşüt filter[name] EXACT yapıyor).
+     * Tüm ürünleri çek, PHP'de contains ile filtrele.
+     * Tek başına kullanılmıyor; parasut-mapping.php direkt liste çekip filtreliyor.
+     * Geriye uyumluluk için bırakıldı.
      */
-    public function searchProducts(string $query, int $maxResults = 50): array {
+    public function searchProducts(string $query, int $maxResults = 100): array {
         if (!$this->isEnabled() || trim($query) === '') return [];
+
+        // PHP-side fuzzy search — Paraşüt'ün filter[name] EXACT match yapıyor!
         $all = [];
-        // page[size]=25 ile birkaç sayfa çek
-        for ($p = 1; $p <= 4; $p++) { // max 100 sonuç (4 × 25)
-            $res = $this->listProducts($p, 25, ['name' => $query]);
-            if (empty($res['data'])) break;
-            $all = array_merge($all, $res['data']);
-            if (count($all) >= $maxResults) break;
-            if (count($res['data']) < 25) break;
+        // Aktif + arşivli tüm ürünler
+        $activeRes = $this->listAllProductsWithMeta(80);
+        $all = array_merge($all, $activeRes['data']);
+        $archivedRes = $this->listAllProductsWithMeta(80, ['archived' => 'true']);
+        $all = array_merge($all, $archivedRes['data']);
+
+        $q = mb_strtolower(trim($query));
+        $matched = [];
+        foreach ($all as $p) {
+            $name = mb_strtolower($p['attributes']['name'] ?? '');
+            $code = mb_strtolower($p['attributes']['code'] ?? '');
+            if (str_contains($name, $q) || str_contains($code, $q)) {
+                $matched[] = $p;
+                if (count($matched) >= $maxResults) break;
+            }
         }
-        return array_slice($all, 0, $maxResults);
+        return $matched;
     }
 
     // ──────────────────────────────────────────────────────────
