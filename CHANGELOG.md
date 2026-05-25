@@ -7,6 +7,20 @@ Format: `## v[X.Y.Z] — Açıklama (YYYY-MM-DD)`
 
 ---
 
+## v1.1.70 — Muhasebe Kalemi Regex Filter (2026-05-24)
+
+### 🐛 Düzeltme - KRİTİK
+- **v1.1.69'da inventory_tracking filter çok agresifti** — G-01 KUŞBAŞI TAVUK gibi gerçek ürünleri de gizliyordu
+- Yeni yaklaşım: PHP-side regex temizleme
+- Mantık: ürün adı SADECE rakam+nokta ise muhasebe kalemi
+- Regex: ^[0-9.]+$
+
+### Mantık örnekleri
+- `01.3.01.0.004.762` → REGEX match → gizlenir
+- `G-01 KUŞBAŞI TAVUK` → harf var → gösterilir ✓
+
+---
+
 ## v1.1.69 — Paraşüt Stok Takipli Filter (2026-05-24)
 
 ### 🐛 Düzeltme — KRİTİK
