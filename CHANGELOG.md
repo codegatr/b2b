@@ -30,6 +30,27 @@ URL `?q=G-14` → "Paraşüt'ten ürün listesi BOŞ döndü" sert kırmızı uy
 
 ---
 
+## v1.1.73 — Paraşüt Arama Güvenli + Exception Yakalama (2026-05-25)
+
+### Sorun (Image kanıtı)
+- ?q=G-14 ile arama yapıldı, kırmızı uyarı çıktı: "Paraşüt'ten ürün listesi BOŞ döndü"
+- Bu sarı arama uyarısı olmalıydı (arama bulunamadı), kırmızı boş veri değil
+- Sebep: searchProducts içinde exception → $parasutMeta tanımsız → $isSearching=false yanlış değer
+
+### Düzeltme
+- products tab başında **default $parasutMeta initializer** ($activeRes, $archivedRes, $parasutProducts boş array)
+- Tüm Paraşüt çağrıları **try/catch** ile sarmalandı
+- Yeni `$parasutMeta['error']` alanı — exception mesajı tutar
+- UI uyarısı 3 senaryo (öncelik sırasıyla):
+  1. **API Hatası** (kırmızı, exception mesajı + 🩺 tanı butonu)
+  2. **Hiç veri yok** (kırmızı, Paraşüt boş)
+  3. **Arama bulunamadı** (sarı, query var ama eşleşme yok)
+
+### Sonuç
+Artık G-14 araması yapılırsa ve bulunamazsa SARI uyarı çıkar, kırmızı değil. Exception olursa hata mesajı kullanıcıya görünür.
+
+---
+
 ## v1.1.72 — Paraşüt Ürün Tanı Paneli (2026-05-24)
 
 ### Sorun

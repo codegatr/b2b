@@ -417,30 +417,33 @@ if ($tab === 'dealers') {
     // ?q=XXX — server-side arama (kullanıcı G-14 gibi spesifik ürün ararken)
     $searchQuery = trim($_GET['q'] ?? '');
 
-    if ($searchQuery !== '') {
-        // Direkt Paraşüt API ile filter[name]= sorgusu
-        $searchResults = parasut()->searchProducts($searchQuery, 100);
-        $rawProducts = $searchResults;
-        $activeRes = ['total_count' => 0, 'fetched' => count($searchResults)];
-        $archivedRes = ['total_count' => 0, 'fetched' => 0];
-    } else {
-        // Normal akış — tüm ürünleri çek (aktif + arşivli)
-        $activeRes = parasut()->listAllProductsWithMeta(80);
-        $archivedRes = parasut()->listAllProductsWithMeta(80, ['archived' => 'true']);
-        $rawProducts = array_merge($activeRes['data'], $archivedRes['data']);
+    // Default güvenli initializer (exception olsa bile UI doğru çalışır)
+    $parasutProducts = [];
+    $rawProducts = [];
+    $activeRes = ['data'=>[], 'total_count'=>0, 'fetched'=>0];
+    $archivedRes = ['data'=>[], 'total_count'=>0, 'fetched'=>0];
+    $parasutError = null;
+
+    try {
+        if ($searchQuery !== '') {
+            // PHP-side fuzzy contains arama (Paraşüt'ün filter[name] EXACT yapıyor)
+            $searchResults = parasut()->searchProducts($searchQuery, 100);
+            $rawProducts = $searchResults;
+            $activeRes = ['total_count' => 0, 'fetched' => count($searchResults)];
+        } else {
+            // Normal akış — tüm ürünleri çek (aktif + arşivli)
+            $activeRes = parasut()->listAllProductsWithMeta(80);
+            $archivedRes = parasut()->listAllProductsWithMeta(80, ['archived' => 'true']);
+            $rawProducts = array_merge($activeRes['data'], $archivedRes['data']);
+        }
+    } catch (\Throwable $e) {
+        $parasutError = $e->getMessage();
+        error_log('parasut-mapping products fetch hata: ' . $e->getMessage());
     }
 
     // ?show_all=1 — muhasebe hesap kalemleri dahil
     $showAll = isset($_GET['show_all']) && $_GET['show_all'] === '1';
 
-    /**
-     * Muhasebe kalemi tespit fonksiyonu
-     * Aşağıdaki gibi kayıtlar gizlenir (B2B ürünü değil, TDHP/e-defter):
-     *   01.3.01.0.004.762
-     *   02.6.06.0.042.169
-     *
-     * Mantık: ürün adı (veya kod) SADECE rakam ve nokta içeriyorsa muhasebe kalemi
-     */
     $isAccountingItem = function($attrs) {
         $name = trim($attrs['name'] ?? '');
         $code = trim($attrs['code'] ?? '');
@@ -450,7 +453,6 @@ if ($tab === 'dealers') {
         return $namePattern || $codePattern;
     };
 
-    $parasutProducts = [];
     $filteredCount = 0;
     foreach ($rawProducts as $p) {
         if (!$showAll && $isAccountingItem($p['attributes'] ?? [])) {
@@ -468,9 +470,9 @@ if ($tab === 'dealers') {
         'show_all'        => $showAll,
         'filtered_count'  => $filteredCount,
         'search_query'    => $searchQuery,
+        'error'           => $parasutError,
     ];
 
-    // Hızlı lookup için ID→object map (string-key)
     $parasutProductsById = [];
     foreach ($parasutProducts as $p) {
         $parasutProductsById[(string)$p['id']] = $p;
@@ -521,8 +523,32 @@ $apiCount = ($tab === 'dealers') ? count($parasutContacts) : count($parasutProdu
 $apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
 $activeSearchQuery = ($tab === 'products') ? trim($parasutMeta['search_query'] ?? '') : '';
 $isSearching = $activeSearchQuery !== '';
+$apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
 ?>
-<?php if ($apiCount === 0 && !$isSearching): ?>
+<?php if ($apiError): ?>
+<!-- EXCEPTION yakalandı — Paraşüt'e bağlantı/yetki sorunu var -->
+<div class="alert" style="background:#fef2f2;border:2px solid #dc2626;color:#7f1d1d;padding:14px 16px;margin-bottom:16px">
+  <div style="display:flex;align-items:flex-start;gap:12px">
+    <div style="font-size:24px">⛔</div>
+    <div style="flex:1">
+      <div style="font-weight:700;font-size:14px;color:#b91c1c;margin-bottom:6px">
+        Paraşüt API Hatası
+      </div>
+      <div style="font-size:12px;line-height:1.6;background:#fff;padding:8px 10px;border-radius:6px;font-family:monospace;color:#7f1d1d;border:1px solid #fca5a5;margin-bottom:8px">
+        <?= h($apiError) ?>
+      </div>
+      <div style="font-size:11px;color:#7f1d1d">
+        Bu hatayla karşılaştığınızda eşleme yapılamaz. Lütfen tanı araçlarını kullanın:
+      </div>
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+        <a href="?page=parasut&diag=1" class="btn btn-sm" style="background:#dc2626;color:#fff;border:none">🩺 Endpoint Tanı</a>
+        <a href="?page=parasut&clear_token=1" class="btn btn-sm" style="background:#fff;color:#dc2626;border:1px solid #dc2626" onclick="return confirm('Token cache temizlensin mi?');">🔄 Token Yenile</a>
+        <a href="?page=parasut-mapping&tab=products&diag_products=1" class="btn btn-sm" style="background:#fff;color:#dc2626;border:1px solid #dc2626">🩺 Ürün Tanı</a>
+      </div>
+    </div>
+  </div>
+</div>
+<?php elseif ($apiCount === 0 && !$isSearching): ?>
 <!-- Paraşüt'ten HİÇ veri gelmedi (arama YOKKEN) - SERT UYARI -->
 <div class="alert" style="background:#fef2f2;border:2px solid #dc2626;color:#7f1d1d;padding:14px 16px;margin-bottom:16px">
   <div style="display:flex;align-items:flex-start;gap:12px">
