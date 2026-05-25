@@ -7,6 +7,23 @@ Format: `## v[X.Y.Z] — Açıklama (YYYY-MM-DD)`
 
 ---
 
+## v1.1.69 — Paraşüt Stok Takipli Filter (2026-05-24)
+
+### 🐛 Düzeltme — KRİTİK
+- **Paraşüt'ten gelen "01.3.01.0.004.762" gibi noktalı kodlar** muhasebe hesap kalemleri/GİB e-defter entegrasyon kayıtları — stok takipsiz. Bunlar B2B ürünleri değil.
+- Default filter: `inventory_tracking=true` → sadece gerçek stok takipli ürünler
+
+### ✨ Yeni
+- **Filtre toggle**: Eşleme sayfasında "📦 Sadece Stoklu Ürünleri Göster" ↔ "📋 Tüm Kayıtları Göster"
+- `?show_all=1` parametresiyle muhasebe kalemleri dahil edilebilir
+- Filter durumu mavi info bandında görünür
+
+### 📦 Paraşüt
+- `listAllProducts` ve `listAllProductsWithMeta` default `filter[inventory_tracking]=true`
+- `filter['inventory_tracking'] = 'all'` veya boş ile filter kaldırılır
+
+---
+
 ## v1.1.68 — Kart Ödeme Görünmüyor + Paraşüt Ürün İsim Sorunu (2026-05-24)
 
 ### 🐛 Düzeltme — KRİTİK

@@ -570,11 +570,11 @@ class Parasut {
         ];
     }
 
-    /** Paraşüt'teki TÜM ürünleri otomatik pagination ile çek */
+    /** Paraşüt'teki TÜM stok takipli ürünleri otomatik pagination ile çek */
     public function listAllProducts(int $maxPages = 40): array {
         $all = [];
         for ($p = 1; $p <= $maxPages; $p++) {
-            $res = $this->listProducts($p, 25, [], 'name');
+            $res = $this->listProducts($p, 25, ['inventory_tracking' => 'true'], 'name');
             if (empty($res['data'])) break;
             $all = array_merge($all, $res['data']);
             if (count($res['data']) < 25) break;
@@ -583,9 +583,22 @@ class Parasut {
     }
 
     /**
-     * Ürünler + metadata. Default sort=name.
+     * Ürünler + metadata. Default sort=name + filter[inventory_tracking]=true.
+     * Yani sadece GERÇEK STOK takipli ürünler (Paraşüt 'Hizmet ve Ürünler' listesi).
+     * Muhasebe kalemleri (01.3.01.0... gibi) hariç tutulur.
+     *
+     * Tümünü görmek için filter['inventory_tracking'] vermeden çağır.
      */
     public function listAllProductsWithMeta(int $maxPages = 40, array $filter = [], string $sort = 'name'): array {
+        // Default: sadece stok takipli ürünler
+        if (!array_key_exists('inventory_tracking', $filter)) {
+            $filter['inventory_tracking'] = 'true';
+        }
+        // 'inventory_tracking' filter değerinde boş veya 'all' ise filtreyi kaldır
+        if (in_array($filter['inventory_tracking'] ?? '', ['all', ''], true)) {
+            unset($filter['inventory_tracking']);
+        }
+
         $all = []; $totalCount = 0; $totalPages = 0; $perPage = 25;
         for ($p = 1; $p <= $maxPages; $p++) {
             $res = $this->listProducts($p, 25, $filter, $sort);

@@ -414,9 +414,14 @@ if ($tab === 'dealers') {
     // products tab
     $b2bProducts = dbRows("SELECT id, name, sku, base_price, vat_rate, parasut_product_id FROM b2b_products WHERE is_active=1 ORDER BY name");
 
-    // Paraşüt'ten ürün listesi — aktif + arşivlenmiş ayrı ayrı
-    $activeRes = parasut()->listAllProductsWithMeta(40);
-    $archivedRes = parasut()->listAllProductsWithMeta(40, ['archived' => 'true']);
+    // Paraşüt'ten ürün listesi — varsayılan: sadece stok takipli ürünler
+    // ?show_all=1 ile muhasebe kalemleri (hesap planı kodları) dahil edilir
+    $showAll = isset($_GET['show_all']) && $_GET['show_all'] === '1';
+    $extraFilter = $showAll ? ['inventory_tracking' => 'all'] : [];
+
+    $activeRes = parasut()->listAllProductsWithMeta(40, $extraFilter);
+    $archivedFilter = array_merge($extraFilter, ['archived' => 'true']);
+    $archivedRes = parasut()->listAllProductsWithMeta(40, $archivedFilter);
     $parasutProducts = array_merge($activeRes['data'], $archivedRes['data']);
 
     $parasutMeta = [
@@ -424,6 +429,7 @@ if ($tab === 'dealers') {
         'active_fetched' => $activeRes['fetched'],
         'archived_total' => $archivedRes['total_count'],
         'archived_fetched' => $archivedRes['fetched'],
+        'show_all'       => $showAll,
     ];
 
     // Hızlı lookup için ID→object map (string-key)
@@ -964,6 +970,28 @@ $apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
     <div style="background:#fffbeb;border-bottom:1px solid #fde68a;padding:10px 16px;font-size:12px;color:#78350f">
       ℹ️ Seçilen ürünleri B2B'ye <strong>yeni ürün</strong> olarak aktarın (parasut_product_id otomatik bağlanır). Stok 0 ve aktif olarak eklenir, sonra admin → Ürünler'den düzenleyin.
     </div>
+
+    <!-- Filtre durumu -->
+    <?php if (isset($parasutMeta) && $tab === 'products'): ?>
+    <div style="background:#eff6ff;border-bottom:1px solid #bfdbfe;padding:10px 16px;font-size:12px;color:#1e40af;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <?php if (!empty($parasutMeta['show_all'])): ?>
+      <div>
+        ⚠️ <strong>TÜM kayıtlar gösteriliyor</strong> — stok takipsiz muhasebe kalemleri (örn: <code>01.3.01.0.004.762</code>) dahil
+      </div>
+      <a href="?page=parasut-mapping&tab=products" class="btn btn-sm" style="background:#1e40af;color:#fff;border:none;font-size:11px">
+        📦 Sadece Stoklu Ürünleri Göster
+      </a>
+      <?php else: ?>
+      <div>
+        📦 <strong>Sadece stok takipli ürünler</strong> gösteriliyor — muhasebe hesap kalemleri (kod formatlı kayıtlar) gizli
+      </div>
+      <a href="?page=parasut-mapping&tab=products&show_all=1" class="btn btn-sm" style="background:#fff;color:#1e40af;border:1px solid #1e40af;font-size:11px">
+        📋 Tüm Kayıtları Göster
+      </a>
+      <?php endif; ?>
+    </div>
+    <?php endif; ?>
+
     <!-- Arama kutusu -->
     <div style="padding:12px 16px;border-bottom:1px solid var(--border);background:#fafafa">
       <input type="search" id="orphanProdSearch" placeholder="🔍 İsim, SKU/kod veya ID ile ara… (örn: G-01, tavuk, KNORR)"
