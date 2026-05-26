@@ -668,9 +668,9 @@ class Parasut {
         // PHP-side fuzzy search — Paraşüt'ün filter[name] EXACT match yapıyor!
         $all = [];
         // Aktif + arşivli tüm ürünler
-        $activeRes = $this->listAllProductsWithMeta(80);
+        $activeRes = $this->listAllProductsWithMeta(200);
         $all = array_merge($all, $activeRes['data']);
-        $archivedRes = $this->listAllProductsWithMeta(80, ['archived' => 'true']);
+        $archivedRes = $this->listAllProductsWithMeta(200, ['archived' => 'true']);
         $all = array_merge($all, $archivedRes['data']);
 
         $q = mb_strtolower(trim($query));

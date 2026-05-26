@@ -779,14 +779,36 @@ $completedNotArchived = (int)dbVal(
 
 <?php elseif ($action === 'archive_list'): ?>
 <div class="page-header">
-  <div><h1 class="page-title">Arşiv</h1></div>
+  <div>
+    <h1 class="page-title">Arşiv</h1>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:4px">
+      Toplam <strong><?= (int)($total ?? 0) ?></strong> arşivli sipariş
+      <?php if ((int)($total ?? 0) > 0): ?>
+       · Sayfa <strong><?= (int)$page ?>/<?= (int)ceil(($total ?? 0)/$perPage) ?></strong>
+      <?php endif; ?>
+    </div>
+  </div>
   <a href="?page=orders" class="btn btn-ghost">← Aktif Siparişler</a>
 </div>
 <?php if (!empty($success)): ?><div class="alert alert-success"><?= h($success) ?></div><?php endif; ?>
+
+<!-- Arama kutusu -->
+<form method="get" style="margin-bottom:12px">
+  <input type="hidden" name="page" value="orders">
+  <input type="hidden" name="action" value="archive_list">
+  <div style="display:flex;gap:8px;align-items:center">
+    <input type="search" name="q" value="<?= h($search ?? '') ?>" placeholder="🔎 Sipariş no veya bayi adı ile ara..." class="form-control" style="flex:1;font-size:13px">
+    <button type="submit" class="btn btn-primary btn-sm" style="height:38px;padding:0 18px">Ara</button>
+    <?php if (!empty($search)): ?>
+      <a href="?page=orders&action=archive_list" class="btn btn-ghost btn-sm" style="height:38px;padding:0 14px">✕ Temizle</a>
+    <?php endif; ?>
+  </div>
+</form>
+
 <div class="card">
 <div class="table-wrap">
 <table class="table">
-  <thead><tr><th>Sipariş No</th><th>Bayi</th><th>Tarih</th><th style="text-align:right">Tutar</th><th>Durum</th><th></th></tr></thead>
+  <thead><tr><th>Sipariş No</th><th>Bayi</th><th>Tarih</th><th style="text-align:right">Tutar</th><th>Durum</th><th>Fatura No</th><th>Arşivlenme</th><th></th></tr></thead>
   <tbody>
   <?php foreach ($archivedOrders ?? [] as $o): ?>
   <tr>
@@ -795,6 +817,17 @@ $completedNotArchived = (int)dbVal(
     <td style="font-size:12px;color:var(--text-muted)"><?= fmtDate($o['created_at']) ?></td>
     <td style="text-align:right;font-weight:600"><?= money($o['grand_total']) ?></td>
     <td><?= orderStatusLabel($o['status']) ?></td>
+    <td>
+      <?php $invNo = trim($o['invoice_no'] ?? ''); ?>
+      <?php if ($invNo !== ''): ?>
+        <span style="font-family:monospace;font-size:11px;background:#f0fdf4;color:#15803d;padding:2px 6px;border-radius:4px;font-weight:600"><?= h($invNo) ?></span>
+      <?php else: ?>
+        <span style="font-size:10px;color:var(--text-muted);font-style:italic">—</span>
+      <?php endif; ?>
+    </td>
+    <td style="font-size:11px;color:var(--text-muted)">
+      <?= $o['archived_at'] ? date('d.m.Y', strtotime($o['archived_at'])) : '—' ?>
+    </td>
     <td style="white-space:nowrap">
       <a href="?page=orders&action=detail&id=<?= $o['id'] ?>" class="btn btn-ghost btn-sm">Detay →</a>
       <form method="post" style="display:inline">
@@ -806,10 +839,17 @@ $completedNotArchived = (int)dbVal(
     </td>
   </tr>
   <?php endforeach; ?>
-  <?php if (empty($archivedOrders)): ?><tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text-muted)">Arşiv boş.</td></tr><?php endif; ?>
+  <?php if (empty($archivedOrders)): ?><tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-muted)">Arşiv boş.</td></tr><?php endif; ?>
   </tbody>
 </table>
 </div>
+
+<!-- Pagination -->
+<?php if (!empty($pager) && ($total ?? 0) > $perPage): ?>
+<div style="padding:12px 16px;border-top:1px solid var(--border);background:#f8fafc">
+  <?= $pager ?>
+</div>
+<?php endif; ?>
 </div>
 
 <?php elseif ($action === 'detail' && $order): ?>

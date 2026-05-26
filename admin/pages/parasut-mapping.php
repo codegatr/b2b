@@ -432,8 +432,8 @@ if ($tab === 'dealers') {
             $activeRes = ['total_count' => 0, 'fetched' => count($searchResults)];
         } else {
             // Normal akış — tüm ürünleri çek (aktif + arşivli)
-            $activeRes = parasut()->listAllProductsWithMeta(80);
-            $archivedRes = parasut()->listAllProductsWithMeta(80, ['archived' => 'true']);
+            $activeRes = parasut()->listAllProductsWithMeta(200);
+            $archivedRes = parasut()->listAllProductsWithMeta(200, ['archived' => 'true']);
             $rawProducts = array_merge($activeRes['data'], $archivedRes['data']);
         }
     } catch (\Throwable $e) {
@@ -1097,8 +1097,8 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
     <?php
     // ─── DETAYLI TANI PANELİ ───
     if (isset($_GET['diag_products'])) {
-        $diagActive   = parasut()->listAllProductsWithMeta(80);
-        $diagArchived = parasut()->listAllProductsWithMeta(80, ['archived' => 'true']);
+        $diagActive   = parasut()->listAllProductsWithMeta(200);
+        $diagArchived = parasut()->listAllProductsWithMeta(200, ['archived' => 'true']);
     ?>
     <div style="background:#faf5ff;border-top:3px solid #7c3aed;border-bottom:3px solid #7c3aed;padding:18px 20px;font-size:12px">
       <h3 style="margin:0 0 12px;font-size:14px;color:#5b21b6">🩺 Paraşüt Ürün Çekimi — Detaylı Tanı</h3>
@@ -1215,6 +1215,25 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
       <a href="?page=parasut-mapping&tab=products&show_all=1<?= $parasutMeta['search_query'] !== '' ? '&q=' . urlencode($parasutMeta['search_query']) : '' ?>" class="btn btn-sm" style="background:#fff;color:#1e40af;border:1px solid #1e40af;font-size:11px">📋 Tüm Kayıtlar</a>
       <?php endif; ?>
     </div>
+
+    <?php
+    // ─── Eksik ürün otomatik uyarı bandı ───
+    $activeMissing   = max(0, (int)$parasutMeta['active_total'] - (int)$parasutMeta['active_fetched']);
+    $archivedMissing = max(0, (int)$parasutMeta['archived_total'] - (int)$parasutMeta['archived_fetched']);
+    $totalMissing    = $activeMissing + $archivedMissing;
+    if ($totalMissing > 0 && $parasutMeta['search_query'] === ''):
+    ?>
+    <div style="background:#fef2f2;border-bottom:2px solid #fca5a5;padding:12px 16px;font-size:12px;color:#7f1d1d;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <div>
+        ⚠️ <strong style="color:#b91c1c">DİKKAT:</strong>
+        Paraşüt'te <strong><?= $activeMissing + $archivedMissing ?></strong> ürün daha var ama çekemedik!
+        <span style="font-size:11px;color:#7f1d1d">
+          (<?= $activeMissing ?> aktif, <?= $archivedMissing ?> arşivli eksik)
+        </span>
+      </div>
+      <a href="?page=parasut-mapping&tab=products&diag_products=1" class="btn btn-sm" style="background:#b91c1c;color:#fff;border:none;font-size:11px">🩺 Detaylı Tanı</a>
+    </div>
+    <?php endif; ?>
     <?php endif; ?>
 
     <!-- Arama kutusu -->
