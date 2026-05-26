@@ -44,10 +44,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 );
                 auditLog('invoice_no_set', 'b2b_orders', $oid, ['invoice_no' => $invNo, 'source' => 'manual']);
                 $success = 'Fatura numarası kaydedildi: ' . $invNo;
+                if (function_exists('parasut')) {
+                    try {
+                        $link = parasut()->linkInvoiceByNumber($oid, $invNo);
+                        $success .= $link['ok']
+                            ? ' Paraşüt faturası bağlandı.'
+                            : ' Paraşüt notu: ' . ($link['msg'] ?? 'fatura bulunamadı.');
+                    } catch (\Throwable $e) {
+                        $success .= ' Paraşüt bağlantısı denenemedi: ' . $e->getMessage();
+                    }
+                }
             }
         }
-        // Liste sayfasına geri dön (URL'i koruyarak)
-        $back = '?page=orders';
+        // Liste veya detay sayfasına geri dön.
+        $back = !empty($_POST['return_detail']) && $oid
+            ? '?page=orders&action=detail&id=' . $oid
+            : '?page=orders';
         if (!empty($_POST['return_q']))      $back .= '&q='      . urlencode($_POST['return_q']);
         if (!empty($_POST['return_status'])) $back .= '&status=' . urlencode($_POST['return_status']);
         $_SESSION['flash'] = ['type'=>'success', 'msg'=>$success];
@@ -452,6 +464,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $action = 'detail'; $id = $oid;
     }
+
+    if ($act === 'parasut_link_invoice_no') {
+        $ord = dbRow("SELECT invoice_no FROM b2b_orders WHERE id=?", [$oid]);
+        $invNo = trim($ord['invoice_no'] ?? '');
+        if ($invNo === '') {
+            $error = 'Bu siparişte manuel fatura numarası yok.';
+        } else {
+            try {
+                $r = parasut()->linkInvoiceByNumber($oid, $invNo);
+                if ($r['ok']) {
+                    $success = $r['msg'];
+                } else {
+                    $error = $r['msg'];
+                }
+            } catch (\Throwable $e) {
+                $error = 'Paraşüt faturası bağlanamadı: ' . $e->getMessage();
+            }
+        }
+        $action = 'detail'; $id = $oid;
+    }
     if ($act === 'parasut_refresh_pdf') {
         // Sadece PDF URL'sini yeniden çek (signed URL süresi dolduğunda)
         $ord = dbRow("SELECT parasut_invoice_id FROM b2b_orders WHERE id=?", [$oid]);
@@ -517,6 +549,19 @@ if ($action === 'detail' && $id) {
         [$id]
     );
     if (!$order) { $action = 'list'; $id = 0; }
+    elseif (!empty($order['invoice_no']) && empty($order['parasut_invoice_id']) && function_exists('parasut')) {
+        try {
+            parasut()->linkInvoiceByNumber((int)$order['id'], (string)$order['invoice_no']);
+            $order = dbRow(
+                "SELECT o.*, d.company_name,
+                        COALESCE(NULLIF(d.company_name,''), CONCAT(TRIM(d.first_name),' ',TRIM(d.last_name))) AS contact_name,
+                        d.email AS dealer_email, d.phone AS dealer_phone,
+                        d.address, d.city, d.tax_number, d.payment_term_days
+                 FROM b2b_orders o JOIN b2b_dealers d ON d.id=o.dealer_id WHERE o.id=?",
+                [$id]
+            );
+        } catch (\Throwable $e) {}
+    }
 }
 $orderItems = [];
 if ($order) {
@@ -1169,6 +1214,7 @@ $completedNotArchived = (int)dbVal(
         <?= csrfField() ?>
         <input type="hidden" name="form_action" value="set_invoice_no">
         <input type="hidden" name="order_id" value="<?= (int)$order['id'] ?>">
+        <input type="hidden" name="return_detail" value="1">
         <input type="text" name="invoice_no" value="<?= h($invNo) ?>" placeholder="örn: SLS2026000123"
                style="font-family:monospace;font-size:13px;padding:8px 12px;border:1px solid #cbd5e1;border-radius:6px;flex:1;min-width:200px;font-weight:600">
         <button type="submit" class="btn btn-sm btn-primary" style="height:36px;padding:0 16px">
@@ -1293,6 +1339,19 @@ $completedNotArchived = (int)dbVal(
           <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px">
             Bu sipariş için Paraşüt'te henüz fatura kesilmedi.
           </div>
+          <?php if ($invNo !== ''): ?>
+          <div style="font-size:12px;color:#166534;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 10px;margin-bottom:10px;text-align:left">
+            Manuel fatura numarası var: <strong><?= h($invNo) ?></strong>. Paraşüt'te bu numarayla kesilmiş eski faturayı bulup PDF'i bağlayabilirsiniz.
+          </div>
+          <form method="post" style="margin-bottom:8px">
+            <?= csrfField() ?>
+            <input type="hidden" name="form_action" value="parasut_link_invoice_no">
+            <input type="hidden" name="order_id" value="<?= (int)$order['id'] ?>">
+            <button type="submit" class="btn" style="width:100%;background:#16a34a;color:#fff;border:none;font-weight:700">
+              🔎 Manuel No ile Paraşüt'te Bul + PDF Bağla
+            </button>
+          </form>
+          <?php endif; ?>
           <form method="post">
             <?= csrfField() ?>
             <input type="hidden" name="form_action" value="parasut_full_flow">
