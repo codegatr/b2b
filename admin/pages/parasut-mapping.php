@@ -1043,7 +1043,7 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
     btn.disabled = c === 0;
   }
   cb.forEach(b => b.addEventListener('change', refresh));
-  all.addEventListener('change', () => {
+  if (all) all.addEventListener('change', () => {
     // Sadece görünür satırları seç (filtreden geçmişleri)
     document.querySelectorAll('.orphan-contact-row').forEach(row => {
       if (row.style.display !== 'none') {
@@ -1493,7 +1493,7 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
     btn.disabled = c === 0;
   }
   cb.forEach(b => b.addEventListener('change', refresh));
-  all.addEventListener('change', () => {
+  if (all) all.addEventListener('change', () => {
     document.querySelectorAll('.orphan-prod-row').forEach(row => {
       if (row.style.display !== 'none') {
         const c = row.querySelector('.orphan-prod-check');
@@ -1531,6 +1531,13 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
     const kind     = form.dataset.kind || 'products';
 
     if (!input || !hiddenId || !sugBox) return;
+
+    document.body.appendChild(sugBox);
+    sugBox.style.position = 'fixed';
+    sugBox.style.left = '0';
+    sugBox.style.top = '0';
+    sugBox.style.right = 'auto';
+    sugBox.style.zIndex = '2000';
 
     // Eşleme zaten varsa input read-only başlasın
     let isLocked = hiddenId.value && hiddenId.value !== '-' && hiddenId.value !== '';
@@ -1629,7 +1636,17 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
     if (openSuggestions === box) openSuggestions = null;
   }
 
+  function positionSuggestions(box, input) {
+    const rect = input.getBoundingClientRect();
+    const maxHeight = Math.max(180, Math.min(320, window.innerHeight - rect.bottom - 12));
+    box.style.left = rect.left + 'px';
+    box.style.top = (rect.bottom + 4) + 'px';
+    box.style.width = rect.width + 'px';
+    box.style.maxHeight = maxHeight + 'px';
+  }
+
   function doSearch(q, kind, sugBox, input, hiddenId) {
+    positionSuggestions(sugBox, input);
     sugBox.style.display = 'block';
     sugBox.innerHTML = '<div style="padding:10px;color:#64748b;font-size:12px;text-align:center">🔎 Aranıyor...</div>';
     openSuggestions = sugBox;
@@ -1707,6 +1724,13 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
     if (s === null || s === undefined) return '';
     return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
+
+  window.addEventListener('scroll', () => {
+    if (openSuggestions) hideSuggestions(openSuggestions);
+  }, true);
+  window.addEventListener('resize', () => {
+    if (openSuggestions) hideSuggestions(openSuggestions);
+  });
 })();
 </script>
 <?php endif; ?>
