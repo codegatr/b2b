@@ -779,13 +779,17 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
 <?php
 // Native browser autocomplete fallback: AJAX arama bozulsa bile cache'deki kayıtlarla eşleme yapılabilsin.
 $psMapOptions = [];
-if ($tab === 'products' && !empty($rawProducts)) {
-    foreach ($rawProducts as $pp) {
+if ($tab === 'products') {
+    // Eşleştirme araması her zaman tüm Paraşüt ürün cache'ini görmeli.
+    // Sayfa tablosundaki $rawProducts boş/filtreli olabilir; datalist'i ondan beslemiyoruz.
+    $optionProducts = function_exists('parasut_cache_get_products') ? parasut_cache_get_products('', true) : $rawProducts;
+    foreach ($optionProducts as $pp) {
         $a = $pp['attributes'] ?? [];
         $name = trim($a['name'] ?? '');
         $code = trim($a['code'] ?? '');
+        $archived = !empty($a['archived']);
         $label = $name !== '' ? $name : ($code !== '' ? '[Adsız - Kod: ' . $code . ']' : '[Adsız - ID: ' . $pp['id'] . ']');
-        $value = $label . ($code !== '' ? ' [' . $code . ']' : '') . ' (ID: ' . $pp['id'] . ')';
+        $value = $label . ($code !== '' ? ' [' . $code . ']' : '') . ' (ID: ' . $pp['id'] . ')' . ($archived ? ' [ARŞİVLİ]' : '');
         $psMapOptions[$value] = (string)$pp['id'];
     }
 } elseif ($tab === 'dealers' && !empty($parasutContacts)) {
