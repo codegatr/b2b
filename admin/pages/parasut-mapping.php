@@ -744,23 +744,32 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
 <div style="background:#f0fdf4;border:1px solid #86efac;color:#166534;padding:10px 14px;border-radius:8px;margin-bottom:16px;font-size:12px">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
     <div>
-      ✓ Paraşüt'ten <strong><?= $apiCount ?></strong> <?= $apiKind ?> çekildi
+      <?php
+        $displayApiCount = $apiCount;
+        if ($tab === 'products' && isset($parasutMeta)) {
+            $displayApiCount = (int)$parasutMeta['active_fetched'] + (int)$parasutMeta['archived_fetched'];
+        }
+      ?>
+      ✓ Paraşüt cache'inde <strong><?= $displayApiCount ?></strong> <?= $apiKind ?> hazır
       <?php if (isset($parasutMeta)): ?>
         <span style="color:#166534;margin-left:8px">
           (<?= (int)$parasutMeta['active_fetched'] ?>/<?= (int)$parasutMeta['active_total'] ?> aktif
           + <?= (int)$parasutMeta['archived_fetched'] ?>/<?= (int)$parasutMeta['archived_total'] ?> arşivli)
+          <?php if ($tab === 'products' && !empty($parasutMeta['filtered_count'])): ?>
+            · <?= (int)$parasutMeta['filtered_count'] ?> muhasebe kalemi gizlendi
+          <?php endif; ?>
         </span>
       <?php endif; ?>
     </div>
     <?php
     // Çekilen vs toplam fark var mı? (eksik kayıt tespiti)
     if (isset($parasutMeta)) {
-        $expected = $parasutMeta['active_total'] + $parasutMeta['archived_total'];
-        $missing  = $expected - $apiCount;
+        $missing = max(0, (int)$parasutMeta['active_total'] - (int)$parasutMeta['active_fetched'])
+                 + max(0, (int)$parasutMeta['archived_total'] - (int)$parasutMeta['archived_fetched']);
         if ($missing > 0):
     ?>
     <div style="background:#fef3c7;color:#92400e;padding:4px 10px;border-radius:6px;font-weight:600;font-size:11px">
-      ⚠️ <?= $missing ?> kayıt çekilemedi (sayfa limiti?)
+      ⚠️ <?= $missing ?> kayıt Paraşüt API'den eksik geldi
     </div>
     <?php endif; } ?>
   </div>
