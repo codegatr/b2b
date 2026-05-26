@@ -1005,6 +1005,155 @@ class Parasut {
         }
     }
 
+    private function normalizeInvoiceNo(string $value): string {
+        $value = trim($value);
+        if ($value === '') return '';
+        if (function_exists('mb_strtoupper')) {
+            $value = mb_strtoupper($value, 'UTF-8');
+        } else {
+            $value = strtoupper($value);
+        }
+        return preg_replace('/[^A-Z0-9]/u', '', $value) ?: '';
+    }
+
+    private function invoiceNumberFromRecord(array $invoice): ?string {
+        $attrs = $invoice['attributes'] ?? [];
+        foreach (['invoice_no', 'printed_invoice_no', 'invoice_number', 'no', 'number'] as $key) {
+            if (!empty($attrs[$key])) return (string)$attrs[$key];
+        }
+        return null;
+    }
+
+    private function invoiceMatchesNumber(array $invoice, string $invoiceNo): bool {
+        $needle = $this->normalizeInvoiceNo($invoiceNo);
+        if ($needle === '') return false;
+
+        $attrs = $invoice['attributes'] ?? [];
+        foreach (['invoice_no', 'printed_invoice_no', 'invoice_number', 'no', 'number', 'description'] as $key) {
+            if (empty($attrs[$key])) continue;
+            $haystack = $this->normalizeInvoiceNo((string)$attrs[$key]);
+            if ($haystack === $needle || str_contains($haystack, $needle)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Paraşüt'te elle girilmiş görünen fatura numarasını bul.
+     * Önce ilgili carinin faturalarında arar; bulunamazsa API filtreleri ve son faturalarla
+     * genel arama yapar. Böylece entegrasyon öncesi kesilen faturalar PDF'e bağlanabilir.
+     */
+    public function findInvoiceByNumber(string $invoiceNo, ?string $contactId = null): ?array {
+        if (!$this->isEnabled()) return null;
+        $invoiceNo = trim($invoiceNo);
+        if ($invoiceNo === '') return null;
+
+        $checkRows = function(array $rows) use ($invoiceNo): ?array {
+            foreach ($rows as $row) {
+                if ($this->invoiceMatchesNumber($row, $invoiceNo)) {
+                    return $row;
+                }
+            }
+            return null;
+        };
+
+        try {
+            if (!empty($contactId)) {
+                $totalPages = 1;
+                for ($page = 1; $page <= min(20, $totalPages); $page++) {
+                    $res = $this->listInvoicesByContact($contactId, $page, 25);
+                    $found = $checkRows($res['data'] ?? []);
+                    if ($found) return $found;
+                    $totalPages = max(1, (int)($res['meta']['total_pages'] ?? $totalPages));
+                    if (empty($res['data'])) break;
+                }
+            }
+
+            foreach (['invoice_no', 'printed_invoice_no', 'no'] as $filterKey) {
+                $url = $this->endpoint('sales_invoices')
+                     . '?filter[' . urlencode($filterKey) . ']=' . urlencode($invoiceNo)
+                     . '&page[number]=1&page[size]=25&sort=-issue_date';
+                $res = $this->http('GET', $url);
+                $found = $checkRows($res['data'] ?? []);
+                if ($found) return $found;
+            }
+
+            $totalPages = 1;
+            for ($page = 1; $page <= min(20, $totalPages); $page++) {
+                $url = $this->endpoint('sales_invoices')
+                     . '?page[number]=' . $page
+                     . '&page[size]=25&sort=-issue_date';
+                $res = $this->http('GET', $url);
+                $found = $checkRows($res['data'] ?? []);
+                if ($found) return $found;
+                $totalPages = max(1, (int)($res['meta']['total_pages'] ?? $totalPages));
+                if (empty($res['data'])) break;
+            }
+        } catch (\Throwable $e) {
+            error_log('Parasut::findInvoiceByNumber hatası: ' . $e->getMessage());
+        }
+        return null;
+    }
+
+    public function linkInvoiceByNumber(int $orderId, string $invoiceNo): array {
+        if (!$this->isEnabled()) {
+            return ['ok'=>false, 'msg'=>'Paraşüt entegrasyonu kapalı.'];
+        }
+        $invoiceNo = trim($invoiceNo);
+        if ($orderId <= 0 || $invoiceNo === '') {
+            return ['ok'=>false, 'msg'=>'Fatura numarası boş.'];
+        }
+
+        $order = dbRow(
+            "SELECT o.id, o.invoice_no_source, d.parasut_contact_id
+             FROM b2b_orders o
+             JOIN b2b_dealers d ON d.id=o.dealer_id
+             WHERE o.id=?",
+            [$orderId]
+        );
+        if (!$order) {
+            return ['ok'=>false, 'msg'=>'Sipariş bulunamadı.'];
+        }
+
+        $invoice = $this->findInvoiceByNumber($invoiceNo, $order['parasut_contact_id'] ?? null);
+        if (!$invoice || empty($invoice['id'])) {
+            return ['ok'=>false, 'msg'=>'Paraşüt içinde bu fatura numarasıyla eşleşen kayıt bulunamadı.'];
+        }
+
+        $invoiceId = (string)$invoice['id'];
+        $status = $invoice['attributes']['payment_status'] ?? $this->getInvoiceStatus($invoiceId);
+        $matchedNo = $this->invoiceNumberFromRecord($invoice) ?: $invoiceNo;
+        $pdfUrl = $this->getInvoicePdfUrl($invoiceId);
+
+        dbExec(
+            "UPDATE b2b_orders
+             SET invoice_no=?,
+                 invoice_no_source=COALESCE(NULLIF(invoice_no_source, ''), 'manual'),
+                 invoice_no_updated_at=COALESCE(invoice_no_updated_at, NOW()),
+                 parasut_invoice_id=?,
+                 parasut_invoice_status=?,
+                 parasut_invoice_pdf_url=?,
+                 parasut_synced_at=NOW()
+             WHERE id=?",
+            [$matchedNo, $invoiceId, $status, $pdfUrl, $orderId]
+        );
+
+        auditLog('parasut_invoice_linked_by_number', 'b2b_orders', $orderId, [
+            'invoice_no' => $matchedNo,
+            'invoice_id' => $invoiceId,
+            'has_pdf' => !empty($pdfUrl),
+        ]);
+
+        return [
+            'ok' => true,
+            'msg' => $pdfUrl
+                ? 'Paraşüt faturası bulundu ve PDF bağlantısı kaydedildi.'
+                : 'Paraşüt faturası bulundu; PDF henüz hazır değil veya Paraşüt URL döndürmedi.',
+            'invoice_id' => $invoiceId,
+            'invoice_no' => $matchedNo,
+            'pdf_url' => $pdfUrl,
+        ];
+    }
+
     /**
      * Fatura iptal et (Paraşüt resmi prosedürü).
      * PATCH /v4/{company_id}/sales_invoices/{id}/cancel
