@@ -1435,3 +1435,154 @@ function parasut(): Parasut {
     if ($p === null) $p = new Parasut();
     return $p;
 }
+
+// ════════════════════════════════════════════════════════════════
+// PARAŞÜT CACHE — Arka planda DB'de tutulan ürün/cari listesi
+// Sayfa açılışında Paraşüt'e gitmiyoruz, sadece manuel sync.
+// ════════════════════════════════════════════════════════════════
+
+/**
+ * Cache'lenmiş Paraşüt ürünlerini getir (arama destekli).
+ * @param string $query  arama metni (boş = hepsi)
+ * @param bool   $includeArchived  arşivli ürünleri dahil et
+ * @return array Paraşüt ürün objesi formatında ([{id, type, attributes:{...}}])
+ */
+function parasut_cache_get_products(string $query = '', bool $includeArchived = true): array {
+    $sql = "SELECT * FROM b2b_parasut_cache WHERE kind='products'";
+    $params = [];
+    if (!$includeArchived) {
+        $sql .= " AND archived=0";
+    }
+    if ($query !== '') {
+        $sql .= " AND (LOWER(name) LIKE ? OR LOWER(code) LIKE ? OR parasut_id=?)";
+        $q = '%' . mb_strtolower(trim($query), 'UTF-8') . '%';
+        $params[] = $q; $params[] = $q; $params[] = trim($query);
+    }
+    $sql .= " ORDER BY name ASC LIMIT 5000";
+    $rows = dbRows($sql, $params);
+
+    $out = [];
+    foreach ($rows as $r) {
+        // raw_data varsa kullan, yoksa minimal yapı oluştur
+        $attrs = !empty($r['raw_data']) ? (json_decode($r['raw_data'], true) ?: []) : [];
+        if (empty($attrs['name']))     $attrs['name'] = $r['name'];
+        if (empty($attrs['code']))     $attrs['code'] = $r['code'];
+        if (!isset($attrs['vat_rate']))   $attrs['vat_rate'] = (float)$r['vat_rate'];
+        if (!isset($attrs['list_price'])) $attrs['list_price'] = $r['list_price'] !== null ? (float)$r['list_price'] : null;
+        if (!isset($attrs['archived']))   $attrs['archived'] = (bool)$r['archived'];
+        if (empty($attrs['_category_name']) && !empty($r['category_name'])) {
+            $attrs['_category_name'] = $r['category_name'];
+        }
+        $out[] = [
+            'id'         => $r['parasut_id'],
+            'type'       => 'products',
+            'attributes' => $attrs,
+        ];
+    }
+    return $out;
+}
+
+/**
+ * Cache'lenmiş ürün sayısı (statistic).
+ */
+function parasut_cache_stats(): array {
+    $row = dbRow(
+        "SELECT
+           COUNT(*) AS total,
+           SUM(CASE WHEN archived=0 THEN 1 ELSE 0 END) AS active,
+           SUM(CASE WHEN archived=1 THEN 1 ELSE 0 END) AS archived,
+           MAX(synced_at) AS last_synced
+         FROM b2b_parasut_cache WHERE kind='products'"
+    );
+    return [
+        'total'       => (int)($row['total'] ?? 0),
+        'active'      => (int)($row['active'] ?? 0),
+        'archived'    => (int)($row['archived'] ?? 0),
+        'last_synced' => $row['last_synced'] ?? null,
+    ];
+}
+
+/**
+ * Paraşüt'ten TÜM ürünleri çek ve DB'ye yaz (cache update).
+ * Manuel "🔄 Senkronize Et" butonundan çağırılır.
+ * Throttle + retry mekanizması var (parasut.php içinde).
+ *
+ * @return array{success: bool, total: int, active: int, archived: int, duration: float, error: ?string}
+ */
+function parasut_cache_sync_products(): array {
+    $start = microtime(true);
+    $result = ['success'=>false, 'total'=>0, 'active'=>0, 'archived'=>0, 'duration'=>0.0, 'error'=>null];
+
+    if (!parasut()->isEnabled()) {
+        $result['error'] = 'Paraşüt entegrasyonu kapalı.';
+        return $result;
+    }
+
+    try {
+        // Aktif + arşivli tüm ürünleri çek (rate-limit-aware fonksiyonlar)
+        $active   = parasut()->listAllProductsWithMeta(200);
+        $archived = parasut()->listAllProductsWithMeta(200, ['archived' => 'true']);
+        $allProducts = array_merge($active['data'], $archived['data']);
+
+        if (empty($allProducts)) {
+            $result['error'] = 'Paraşüt boş döndü. Token veya bağlantı sorunu olabilir.';
+            return $result;
+        }
+
+        // Transaction ile hızlı toplu insert
+        $pdo = db();
+        $pdo->beginTransaction();
+        try {
+            // Eski cache'i temizle
+            dbExec("DELETE FROM b2b_parasut_cache WHERE kind='products'");
+
+            $stmt = $pdo->prepare(
+                "INSERT INTO b2b_parasut_cache
+                 (kind, parasut_id, name, code, category_name, vat_rate, list_price, archived, raw_data, synced_at)
+                 VALUES ('products', ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                 ON DUPLICATE KEY UPDATE
+                   name=VALUES(name), code=VALUES(code), category_name=VALUES(category_name),
+                   vat_rate=VALUES(vat_rate), list_price=VALUES(list_price),
+                   archived=VALUES(archived), raw_data=VALUES(raw_data), synced_at=NOW()"
+            );
+
+            foreach ($allProducts as $p) {
+                $attrs = $p['attributes'] ?? [];
+                $stmt->execute([
+                    $p['id'],
+                    mb_substr(trim($attrs['name'] ?? ''), 0, 255),
+                    mb_substr(trim($attrs['code'] ?? ''), 0, 128),
+                    mb_substr(trim($attrs['_category_name'] ?? ''), 0, 128),
+                    (float)($attrs['vat_rate'] ?? 0),
+                    isset($attrs['list_price']) ? (float)$attrs['list_price'] : null,
+                    !empty($attrs['archived']) ? 1 : 0,
+                    json_encode($attrs, JSON_UNESCAPED_UNICODE),
+                ]);
+            }
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+
+        $stats = parasut_cache_stats();
+        $result['success']  = true;
+        $result['total']    = $stats['total'];
+        $result['active']   = $stats['active'];
+        $result['archived'] = $stats['archived'];
+        $result['duration'] = round(microtime(true) - $start, 2);
+
+        settingSave('parasut_cache_last_sync_at', date('Y-m-d H:i:s'));
+        settingSave('parasut_cache_last_sync_status', json_encode([
+            'success'  => true,
+            'total'    => $stats['total'],
+            'active'   => $stats['active'],
+            'archived' => $stats['archived'],
+            'duration' => $result['duration'],
+        ]));
+    } catch (\Throwable $e) {
+        $result['error'] = $e->getMessage();
+        error_log('parasut_cache_sync_products error: ' . $e->getMessage());
+    }
+    return $result;
+}

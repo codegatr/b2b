@@ -23,6 +23,25 @@ $msg = '';
 // POST HANDLERS
 // ──────────────────────────────────────────────────────────────
 
+// 🔄 Paraşüt Cache Senkronizasyonu (manuel buton)
+if (isPost() && ($_POST['action'] ?? '') === 'sync-parasut-cache') {
+    csrfCheck();
+    // Uzun sürebilir (1144 ürün × ~150ms = ~3 dakika)
+    @set_time_limit(600);
+    @ini_set('max_execution_time', 600);
+    @ignore_user_abort(true);
+
+    $r = parasut_cache_sync_products();
+    if ($r['success']) {
+        $msg = 'success:✓ Senkronizasyon tamamlandı! ' . $r['total'] . ' ürün cache\'de (' . $r['active'] . ' aktif + ' . $r['archived'] . ' arşivli). Süre: ' . $r['duration'] . ' sn.';
+    } else {
+        $msg = 'danger:✗ Senkronizasyon başarısız: ' . ($r['error'] ?? 'Bilinmeyen hata');
+    }
+    // POST sonrası redirect (PRG pattern) — sayfa yenilensin
+    $_SESSION['flash'] = ['type' => $r['success'] ? 'success' : 'danger', 'msg' => substr($msg, strpos($msg, ':') + 1)];
+    redirect('?page=parasut-mapping&tab=products');
+}
+
 // Bayi → Paraşüt cari eşleme (manuel)
 if (isPost() && ($_POST['action'] ?? '') === 'map-dealer') {
     csrfCheck();
@@ -414,36 +433,22 @@ if ($tab === 'dealers') {
     // products tab
     $b2bProducts = dbRows("SELECT id, name, sku, base_price, vat_rate, parasut_product_id FROM b2b_products WHERE is_active=1 ORDER BY name");
 
-    // ?q=XXX — server-side arama (kullanıcı G-14 gibi spesifik ürün ararken)
+    // ?q=XXX — cache içinde anlık arama (Paraşüt'e gitmez)
     $searchQuery = trim($_GET['q'] ?? '');
-
-    // Default güvenli initializer (exception olsa bile UI doğru çalışır)
-    $parasutProducts = [];
-    $rawProducts = [];
-    $activeRes = ['data'=>[], 'total_count'=>0, 'fetched'=>0];
-    $archivedRes = ['data'=>[], 'total_count'=>0, 'fetched'=>0];
-    $parasutError = null;
-
-    try {
-        if ($searchQuery !== '') {
-            // PHP-side fuzzy contains arama (Paraşüt'ün filter[name] EXACT yapıyor)
-            $searchResults = parasut()->searchProducts($searchQuery, 100);
-            $rawProducts = $searchResults;
-            $activeRes = ['total_count' => 0, 'fetched' => count($searchResults)];
-        } else {
-            // Normal akış — tüm ürünleri çek (aktif + arşivli)
-            $activeRes = parasut()->listAllProductsWithMeta(200);
-            $archivedRes = parasut()->listAllProductsWithMeta(200, ['archived' => 'true']);
-            $rawProducts = array_merge($activeRes['data'], $archivedRes['data']);
-        }
-    } catch (\Throwable $e) {
-        $parasutError = $e->getMessage();
-        error_log('parasut-mapping products fetch hata: ' . $e->getMessage());
-    }
 
     // ?show_all=1 — muhasebe hesap kalemleri dahil
     $showAll = isset($_GET['show_all']) && $_GET['show_all'] === '1';
 
+    // CACHE FIRST: arka planda DB'de hazır ürünler
+    $cacheStats = parasut_cache_stats();
+    $rawProducts = parasut_cache_get_products($searchQuery, true);
+
+    $parasutError = null;
+    $parasutProducts = [];
+
+    /**
+     * Muhasebe kalemi tespit fonksiyonu (regex: SADECE rakam+nokta)
+     */
     $isAccountingItem = function($attrs) {
         $name = trim($attrs['name'] ?? '');
         $code = trim($attrs['code'] ?? '');
@@ -462,26 +467,28 @@ if ($tab === 'dealers') {
         $parasutProducts[] = $p;
     }
 
-    // ─── PHP-side alfabetik sıralama (Türkçe karakter destekli) ───
-    // Paraşüt'ün sort=name Türkçe karakterlerde sorun çıkarıyor, PHP-side garanti.
+    // PHP-side alfabetik sıralama (Türkçe karakter destekli)
     usort($parasutProducts, function($a, $b) {
         $nameA = mb_strtolower(trim($a['attributes']['name'] ?? ''), 'UTF-8');
         $nameB = mb_strtolower(trim($b['attributes']['name'] ?? ''), 'UTF-8');
-        // Boş isimleri en alta at
         if ($nameA === '' && $nameB !== '') return 1;
         if ($nameA !== '' && $nameB === '') return -1;
         return strnatcasecmp($nameA, $nameB);
     });
 
     $parasutMeta = [
-        'active_total'    => $activeRes['total_count'] ?? 0,
-        'active_fetched'  => $activeRes['fetched'] ?? 0,
-        'archived_total'  => $archivedRes['total_count'] ?? 0,
-        'archived_fetched'=> $archivedRes['fetched'] ?? 0,
-        'show_all'        => $showAll,
-        'filtered_count'  => $filteredCount,
-        'search_query'    => $searchQuery,
-        'error'           => $parasutError,
+        'cache_total'    => $cacheStats['total'],
+        'cache_active'   => $cacheStats['active'],
+        'cache_archived' => $cacheStats['archived'],
+        'last_synced'    => $cacheStats['last_synced'],
+        'active_total'   => $cacheStats['active'],
+        'active_fetched' => $cacheStats['active'],
+        'archived_total' => $cacheStats['archived'],
+        'archived_fetched'=> $cacheStats['archived'],
+        'show_all'       => $showAll,
+        'filtered_count' => $filteredCount,
+        'search_query'   => $searchQuery,
+        'error'          => $parasutError,
     ];
 
     $parasutProductsById = [];
@@ -1075,7 +1082,43 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
     <!-- Filtre durumu -->
     <?php if (isset($parasutMeta) && $tab === 'products'): ?>
 
-    <!-- Server-side arama formu - Paraşüt'te direkt sorgu -->
+    <!-- ─── PARAŞÜT CACHE DURUMU + SYNC BUTONU ─── -->
+    <?php
+      $lastSync = $parasutMeta['last_synced'] ?? null;
+      $isCacheEmpty = ((int)$parasutMeta['cache_total']) === 0;
+      $cacheAgeMinutes = $lastSync ? floor((time() - strtotime($lastSync)) / 60) : null;
+      $isCacheStale = $cacheAgeMinutes !== null && $cacheAgeMinutes > 360; // 6 saat+
+    ?>
+    <div style="background:linear-gradient(135deg,<?= $isCacheEmpty ? '#fef2f2,#fee2e2' : ($isCacheStale ? '#fffbeb,#fef3c7' : '#f0fdf4,#dcfce7') ?>);border-bottom:1px solid <?= $isCacheEmpty ? '#fca5a5' : ($isCacheStale ? '#fcd34d' : '#86efac') ?>;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+      <div>
+        <?php if ($isCacheEmpty): ?>
+          <div style="font-weight:700;color:#b91c1c;font-size:13px;margin-bottom:3px">🔴 Cache Boş — Senkronizasyon Gerekli</div>
+          <div style="font-size:11px;color:#7f1d1d">Paraşüt ürünleri henüz çekilmedi. "Şimdi Senkronize Et" butonuna basın.</div>
+        <?php else: ?>
+          <div style="font-weight:700;color:<?= $isCacheStale ? '#92400e' : '#15803d' ?>;font-size:13px;margin-bottom:3px">
+            <?= $isCacheStale ? '🟡' : '✅' ?>
+            Cache'de <strong><?= (int)$parasutMeta['cache_total'] ?></strong> ürün hazır
+            (<?= (int)$parasutMeta['cache_active'] ?> aktif + <?= (int)$parasutMeta['cache_archived'] ?> arşivli)
+          </div>
+          <div style="font-size:11px;color:<?= $isCacheStale ? '#78350f' : '#166534' ?>">
+            Son senkron: <strong><?= h(date('d.m.Y H:i', strtotime($lastSync))) ?></strong>
+            <?php if ($cacheAgeMinutes !== null): ?>
+              · <?= $cacheAgeMinutes < 60 ? ($cacheAgeMinutes . ' dakika önce') : (floor($cacheAgeMinutes/60) . ' saat önce') ?>
+              <?php if ($isCacheStale): ?> · <strong>Yenilenmesi öneriliyor</strong><?php endif; ?>
+            <?php endif; ?>
+          </div>
+        <?php endif; ?>
+      </div>
+      <form method="post" onsubmit="return confirm('Paraşüt\'ten tüm ürünler tekrar çekilecek. Bu işlem 1-3 dakika sürebilir. Devam edilsin mi?');" style="display:inline">
+        <?= csrfField() ?>
+        <input type="hidden" name="action" value="sync-parasut-cache">
+        <button type="submit" class="btn" style="background:<?= $isCacheEmpty ? '#dc2626' : ($isCacheStale ? '#d97706' : '#16a34a') ?>;color:#fff;border:none;font-weight:700;padding:10px 18px;font-size:13px">
+          🔄 <?= $isCacheEmpty ? 'Şimdi Senkronize Et' : 'Yeniden Senkronize Et' ?>
+        </button>
+      </form>
+    </div>
+
+    <!-- Server-side arama formu - cache içinde anlık -->
     <div style="padding:14px 16px;border-bottom:1px solid var(--border);background:#f8fafc">
       <form method="get" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <input type="hidden" name="page" value="parasut-mapping">
@@ -1083,11 +1126,12 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
         <?php if ($parasutMeta['show_all']): ?><input type="hidden" name="show_all" value="1"><?php endif; ?>
         <div style="flex:1;min-width:240px">
           <input type="search" name="q" value="<?= h($parasutMeta['search_query']) ?>"
-                 placeholder="🔎 Paraşüt'te direkt ara (örn: G-14, churros, tavuk)..."
-                 class="form-control" style="font-size:13px;padding:8px 12px">
+                 placeholder="🔎 Cache'de ara (örn: G-14, churros, tavuk)..."
+                 class="form-control" style="font-size:13px;padding:8px 12px"
+                 autofocus>
         </div>
         <button type="submit" class="btn btn-primary btn-sm" style="height:36px;padding:0 16px">
-          🔎 Paraşüt'te Ara
+          🔎 Ara
         </button>
         <?php if ($parasutMeta['search_query'] !== ''): ?>
         <a href="?page=parasut-mapping&tab=products<?= $parasutMeta['show_all'] ? '&show_all=1' : '' ?>"
@@ -1099,8 +1143,7 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
       </form>
       <?php if ($parasutMeta['search_query'] !== ''): ?>
       <div style="margin-top:8px;font-size:11px;color:#1e40af;background:#eff6ff;border-left:3px solid #1e40af;padding:6px 10px;border-radius:4px">
-        🔎 <strong>"<?= h($parasutMeta['search_query']) ?>"</strong> için Paraşüt'te <strong><?= count($parasutProducts) ?></strong> ürün bulundu
-        (toplam <?= $parasutMeta['active_fetched'] ?> kayıt çekildi).
+        🔎 <strong>"<?= h($parasutMeta['search_query']) ?>"</strong> için cache'de <strong><?= count($parasutProducts) ?></strong> ürün bulundu
       </div>
       <?php endif; ?>
     </div>
