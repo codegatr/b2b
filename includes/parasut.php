@@ -986,10 +986,75 @@ class Parasut {
         if (!$this->isEnabled() || empty($invoiceId)) return null;
         try {
             $r = $this->http('GET', $this->endpoint("sales_invoices/{$invoiceId}/pdf"));
+            $url = $r['url'] ?? $r['data']['attributes']['url'] ?? null;
+            if ($url) return $url;
+
+            $doc = $this->getInvoiceActiveEDocument($invoiceId);
+            if ($doc && !empty($doc['id']) && !empty($doc['type'])) {
+                return $this->getEDocumentPdfUrl((string)$doc['type'], (string)$doc['id']);
+            }
+        } catch (\Throwable $e) {
+            return null;
+        }
+        return null;
+    }
+
+    private function eDocumentEndpointType(string $type): string {
+        $type = strtolower(trim($type));
+        return match ($type) {
+            'e_archive', 'e_archives' => 'e_archives',
+            'e_invoice', 'e_invoices' => 'e_invoices',
+            'e_smm', 'e_smms' => 'e_smms',
+            default => $type,
+        };
+    }
+
+    private function eDocumentDbType(string $type): string {
+        $type = strtolower(trim($type));
+        return match ($type) {
+            'e_archives' => 'e_archive',
+            'e_invoices' => 'e_invoice',
+            'e_smms' => 'e_smm',
+            default => $type,
+        };
+    }
+
+    public function getEDocumentPdfUrl(string $type, string $documentId): ?string {
+        if (!$this->isEnabled() || $documentId === '') return null;
+        $endpointType = $this->eDocumentEndpointType($type);
+        if (!in_array($endpointType, ['e_archives', 'e_invoices', 'e_smms'], true)) return null;
+        try {
+            $r = $this->http('GET', $this->endpoint("{$endpointType}/{$documentId}/pdf"));
             return $r['url'] ?? $r['data']['attributes']['url'] ?? null;
         } catch (\Throwable $e) {
             return null;
         }
+    }
+
+    public function getInvoiceActiveEDocument(string $invoiceId): ?array {
+        if (!$this->isEnabled() || empty($invoiceId)) return null;
+        try {
+            $r = $this->http('GET', $this->endpoint("sales_invoices/{$invoiceId}") . '?include=active_e_document');
+            $rel = $r['data']['relationships']['active_e_document']['data'] ?? null;
+            if (is_array($rel) && !empty($rel['id']) && !empty($rel['type'])) {
+                $attrs = [];
+                foreach (($r['included'] ?? []) as $inc) {
+                    if (($inc['id'] ?? null) == $rel['id'] && ($inc['type'] ?? null) == $rel['type']) {
+                        $attrs = $inc['attributes'] ?? [];
+                        break;
+                    }
+                }
+                return [
+                    'id' => (string)$rel['id'],
+                    'type' => $this->eDocumentDbType((string)$rel['type']),
+                    'endpoint_type' => $this->eDocumentEndpointType((string)$rel['type']),
+                    'attributes' => $attrs,
+                ];
+            }
+        } catch (\Throwable $e) {
+            return null;
+        }
+        return null;
     }
 
     /**
@@ -1122,7 +1187,14 @@ class Parasut {
         $invoiceId = (string)$invoice['id'];
         $status = $invoice['attributes']['payment_status'] ?? $this->getInvoiceStatus($invoiceId);
         $matchedNo = $this->invoiceNumberFromRecord($invoice) ?: $invoiceNo;
-        $pdfUrl = $this->getInvoicePdfUrl($invoiceId);
+        $doc = $this->getInvoiceActiveEDocument($invoiceId);
+        $pdfUrl = null;
+        if ($doc && !empty($doc['id']) && !empty($doc['type'])) {
+            $pdfUrl = $this->getEDocumentPdfUrl((string)$doc['type'], (string)$doc['id']);
+        }
+        if (!$pdfUrl) {
+            $pdfUrl = $this->getInvoicePdfUrl($invoiceId);
+        }
 
         dbExec(
             "UPDATE b2b_orders
@@ -1130,11 +1202,13 @@ class Parasut {
                  invoice_no_source=COALESCE(NULLIF(invoice_no_source, ''), 'manual'),
                  invoice_no_updated_at=COALESCE(invoice_no_updated_at, NOW()),
                  parasut_invoice_id=?,
+                 parasut_einvoice_id=?,
+                 parasut_einvoice_type=?,
                  parasut_invoice_status=?,
                  parasut_invoice_pdf_url=?,
                  parasut_synced_at=NOW()
              WHERE id=?",
-            [$matchedNo, $invoiceId, $status, $pdfUrl, $orderId]
+            [$matchedNo, $invoiceId, $doc['id'] ?? null, $doc['type'] ?? null, $status, $pdfUrl, $orderId]
         );
 
         auditLog('parasut_invoice_linked_by_number', 'b2b_orders', $orderId, [
