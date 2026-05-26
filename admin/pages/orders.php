@@ -24,7 +24,8 @@ if (!empty($_GET['print']) && $_GET['print'] === 'irsaliye' && $id) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrfCheck();
-    $act = $_POST['form_action'] ?? '';
+    $act = $_POST['form_action'] ?? ($_POST['act'] ?? '');
+    $oid = intval($_POST['order_id'] ?? ($_POST['oid'] ?? 0));
 
     // ─── Fatura no manuel kaydetme ───
     if ($act === 'set_invoice_no') {
@@ -187,8 +188,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $success = 'İptal talebi reddedildi.';
         $action = 'detail'; $id = $oid;
     }
-    $oid = intval($_POST['order_id'] ?? 0);
-
     // Sipariş Onayla
     if ($act === 'approve') {
         $order = dbRow("SELECT * FROM b2b_orders WHERE id=?", [$oid]);
@@ -322,10 +321,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // ── Arşivle / Arşivden Çıkar ──────────────────────────────
     if ($act === 'archive') {
-        $oids = array_map('intval', (array)($_POST['order_ids'] ?? [$oid]));
+        $postedIds = $_POST['order_ids'] ?? ($_POST['order_id'] ?? ($_POST['oid'] ?? $oid));
+        $oids = array_values(array_filter(array_map('intval', (array)$postedIds)));
         foreach ($oids as $aid) {
-            $o = dbRow("SELECT status FROM b2b_orders WHERE id=?", [$aid]);
-            if ($o && in_array($o['status'], ['iptal','teslim_edildi','iade'])) {
+            $o = dbRow("SELECT status, parasut_invoice_id FROM b2b_orders WHERE id=?", [$aid]);
+            if ($o && (in_array($o['status'], ['iptal','teslim_edildi','iade'], true) || !empty($o['parasut_invoice_id']))) {
                 dbExec("UPDATE b2b_orders SET is_archived=1, archived_by=?, archived_at=NOW() WHERE id=?",
                     [adminId(), $aid]);
                 auditLog('order_archived', 'b2b_orders', $aid);
@@ -432,6 +432,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = 'detail'; $id = $oid;
     }
 
+    if ($act === 'parasut_full_flow_archive') {
+        try {
+            $r = parasut()->fullInvoiceFlow($oid);
+            if ($r['ok']) {
+                dbExec("UPDATE b2b_orders SET is_archived=1, archived_by=?, archived_at=NOW() WHERE id=?", [adminId(), $oid]);
+                auditLog('order_invoiced_and_archived', 'b2b_orders', $oid, [
+                    'invoice_id' => $r['invoice_id'] ?? null,
+                    'einvoice_id' => $r['einvoice_id'] ?? null,
+                    'einvoice_type' => $r['einvoice_type'] ?? null,
+                ]);
+                $_SESSION['flash_admin'] = ['type'=>'success', 'msg'=>'Fatura kesildi ve sipariş arşive kaldırıldı.'];
+                redirect('?page=orders&action=archive_list');
+            } else {
+                $error = 'Paraşüt hatası: ' . $r['msg'];
+            }
+        } catch (\Throwable $e) {
+            $error = 'Paraşüt hatası: ' . $e->getMessage();
+        }
+        $action = 'detail'; $id = $oid;
+    }
     if ($act === 'parasut_refresh_pdf') {
         // Sadece PDF URL'sini yeniden çek (signed URL süresi dolduğunda)
         $ord = dbRow("SELECT parasut_invoice_id FROM b2b_orders WHERE id=?", [$oid]);
@@ -1216,11 +1236,22 @@ $completedNotArchived = (int)dbVal(
           </a>
           <?php endif; ?>
 
+          <?php if (empty($order['is_archived'])): ?>
+          <form method="post" onsubmit="return confirm('Bu sipariş arşive kaldırılacak. Ana listeden gizlenir, Arşiv menüsünden geri çıkarılabilir.');">
+            <?= csrfField() ?>
+            <input type="hidden" name="form_action" value="archive">
+            <input type="hidden" name="order_id" value="<?= (int)$order['id'] ?>">
+            <button type="submit" class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;width:100%">
+              📦 Arşiv'e Kaldır
+            </button>
+          </form>
+          <?php endif; ?>
+
           <?php if (!$pEinvoiceId): ?>
           <form method="post" onsubmit="return confirm('Bu siparişin faturası e-arşiv veya e-fatura olarak Paraşüt''te resmileştirilecek.\n\nDevam edilsin mi?');">
             <?= csrfField() ?>
-            <input type="hidden" name="act" value="parasut_full_flow">
-            <input type="hidden" name="oid" value="<?= (int)$order['id'] ?>">
+            <input type="hidden" name="form_action" value="parasut_full_flow">
+            <input type="hidden" name="order_id" value="<?= (int)$order['id'] ?>">
             <button type="submit" class="btn btn-sm" style="background:#7c3aed;color:#fff;border:none;width:100%">
               ⚡ Resmileştir (E-Arşiv/E-Fatura)
             </button>
@@ -1230,15 +1261,15 @@ $completedNotArchived = (int)dbVal(
           <div style="display:flex;gap:6px">
             <form method="post" style="flex:1">
               <?= csrfField() ?>
-              <input type="hidden" name="act" value="parasut_sync_status">
-              <input type="hidden" name="oid" value="<?= (int)$order['id'] ?>">
+              <input type="hidden" name="form_action" value="parasut_sync_status">
+              <input type="hidden" name="order_id" value="<?= (int)$order['id'] ?>">
               <button type="submit" class="btn btn-sm btn-secondary" style="width:100%;font-size:11px">🔄 Durumu Çek</button>
             </form>
             <?php if ($pInvoiceId): ?>
             <form method="post" style="flex:1">
               <?= csrfField() ?>
-              <input type="hidden" name="act" value="parasut_refresh_pdf">
-              <input type="hidden" name="oid" value="<?= (int)$order['id'] ?>">
+              <input type="hidden" name="form_action" value="parasut_refresh_pdf">
+              <input type="hidden" name="order_id" value="<?= (int)$order['id'] ?>">
               <button type="submit" class="btn btn-sm btn-secondary" style="width:100%;font-size:11px">🔄 PDF Yenile</button>
             </form>
             <?php endif; ?>
@@ -1247,8 +1278,8 @@ $completedNotArchived = (int)dbVal(
           <?php if ($pStatus !== 'cancelled' && $pInvoiceId): ?>
           <form method="post" onsubmit="return confirm('⚠️ Paraşüt''teki fatura İPTAL edilecek. Bu işlem muhasebede iz bırakır.\n\nDevam edilsin mi?');" style="margin-top:6px">
             <?= csrfField() ?>
-            <input type="hidden" name="act" value="parasut_cancel_invoice">
-            <input type="hidden" name="oid" value="<?= (int)$order['id'] ?>">
+            <input type="hidden" name="form_action" value="parasut_cancel_invoice">
+            <input type="hidden" name="order_id" value="<?= (int)$order['id'] ?>">
             <button type="submit" class="btn btn-sm" style="background:transparent;color:#dc2626;border:1px solid #fecaca;width:100%;font-size:11px">
               🗑 Paraşüt'te İptal Et
             </button>
@@ -1264,10 +1295,18 @@ $completedNotArchived = (int)dbVal(
           </div>
           <form method="post">
             <?= csrfField() ?>
-            <input type="hidden" name="act" value="parasut_full_flow">
-            <input type="hidden" name="oid" value="<?= (int)$order['id'] ?>">
+            <input type="hidden" name="form_action" value="parasut_full_flow">
+            <input type="hidden" name="order_id" value="<?= (int)$order['id'] ?>">
             <button type="submit" class="btn btn-primary" style="width:100%">
               ⚡ Paraşüt'te Fatura Oluştur + Resmileştir
+            </button>
+          </form>
+          <form method="post" style="margin-top:8px" onsubmit="return confirm('Fatura kesilecek ve işlem başarılı olursa sipariş arşive kaldırılacak. Devam edilsin mi?');">
+            <?= csrfField() ?>
+            <input type="hidden" name="form_action" value="parasut_full_flow_archive">
+            <input type="hidden" name="order_id" value="<?= (int)$order['id'] ?>">
+            <button type="submit" class="btn" style="width:100%;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;font-weight:700">
+              📦 Faturayı Kes ve Arşiv'e Kaldır
             </button>
           </form>
         </div>
