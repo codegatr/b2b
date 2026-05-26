@@ -24,7 +24,7 @@ if (($_GET['ajax'] ?? '') === 'search') {
 
     $kind = $_GET['kind'] ?? 'products';
     $q    = trim($_GET['q'] ?? '');
-    $limit = min(50, max(5, (int)($_GET['limit'] ?? 30)));
+    $limit = min(250, max(5, (int)($_GET['limit'] ?? 100)));
 
     try {
         if ($kind === 'contacts') {
@@ -1729,7 +1729,7 @@ if ($tab === 'products') {
     sugBox.innerHTML = '<div style="padding:10px;color:#64748b;font-size:12px;text-align:center">🔎 Aranıyor...</div>';
     openSuggestions = sugBox;
 
-    fetch(SEARCH_URL + '&kind=' + encodeURIComponent(kind) + '&q=' + encodeURIComponent(q) + '&limit=30', {
+    fetch(SEARCH_URL + '&kind=' + encodeURIComponent(kind) + '&q=' + encodeURIComponent(q) + '&limit=100', {
         headers: {'Accept': 'application/json'},
         credentials: 'same-origin'
       })
