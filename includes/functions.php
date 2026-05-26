@@ -807,7 +807,18 @@ function parasutSyncStock(): array {
 
             // Paraşüt'ten gerçek stok çek (inventory_levels)
             // NOT: Bu Paraşüt'e ekstra istek yapar — 100ms throttle uygulanır
-            $invQty = parasut()->getProductInventory($parasutId);
+            $invQty = null;
+            $cacheRow = $cacheById[$parasutId] ?? null;
+            if ($cacheRow && !empty($cacheRow['raw_data'])) {
+                $attrs = json_decode($cacheRow['raw_data'], true) ?: [];
+                if (array_key_exists('stock_count', $attrs) && $attrs['stock_count'] !== null && $attrs['stock_count'] !== '') {
+                    $invQty = (float)$attrs['stock_count'];
+                }
+            }
+            if ($invQty === null) {
+                $invQty = parasut()->getProductInventory($parasutId);
+                usleep(250000);
+            }
             if ($invQty !== null) {
                 $newStock = (int)round($invQty);
                 dbExec("UPDATE b2b_products SET stock=?, updated_at=NOW() WHERE id=?",
