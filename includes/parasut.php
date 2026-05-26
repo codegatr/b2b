@@ -1503,15 +1503,20 @@ function parasut_cache_stats(): array {
 }
 
 /**
- * Paraşüt'ten TÜM ürünleri çek ve DB'ye yaz (cache update).
- * Manuel "🔄 Senkronize Et" butonundan çağırılır.
- * Throttle + retry mekanizması var (parasut.php içinde).
+ * Paraşüt'ten TÜM ürünleri çek ve DB'ye yaz (SAFE cache update).
  *
- * @return array{success: bool, total: int, active: int, archived: int, duration: float, error: ?string}
+ * KRITIK MANTIK (v1.1.83):
+ * - Eski cache'i SILMEZ (mevcut eşleşmeler korunur)
+ * - UPSERT ile günceller (ON DUPLICATE KEY)
+ * - Bu sync'te dönen ID'leri "synced_at = NOW()" ile işaretler
+ * - Eski synced_at değeri kalan kayıtlar → "kayıp/silinmiş" sayılır
+ * - Minimum threshold: eğer Paraşüt < 50 ürün döndüyse şüpheli sync → cache'e dokunmaz
+ *
+ * @return array{success: bool, total: int, active: int, archived: int, duration: float, error: ?string, stale: int}
  */
 function parasut_cache_sync_products(): array {
     $start = microtime(true);
-    $result = ['success'=>false, 'total'=>0, 'active'=>0, 'archived'=>0, 'duration'=>0.0, 'error'=>null];
+    $result = ['success'=>false, 'total'=>0, 'active'=>0, 'archived'=>0, 'duration'=>0.0, 'error'=>null, 'stale'=>0];
 
     if (!parasut()->isEnabled()) {
         $result['error'] = 'Paraşüt entegrasyonu kapalı.';
@@ -1525,29 +1530,42 @@ function parasut_cache_sync_products(): array {
         $allProducts = array_merge($active['data'], $archived['data']);
 
         if (empty($allProducts)) {
-            $result['error'] = 'Paraşüt boş döndü. Token veya bağlantı sorunu olabilir.';
+            $result['error'] = 'Paraşüt boş döndü. Token veya bağlantı sorunu olabilir. Cache korundu.';
             return $result;
         }
 
-        // Transaction ile hızlı toplu insert
+        // GÜVENLİK: Eğer çok az ürün döndüyse şüphelidir → cache'e dokunma
+        // (Eski 1144 ürün vardı, şimdi 50 dönerse rate limit/hata var demek)
+        $existingTotal = (int)(parasut_cache_stats()['total'] ?? 0);
+        $newCount = count($allProducts);
+        if ($existingTotal > 100 && $newCount < ($existingTotal * 0.3)) {
+            $result['error'] = sprintf(
+                'Şüpheli sync: Paraşüt sadece %d ürün döndü (eskiden %d vardı). Cache korundu, lütfen tekrar deneyin.',
+                $newCount, $existingTotal
+            );
+            return $result;
+        }
+
+        // Sync timestamp — bu sync'te dönenleri işaretleyeceğiz
+        $syncTime = date('Y-m-d H:i:s');
+        $foundIds = []; // bu sync'te bulunan Paraşüt ID'leri
+
         $pdo = db();
         $pdo->beginTransaction();
         try {
-            // Eski cache'i temizle
-            dbExec("DELETE FROM b2b_parasut_cache WHERE kind='products'");
-
             $stmt = $pdo->prepare(
                 "INSERT INTO b2b_parasut_cache
                  (kind, parasut_id, name, code, category_name, vat_rate, list_price, archived, raw_data, synced_at)
-                 VALUES ('products', ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                 VALUES ('products', ?, ?, ?, ?, ?, ?, ?, ?, ?)
                  ON DUPLICATE KEY UPDATE
                    name=VALUES(name), code=VALUES(code), category_name=VALUES(category_name),
                    vat_rate=VALUES(vat_rate), list_price=VALUES(list_price),
-                   archived=VALUES(archived), raw_data=VALUES(raw_data), synced_at=NOW()"
+                   archived=VALUES(archived), raw_data=VALUES(raw_data), synced_at=VALUES(synced_at)"
             );
 
             foreach ($allProducts as $p) {
                 $attrs = $p['attributes'] ?? [];
+                $foundIds[] = $p['id'];
                 $stmt->execute([
                     $p['id'],
                     mb_substr(trim($attrs['name'] ?? ''), 0, 255),
@@ -1557,6 +1575,7 @@ function parasut_cache_sync_products(): array {
                     isset($attrs['list_price']) ? (float)$attrs['list_price'] : null,
                     !empty($attrs['archived']) ? 1 : 0,
                     json_encode($attrs, JSON_UNESCAPED_UNICODE),
+                    $syncTime,
                 ]);
             }
             $pdo->commit();
@@ -1565,19 +1584,28 @@ function parasut_cache_sync_products(): array {
             throw $e;
         }
 
+        // STALE kayıtları say (bu sync'te dönmeyenler)
+        // SILMEYIZ — eşleşmeler korunur, sadece UI'da uyarı veririz
+        $stale = (int)dbVal(
+            "SELECT COUNT(*) FROM b2b_parasut_cache WHERE kind='products' AND synced_at < ?",
+            [$syncTime]
+        );
+
         $stats = parasut_cache_stats();
         $result['success']  = true;
         $result['total']    = $stats['total'];
         $result['active']   = $stats['active'];
         $result['archived'] = $stats['archived'];
+        $result['stale']    = $stale;
         $result['duration'] = round(microtime(true) - $start, 2);
 
-        settingSave('parasut_cache_last_sync_at', date('Y-m-d H:i:s'));
+        settingSave('parasut_cache_last_sync_at', $syncTime);
         settingSave('parasut_cache_last_sync_status', json_encode([
             'success'  => true,
             'total'    => $stats['total'],
             'active'   => $stats['active'],
             'archived' => $stats['archived'],
+            'stale'    => $stale,
             'duration' => $result['duration'],
         ]));
     } catch (\Throwable $e) {
@@ -1626,11 +1654,12 @@ function parasut_cache_contacts_stats(): array {
 }
 
 /**
- * Paraşüt'ten TÜM cari kartlarını çek ve cache'e yaz.
+ * Paraşüt'ten TÜM cari kartlarını çek ve cache'e yaz (SAFE).
+ * DELETE etmez, UPSERT yapar — mevcut eşleşmeler korunur.
  */
 function parasut_cache_sync_contacts(): array {
     $start = microtime(true);
-    $result = ['success'=>false, 'total'=>0, 'duration'=>0.0, 'error'=>null];
+    $result = ['success'=>false, 'total'=>0, 'duration'=>0.0, 'error'=>null, 'stale'=>0];
 
     if (!parasut()->isEnabled()) {
         $result['error'] = 'Paraşüt entegrasyonu kapalı.';
@@ -1642,22 +1671,33 @@ function parasut_cache_sync_contacts(): array {
         $contacts = $res['data'] ?? [];
 
         if (empty($contacts)) {
-            $result['error'] = 'Paraşüt cari listesi boş döndü.';
+            $result['error'] = 'Paraşüt cari listesi boş döndü. Cache korundu.';
             return $result;
         }
+
+        // GÜVENLİK: şüpheli sync kontrolü
+        $existingTotal = (int)(parasut_cache_contacts_stats()['total'] ?? 0);
+        $newCount = count($contacts);
+        if ($existingTotal > 100 && $newCount < ($existingTotal * 0.3)) {
+            $result['error'] = sprintf(
+                'Şüpheli cari sync: %d kayıt döndü (eskiden %d vardı). Cache korundu.',
+                $newCount, $existingTotal
+            );
+            return $result;
+        }
+
+        $syncTime = date('Y-m-d H:i:s');
 
         $pdo = db();
         $pdo->beginTransaction();
         try {
-            dbExec("DELETE FROM b2b_parasut_cache WHERE kind='contacts'");
-
             $stmt = $pdo->prepare(
                 "INSERT INTO b2b_parasut_cache
                  (kind, parasut_id, name, code, category_name, archived, raw_data, synced_at)
-                 VALUES ('contacts', ?, ?, ?, ?, 0, ?, NOW())
+                 VALUES ('contacts', ?, ?, ?, ?, 0, ?, ?)
                  ON DUPLICATE KEY UPDATE
                    name=VALUES(name), code=VALUES(code), category_name=VALUES(category_name),
-                   raw_data=VALUES(raw_data), synced_at=NOW()"
+                   raw_data=VALUES(raw_data), synced_at=VALUES(synced_at)"
             );
 
             foreach ($contacts as $c) {
@@ -1668,6 +1708,7 @@ function parasut_cache_sync_contacts(): array {
                     mb_substr(trim($attrs['tax_number'] ?? ''), 0, 128),
                     mb_substr(trim($attrs['account_type'] ?? ''), 0, 128),
                     json_encode($attrs, JSON_UNESCAPED_UNICODE),
+                    $syncTime,
                 ]);
             }
             $pdo->commit();
@@ -1676,12 +1717,18 @@ function parasut_cache_sync_contacts(): array {
             throw $e;
         }
 
+        $stale = (int)dbVal(
+            "SELECT COUNT(*) FROM b2b_parasut_cache WHERE kind='contacts' AND synced_at < ?",
+            [$syncTime]
+        );
+
         $stats = parasut_cache_contacts_stats();
         $result['success']  = true;
         $result['total']    = $stats['total'];
+        $result['stale']    = $stale;
         $result['duration'] = round(microtime(true) - $start, 2);
 
-        settingSave('parasut_cache_contacts_last_sync_at', date('Y-m-d H:i:s'));
+        settingSave('parasut_cache_contacts_last_sync_at', $syncTime);
     } catch (\Throwable $e) {
         $result['error'] = $e->getMessage();
         error_log('parasut_cache_sync_contacts error: ' . $e->getMessage());

@@ -442,13 +442,43 @@ if ($tab === 'dealers') {
     // CACHE FIRST: arka planda DB'de hazır ürünler
     $cacheStats = parasut_cache_stats();
 
-    // YENI MANTIK (v1.1.81): Sayfa açıldığında otomatik 1144 ürün gösterme.
+    // YENI MANTIK (v1.1.81+): Sayfa açıldığında otomatik 1144 ürün gösterme.
     // Sadece kullanıcı arama yaparsa cache'den çek (LIKE prefix optimized).
     // Bu sayfa hızlı yüklenir, scroll uzun olmaz.
     if ($searchQuery !== '') {
         $rawProducts = parasut_cache_get_products($searchQuery, true);
     } else {
         $rawProducts = []; // Boş arama → ürün listesi gösterme
+    }
+
+    // KRITIK (v1.1.83): Mevcut eşleştirilmiş ürünleri HER ZAMAN dropdown'a dahil et
+    // Aksi takdirde arama yokken kullanıcı eşleşmeleri "kayıp" görür
+    $linkedIds = array_filter(array_column($b2bProducts, 'parasut_product_id'));
+    if (!empty($linkedIds)) {
+        $placeholders = implode(',', array_fill(0, count($linkedIds), '?'));
+        $linkedRows = dbRows(
+            "SELECT * FROM b2b_parasut_cache WHERE kind='products' AND parasut_id IN ($placeholders)",
+            array_values($linkedIds)
+        );
+        $existingIds = array_column($rawProducts, 'id');
+        foreach ($linkedRows as $row) {
+            // Eğer bu ID zaten rawProducts'ta yoksa ekle
+            if (!in_array($row['parasut_id'], $existingIds, true)) {
+                $attrs = !empty($row['raw_data']) ? (json_decode($row['raw_data'], true) ?: []) : [];
+                if (empty($attrs['name']))         $attrs['name']     = $row['name'];
+                if (empty($attrs['code']))         $attrs['code']     = $row['code'];
+                if (!isset($attrs['vat_rate']))    $attrs['vat_rate'] = (float)$row['vat_rate'];
+                if (!isset($attrs['archived']))    $attrs['archived'] = (bool)$row['archived'];
+                if (empty($attrs['_category_name']) && !empty($row['category_name'])) {
+                    $attrs['_category_name'] = $row['category_name'];
+                }
+                $rawProducts[] = [
+                    'id'         => $row['parasut_id'],
+                    'type'       => 'products',
+                    'attributes' => $attrs,
+                ];
+            }
+        }
     }
 
     $parasutError = null;
@@ -523,7 +553,7 @@ if ($tab === 'dealers') {
         'total_b2b'       => count($b2bProducts),
         'matched'         => count(array_filter($b2bProducts, fn($p) => !empty($p['parasut_product_id']))),
         'unmatched_b2b'   => count(array_filter($b2bProducts, fn($p) => empty($p['parasut_product_id']))),
-        'total_parasut'   => count($parasutProducts),
+        'total_parasut'   => (int)$cacheStats['total'], // Cache'deki TOPLAM ürün sayısı (sayfada arama yoksa bile)
         'orphan_parasut'  => count($orphanProducts),
     ];
 }
