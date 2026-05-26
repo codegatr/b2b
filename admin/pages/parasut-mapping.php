@@ -1651,8 +1651,18 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
     sugBox.innerHTML = '<div style="padding:10px;color:#64748b;font-size:12px;text-align:center">🔎 Aranıyor...</div>';
     openSuggestions = sugBox;
 
-    fetch(SEARCH_URL + '&kind=' + encodeURIComponent(kind) + '&q=' + encodeURIComponent(q) + '&limit=30')
-      .then(r => r.json())
+    fetch(SEARCH_URL + '&kind=' + encodeURIComponent(kind) + '&q=' + encodeURIComponent(q) + '&limit=30', {
+        headers: {'Accept': 'application/json'},
+        credentials: 'same-origin'
+      })
+      .then(async r => {
+        const text = await r.text();
+        try {
+          return JSON.parse(text);
+        } catch (err) {
+          throw new Error('Sunucu JSON yerine farkli cevap dondu: ' + text.slice(0, 120).replace(/\s+/g, ' '));
+        }
+      })
       .then(data => {
         if (!data.success) {
           sugBox.innerHTML = '<div style="padding:10px;color:#dc2626;font-size:12px">Hata: ' + (data.error || 'Bilinmeyen') + '</div>';
@@ -1665,7 +1675,10 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
         renderSuggestions(data.items, sugBox, input, hiddenId);
       })
       .catch(err => {
-        sugBox.innerHTML = '<div style="padding:10px;color:#dc2626;font-size:12px">Bağlantı hatası: ' + err.message + '</div>';
+        positionSuggestions(sugBox, input);
+        sugBox.style.display = 'block';
+        openSuggestions = sugBox;
+        sugBox.innerHTML = '<div style="padding:10px;color:#dc2626;font-size:12px">Baglanti/arama hatasi: ' + escapeHtml(err.message) + '</div>';
       });
   }
 
@@ -1687,8 +1700,9 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
       if (it.category) html += '📁 ' + escapeHtml(it.category) + ' · ';
       if (it.archived) html += '<span style="color:#dc2626;font-weight:600">📦 ARŞİVLİ</span> · ';
       html += 'ID: ' + escapeHtml(it.id);
-      if (it.price !== null && it.price !== undefined) {
-        html += ' · ' + it.price.toFixed(2) + ' ₺';
+      if (it.price !== null && it.price !== undefined && it.price !== '') {
+        const price = Number(it.price);
+        if (!Number.isNaN(price)) html += ' · ' + price.toFixed(2) + ' ₺';
       }
       html += '</div>';
       div.innerHTML = html;
