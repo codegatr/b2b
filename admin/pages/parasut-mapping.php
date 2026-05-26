@@ -1133,12 +1133,14 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
         <details>
           <summary style="cursor:pointer;font-size:11px;color:#6b21a8">Sayfa sayfa detay göster</summary>
           <table style="width:100%;margin-top:8px;font-size:10px;font-family:monospace">
-            <thead><tr style="background:#f3f4f6"><th style="text-align:left;padding:4px">Sayfa</th><th style="text-align:left;padding:4px">Gelen kayıt</th><th style="text-align:left;padding:4px">Hata</th></tr></thead>
+            <thead><tr style="background:#f3f4f6"><th style="text-align:left;padding:4px">Sayfa</th><th style="text-align:left;padding:4px">Gelen kayıt</th><th style="text-align:left;padding:4px">HTTP</th><th style="text-align:left;padding:4px">Deneme</th><th style="text-align:left;padding:4px">Hata</th></tr></thead>
             <tbody>
               <?php foreach (($diagActive['page_log'] ?? []) as $pl): ?>
               <tr style="border-bottom:1px solid #f3f4f6">
                 <td style="padding:4px">Sayfa #<?= $pl['page'] ?></td>
                 <td style="padding:4px"><strong><?= $pl['count'] ?></strong> kayıt</td>
+                <td style="padding:4px"><?= h((string)($pl['http'] ?? '—')) ?></td>
+                <td style="padding:4px"><?= (int)($pl['attempts'] ?? 1) ?>x</td>
                 <td style="padding:4px;color:#dc2626"><?= $pl['err'] ? h($pl['err']) : '—' ?></td>
               </tr>
               <?php endforeach; ?>
@@ -1165,12 +1167,14 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
         <details>
           <summary style="cursor:pointer;font-size:11px;color:#6b21a8">Sayfa sayfa detay göster</summary>
           <table style="width:100%;margin-top:8px;font-size:10px;font-family:monospace">
-            <thead><tr style="background:#f3f4f6"><th style="text-align:left;padding:4px">Sayfa</th><th style="text-align:left;padding:4px">Gelen kayıt</th><th style="text-align:left;padding:4px">Hata</th></tr></thead>
+            <thead><tr style="background:#f3f4f6"><th style="text-align:left;padding:4px">Sayfa</th><th style="text-align:left;padding:4px">Gelen kayıt</th><th style="text-align:left;padding:4px">HTTP</th><th style="text-align:left;padding:4px">Deneme</th><th style="text-align:left;padding:4px">Hata</th></tr></thead>
             <tbody>
               <?php foreach (($diagArchived['page_log'] ?? []) as $pl): ?>
               <tr style="border-bottom:1px solid #f3f4f6">
                 <td style="padding:4px">Sayfa #<?= $pl['page'] ?></td>
                 <td style="padding:4px"><strong><?= $pl['count'] ?></strong> kayıt</td>
+                <td style="padding:4px"><?= h((string)($pl['http'] ?? '—')) ?></td>
+                <td style="padding:4px"><?= (int)($pl['attempts'] ?? 1) ?>x</td>
                 <td style="padding:4px;color:#dc2626"><?= $pl['err'] ? h($pl['err']) : '—' ?></td>
               </tr>
               <?php endforeach; ?>

@@ -575,7 +575,10 @@ class Parasut {
         ];
     }
 
-    /** Paraşüt'teki tek sayfa ürün listesi (page size max 25) */
+    /** Paraşüt'teki tek sayfa ürün listesi (page size max 25)
+     *  İSTEK CACHE: aynı URL aynı request içinde tekrar çağrılırsa önbellekten döner.
+     *  RETRY: rate limit (429) veya boş response durumunda 2 kez retry.
+     */
     public function listProducts(int $page = 1, int $size = 25, array $filter = [], string $sort = ''): array {
         if (!$this->isEnabled()) return ['data'=>[], 'meta'=>['error'=>'Entegrasyon kapalı.']];
         $size = max(1, min(25, $size));
@@ -584,7 +587,32 @@ class Parasut {
             if ($v !== '' && $v !== null) $url .= '&filter[' . urlencode($k) . ']=' . urlencode((string)$v);
         }
         if ($sort !== '') $url .= '&sort=' . urlencode($sort);
-        $r = $this->http('GET', $url);
+
+        // ─── REQUEST-LEVEL CACHE ───
+        // Tanı paneli aynı sayfada 2. kez aynı sayfayı çağırırsa Paraşüt rate
+        // limit'e takılıyor → 0 döner. Cache ile bunu çözüyoruz.
+        static $cache = [];
+        if (isset($cache[$url])) return $cache[$url];
+
+        // ─── RETRY MANTIĞI ───
+        // Boş data veya 429 (rate limit) durumunda 2 kez retry, her seferinde 500ms bekle
+        $r = null;
+        $attempts = 0;
+        $maxAttempts = 3;
+        while ($attempts < $maxAttempts) {
+            $r = $this->http('GET', $url);
+            $httpCode = $r['__meta']['http_code'] ?? 0;
+            $dataCount = count($r['data'] ?? []);
+            // Başarılı veya geri dönüş yok-veri-yok → çık
+            if ($dataCount > 0 || $httpCode === 200) break;
+            // Rate limit veya geçici hata → bekle ve retry
+            if ($httpCode === 429 || $httpCode === 503 || $httpCode === 0) {
+                usleep(500000); // 500ms
+                $attempts++;
+                continue;
+            }
+            break;
+        }
 
         // included[] (kategoriler) ile data'yı zenginleştir
         $catById = [];
@@ -602,17 +630,19 @@ class Parasut {
         }
         unset($d);
 
-        // Meta'ya çağrı bilgisi de yansıt
         $meta = $r['meta'] ?? [];
-        $meta['_url']      = $url;
-        $meta['_http']     = $r['__meta']['http_code'] ?? null;
-        $meta['_returned'] = count($data);
+        $meta['_url']       = $url;
+        $meta['_http']      = $r['__meta']['http_code'] ?? null;
+        $meta['_returned']  = count($data);
+        $meta['_attempts']  = $attempts + 1;
 
-        return [
+        $result = [
             'data' => $data,
             'meta' => $meta,
             'err'  => empty($data) ? $this->getErrorDetail($r) : null,
         ];
+        $cache[$url] = $result;
+        return $result;
     }
 
     /** Paraşüt'teki TÜM ürünleri otomatik pagination ile çek (KRITIK FIX: erken kesme bug'ı yok) */
@@ -634,23 +664,33 @@ class Parasut {
     /**
     /**
      * Ürünler + metadata + sayfa sayfa log (debug için).
-     * maxPages 200 = 5000 kayıt destek.
-     *
-     * KRITIK FIX: Eskiden "count<25 ise dur" mantığı vardı, ama Paraşüt
-     * filter sonrası 22-24 kayıt dönebiliyor ortada → ERKEN KESILMESI bugı.
-     * Şimdi total_pages bilgisini kullanıyoruz, garanti çekim.
+     * - maxPages 200 = 5000 kayıt destek
+     * - Sayfalar arası 100ms throttle (rate limit'ten kaçınmak için)
+     * - RESULT CACHE: aynı filter+sort kombinasyonu aynı request içinde tekrar
+     *   çağrılırsa önbellekten döner (tanı + normal liste çift çağırınca rate limit
+     *   tetikleniyordu, bu fix onu çözer).
      */
     public function listAllProductsWithMeta(int $maxPages = 200, array $filter = [], string $sort = ''): array {
+        // Result cache
+        static $resultCache = [];
+        $cacheKey = md5(serialize($filter) . '|' . $sort);
+        if (isset($resultCache[$cacheKey])) return $resultCache[$cacheKey];
+
         $all = []; $totalCount = 0; $totalPages = 0; $perPage = 25;
         $pageLog = [];
 
         for ($p = 1; $p <= $maxPages; $p++) {
+            // İlk sayfa hariç sayfalar arası 100ms throttle
+            if ($p > 1) usleep(100000);
+
             $res = $this->listProducts($p, 25, $filter, $sort);
             $cnt = count($res['data'] ?? []);
             $pageLog[] = [
-                'page'  => $p,
-                'count' => $cnt,
-                'err'   => $res['err'] ?? null,
+                'page'    => $p,
+                'count'   => $cnt,
+                'err'     => $res['err'] ?? null,
+                'http'    => $res['meta']['_http'] ?? null,
+                'attempts'=> $res['meta']['_attempts'] ?? 1,
             ];
 
             if ($p === 1 && !empty($res['meta'])) {
@@ -659,14 +699,12 @@ class Parasut {
                 $perPage    = (int)($res['meta']['per_page']    ?? 25);
             }
 
-            // SADECE tamamen boşsa dur (eski "count<25" bug'ı kaldırıldı)
             if ($cnt === 0) break;
             $all = array_merge($all, $res['data']);
-
-            // total_pages biliniyorsa ona göre dur (gerçek son sayfa)
             if ($totalPages > 0 && $p >= $totalPages) break;
         }
-        return [
+
+        $result = [
             'data'        => $all,
             'fetched'     => count($all),
             'total_count' => $totalCount,
@@ -674,6 +712,8 @@ class Parasut {
             'per_page'    => $perPage,
             'page_log'    => $pageLog,
         ];
+        $resultCache[$cacheKey] = $result;
+        return $result;
     }
 
     /**
