@@ -1586,3 +1586,105 @@ function parasut_cache_sync_products(): array {
     }
     return $result;
 }
+
+/**
+ * Cache'lenmiş Paraşüt CARİ kartlarını getir (arama destekli).
+ */
+function parasut_cache_get_contacts(string $query = ''): array {
+    $sql = "SELECT * FROM b2b_parasut_cache WHERE kind='contacts'";
+    $params = [];
+    if ($query !== '') {
+        $sql .= " AND (LOWER(name) LIKE ? OR LOWER(code) LIKE ? OR parasut_id=?)";
+        $q = '%' . mb_strtolower(trim($query), 'UTF-8') . '%';
+        $params[] = $q; $params[] = $q; $params[] = trim($query);
+    }
+    $sql .= " ORDER BY name ASC LIMIT 5000";
+    $rows = dbRows($sql, $params);
+
+    $out = [];
+    foreach ($rows as $r) {
+        $attrs = !empty($r['raw_data']) ? (json_decode($r['raw_data'], true) ?: []) : [];
+        if (empty($attrs['name'])) $attrs['name'] = $r['name'];
+        $out[] = [
+            'id'         => $r['parasut_id'],
+            'type'       => 'contacts',
+            'attributes' => $attrs,
+        ];
+    }
+    return $out;
+}
+
+/**
+ * Cache contacts istatistik.
+ */
+function parasut_cache_contacts_stats(): array {
+    $row = dbRow("SELECT COUNT(*) AS total, MAX(synced_at) AS last_synced FROM b2b_parasut_cache WHERE kind='contacts'");
+    return [
+        'total'       => (int)($row['total'] ?? 0),
+        'last_synced' => $row['last_synced'] ?? null,
+    ];
+}
+
+/**
+ * Paraşüt'ten TÜM cari kartlarını çek ve cache'e yaz.
+ */
+function parasut_cache_sync_contacts(): array {
+    $start = microtime(true);
+    $result = ['success'=>false, 'total'=>0, 'duration'=>0.0, 'error'=>null];
+
+    if (!parasut()->isEnabled()) {
+        $result['error'] = 'Paraşüt entegrasyonu kapalı.';
+        return $result;
+    }
+
+    try {
+        $res = parasut()->listAllContactsWithMeta(200);
+        $contacts = $res['data'] ?? [];
+
+        if (empty($contacts)) {
+            $result['error'] = 'Paraşüt cari listesi boş döndü.';
+            return $result;
+        }
+
+        $pdo = db();
+        $pdo->beginTransaction();
+        try {
+            dbExec("DELETE FROM b2b_parasut_cache WHERE kind='contacts'");
+
+            $stmt = $pdo->prepare(
+                "INSERT INTO b2b_parasut_cache
+                 (kind, parasut_id, name, code, category_name, archived, raw_data, synced_at)
+                 VALUES ('contacts', ?, ?, ?, ?, 0, ?, NOW())
+                 ON DUPLICATE KEY UPDATE
+                   name=VALUES(name), code=VALUES(code), category_name=VALUES(category_name),
+                   raw_data=VALUES(raw_data), synced_at=NOW()"
+            );
+
+            foreach ($contacts as $c) {
+                $attrs = $c['attributes'] ?? [];
+                $stmt->execute([
+                    $c['id'],
+                    mb_substr(trim($attrs['name'] ?? ''), 0, 255),
+                    mb_substr(trim($attrs['tax_number'] ?? ''), 0, 128),
+                    mb_substr(trim($attrs['account_type'] ?? ''), 0, 128),
+                    json_encode($attrs, JSON_UNESCAPED_UNICODE),
+                ]);
+            }
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+
+        $stats = parasut_cache_contacts_stats();
+        $result['success']  = true;
+        $result['total']    = $stats['total'];
+        $result['duration'] = round(microtime(true) - $start, 2);
+
+        settingSave('parasut_cache_contacts_last_sync_at', date('Y-m-d H:i:s'));
+    } catch (\Throwable $e) {
+        $result['error'] = $e->getMessage();
+        error_log('parasut_cache_sync_contacts error: ' . $e->getMessage());
+    }
+    return $result;
+}

@@ -70,21 +70,24 @@ if (defined('CRON_ALLOWED_IPS') && is_array(CRON_ALLOWED_IPS) && !empty(CRON_ALL
     }
 }
 
-// ─── SENKRONİZASYON ───
-$result = parasut_cache_sync_products();
+// ─── SENKRONİZASYON (Products + Contacts) ───
+$productResult = parasut_cache_sync_products();
+$contactResult = parasut_cache_sync_contacts();
 $duration = round(microtime(true) - $startTime, 2);
+
+// Toplam sonuç
+$success = $productResult['success'] || $contactResult['success'];
+$combined = [
+    'success'  => $success,
+    'products' => $productResult,
+    'contacts' => $contactResult,
+    'duration' => $duration,
+    'time'     => date('c'),
+];
 
 // Settings'e cron log
 settingSave('parasut_cron_last_run_at', date('Y-m-d H:i:s'));
-settingSave('parasut_cron_last_result', json_encode($result, JSON_UNESCAPED_UNICODE));
+settingSave('parasut_cron_last_result', json_encode($combined, JSON_UNESCAPED_UNICODE));
 
-http_response_code($result['success'] ? 200 : 500);
-echo json_encode([
-    'success'  => $result['success'],
-    'total'    => $result['total'],
-    'active'   => $result['active'],
-    'archived' => $result['archived'],
-    'duration' => $duration,
-    'error'    => $result['error'] ?? null,
-    'time'     => date('c'),
-], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+http_response_code($success ? 200 : 500);
+echo json_encode($combined, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);

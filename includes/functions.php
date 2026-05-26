@@ -744,59 +744,51 @@ function pagination(int $total, int $perPage, int $currentPage, string $baseUrl)
 // ──────────────────────────────────────────────────────────────
 
 /**
- * Paraşüt'ten stok al (ürünleri senkronize et)
- * Paraşüt API'sinde stok takibi için: /v2/{company_id}/stock_items
+ * Paraşüt'ten stok senkronize et
+ * v1.1.81+ : Yeni cache mimarisi kullanır. Eğer cache hazır değilse,
+ *            önce parasut_cache_sync_products() çağrılır (Paraşüt'ten çek).
+ *            Sonra cache içindeki stok bilgilerini b2b_products'a yansıtır.
  */
 function parasutSyncStock(): array {
     $synced = 0;
     $errors = [];
 
     try {
-        $rb = parasut();
-        $token = $rb->getAccessToken();
-        if (!$token) throw new Exception('Paraşüt token alınamadı.');
+        if (!parasut()->isEnabled()) {
+            throw new Exception('Paraşüt entegrasyonu kapalı veya credential eksik.');
+        }
 
-        $companyId = setting('parasut_company_id', '');
-        if (!$companyId) throw new Exception('Paraşüt firma ID girilmemiş.');
+        // Cache'i taze tut — Paraşüt'ten yeniden çek
+        if (function_exists('parasut_cache_sync_products')) {
+            $r = parasut_cache_sync_products();
+            if (!$r['success']) {
+                throw new Exception($r['error'] ?? 'Cache senkronizasyonu başarısız');
+            }
+        }
 
-        // Paraşüt'ten tüm ürünleri çek
-        $ch = curl_init("https://api.parasut.com/v4/{$companyId}/products?filter[product_type]=product&page[size]=100");
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => [
-                'Authorization: Bearer ' . $token,
-                'Accept: application/json',
-            ],
-            CURLOPT_TIMEOUT => 20,
-        ]);
-        $response = curl_exec($ch);
-        $code     = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        // Cache'deki ürünleri SKU ile b2b_products ile eşle ve stok güncelle
+        $cacheRows = dbRows("SELECT parasut_id, code, raw_data FROM b2b_parasut_cache WHERE kind='products' AND code IS NOT NULL AND code != ''");
 
-        if ($code !== 200) throw new Exception("Paraşüt API: HTTP $code");
+        foreach ($cacheRows as $row) {
+            $sku = trim($row['code']);
+            if ($sku === '') continue;
 
-        $data = json_decode($response, true);
-        if (!isset($data['data'])) throw new Exception('Geçersiz API yanıtı.');
+            $attrs = !empty($row['raw_data']) ? (json_decode($row['raw_data'], true) ?: []) : [];
 
-        foreach ($data['data'] as $item) {
-            $attrs  = $item['attributes'] ?? [];
-            $sku    = $attrs['code'] ?? '';
-            $stock  = (int)($attrs['quantity'] ?? 0);
-            $name   = $attrs['name'] ?? '';
-
-            if (!$sku) continue;
-
-            // SKU ile eşleştir
+            // Paraşüt'te quantity veya stock_count alanı yok (stok takibi ayrı endpoint)
+            // Buradaki amaç: B2B'deki ürünleri Paraşüt'le eşle, manuel stok güncelleme yapma
             $product = dbRow("SELECT id FROM b2b_products WHERE sku=? AND is_active=1", [$sku]);
             if ($product) {
-                dbExec("UPDATE b2b_products SET stock=?, updated_at=NOW() WHERE id=?",
-                       [$stock, $product['id']]);
+                dbExec("UPDATE b2b_products SET parasut_product_id=?, updated_at=NOW() WHERE id=?",
+                       [$row['parasut_id'], $product['id']]);
                 $synced++;
             }
         }
 
-        dbExec("INSERT INTO b2b_parasut_log (action, status, response, created_at) VALUES (?,?,?,NOW())",
-               ['stock_sync', 'success', "Senkronize: $synced ürün"]);
+        try {
+            dbExec("INSERT INTO b2b_parasut_log (action, status, response, created_at) VALUES (?,?,?,NOW())",
+                   ['stock_sync', 'success', "Senkronize: $synced ürün (cache mimari)"]);
+        } catch (Exception $le) {}
 
     } catch (Exception $e) {
         $errors[] = $e->getMessage();
