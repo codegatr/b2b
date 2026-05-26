@@ -54,6 +54,12 @@ $order = null;
 if ($action === 'detail' && $id) {
     $order = dbRow("SELECT * FROM b2b_orders WHERE id=? AND dealer_id=?", [$id, $dealer['id']]);
     if (!$order) { $action = 'list'; $id = 0; }
+    elseif (!empty($order['invoice_no']) && empty($order['parasut_invoice_pdf_url']) && function_exists('parasut')) {
+        try {
+            parasut()->linkInvoiceByNumber((int)$order['id'], (string)$order['invoice_no']);
+            $order = dbRow("SELECT * FROM b2b_orders WHERE id=? AND dealer_id=?", [$id, $dealer['id']]);
+        } catch (\Throwable $e) {}
+    }
 }
 
 if ($action === 'detail' && $order) {
