@@ -116,6 +116,10 @@ if (isPost() && ($_POST['action'] ?? '') === 'map-product') {
     csrfCheck();
     $productId = (int)($_POST['product_id'] ?? 0);
     $parasutId = trim($_POST['parasut_id'] ?? '');
+    $typedSearch = trim($_POST['parasut_search_text'] ?? '');
+    if ($typedSearch !== '' && preg_match('/\(ID:\s*([^\)]+)\)/u', $typedSearch, $m)) {
+        $parasutId = trim($m[1]);
+    }
     if ($productId) {
         if ($parasutId === '' || $parasutId === '-') {
             dbExec("UPDATE b2b_products SET parasut_product_id=NULL WHERE id=?", [$productId]);
@@ -789,7 +793,7 @@ if ($tab === 'products') {
         $code = trim($a['code'] ?? '');
         $archived = !empty($a['archived']);
         $label = $name !== '' ? $name : ($code !== '' ? '[Adsız - Kod: ' . $code . ']' : '[Adsız - ID: ' . $pp['id'] . ']');
-        $value = $label . ($code !== '' ? ' [' . $code . ']' : '') . ' (ID: ' . $pp['id'] . ')' . ($archived ? ' [ARŞİVLİ]' : '');
+        $value = $label . ($code !== '' ? ' [' . $code . ']' : '') . ' (ID: ' . $pp['id'] . ')';
         $psMapOptions[$value] = (string)$pp['id'];
     }
 } elseif ($tab === 'dealers' && !empty($parasutContacts)) {
@@ -955,6 +959,7 @@ if ($tab === 'products') {
               <input type="hidden" name="parasut_id" class="ps-parasut-id" value="<?= h($linkedId !== '' ? $linkedId : '-') ?>">
               <div style="position:relative;flex:1">
                 <input type="text" class="form-control ps-search-input"
+                       name="parasut_search_text"
                        placeholder="🔎 Paraşüt cari ara (en az 2 karakter)..."
                        autocomplete="off"
                        list="ps-map-options"
@@ -1168,6 +1173,7 @@ if ($tab === 'products') {
               <input type="hidden" name="parasut_id" class="ps-parasut-id" value="<?= h($linkedId !== '' ? $linkedId : '-') ?>">
               <div style="position:relative;flex:1">
                 <input type="text" class="form-control ps-search-input"
+                       name="parasut_search_text"
                        placeholder="🔎 Paraşüt ürün ara (en az 2 karakter)..."
                        autocomplete="off"
                        list="ps-map-options"
@@ -1704,7 +1710,7 @@ if ($tab === 'products') {
     const value = input.value.trim();
     let id = NATIVE_OPTIONS[value] || '';
     if (!id) {
-      const match = value.match(/\(ID:\s*([^)]+)\)\s*$/);
+      const match = value.match(/\(ID:\s*([^\)]+)\)/);
       if (match) id = match[1].trim();
     }
     if (!id) return false;
