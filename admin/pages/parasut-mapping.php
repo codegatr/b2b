@@ -15,6 +15,59 @@ if (!parasut()->isEnabled()) {
     return;
 }
 
+// ─── AJAX SEARCH ENDPOINT ──────────────────────────────────────
+// JS'den fetch ile çağrılır: ?page=parasut-mapping&ajax=search&kind=products&q=cheddar
+if (($_GET['ajax'] ?? '') === 'search') {
+    // Tüm output buffer'ı temizle (header conflict önleme)
+    while (ob_get_level()) ob_end_clean();
+    header('Content-Type: application/json; charset=utf-8');
+
+    $kind = $_GET['kind'] ?? 'products';
+    $q    = trim($_GET['q'] ?? '');
+    $limit = min(50, max(5, (int)($_GET['limit'] ?? 30)));
+
+    try {
+        if ($kind === 'contacts') {
+            $items = parasut_cache_get_contacts($q);
+        } else {
+            $items = parasut_cache_get_products($q, true);
+        }
+
+        // İlk N tane (sayfa hızı için sınırla)
+        $items = array_slice($items, 0, $limit);
+
+        // Sadeleştir
+        $out = [];
+        foreach ($items as $it) {
+            $attrs = $it['attributes'] ?? [];
+            $name  = trim($attrs['name'] ?? '');
+            $code  = trim($attrs['code'] ?? '');
+            $cat   = trim($attrs['_category_name'] ?? '');
+            $vat   = (float)($attrs['vat_rate'] ?? 0);
+            $price = isset($attrs['list_price']) ? (float)$attrs['list_price'] : null;
+            $arch  = !empty($attrs['archived']);
+
+            // Görünür label
+            $label = $name !== '' ? $name : ($code !== '' ? '[Adsız - ' . $code . ']' : '[Adsız - ID: ' . $it['id'] . ']');
+
+            $out[] = [
+                'id'       => $it['id'],
+                'name'     => $name,
+                'code'     => $code,
+                'category' => $cat,
+                'vat_rate' => $vat,
+                'price'    => $price,
+                'archived' => $arch,
+                'label'    => $label,
+            ];
+        }
+        echo json_encode(['success' => true, 'items' => $out, 'count' => count($out)], JSON_UNESCAPED_UNICODE);
+    } catch (\Throwable $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+    exit;
+}
+
 $tab = $_GET['tab'] ?? 'dealers';
 if (!in_array($tab, ['dealers', 'products'], true)) $tab = 'dealers';
 $msg = '';
@@ -853,26 +906,32 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
           <td style="font-family:monospace;font-size:12px"><?= h($d['tax_number'] ?: '—') ?></td>
           <td style="font-size:12px"><?= h($d['email'] ?: '—') ?></td>
           <td>
-            <form method="post" style="display:flex;gap:6px;align-items:center" class="map-form">
+            <form method="post" class="parasut-search-form map-form" data-kind="contacts" style="display:flex;gap:6px;align-items:center;position:relative">
               <?= csrfField() ?>
               <input type="hidden" name="action" value="map-dealer">
               <input type="hidden" name="dealer_id" value="<?= (int)$d['id'] ?>">
-              <select name="parasut_id" class="form-control" style="font-size:12px;padding:4px 8px;height:30px;min-height:30px;flex:1<?= $linked ? ';border:2px solid #16a34a' : ($isLost ? ';border:2px solid #dc2626' : '') ?>">
-                <option value="-">— Bağlı değil —</option>
-                <?php if ($isLost): ?>
-                <option value="<?= h($linkedId) ?>" selected style="color:#dc2626">⚠️ KAYIP ID: <?= h($linkedId) ?> (Paraşüt'te yok)</option>
+              <input type="hidden" name="parasut_id" class="ps-parasut-id" value="<?= h($linkedId !== '' ? $linkedId : '-') ?>">
+              <div style="position:relative;flex:1">
+                <input type="text" class="form-control ps-search-input"
+                       placeholder="🔎 Paraşüt cari ara (en az 2 karakter)..."
+                       autocomplete="off"
+                       value="<?php
+                         if ($linked) {
+                           $ln = trim($linked['attributes']['name'] ?? '');
+                           $vt = trim($linked['attributes']['tax_number'] ?? '');
+                           echo h(($ln !== '' ? $ln : 'Adsız') . ($vt ? ' [VKN: ' . $vt . ']' : '') . ' (ID: ' . $linkedId . ')');
+                         } elseif ($isLost) {
+                           echo h('⚠️ KAYIP ID: ' . $linkedId);
+                         }
+                       ?>"
+                       style="font-size:12px;padding:6px 30px 6px 10px;height:32px;<?= $linked ? 'border:2px solid #16a34a;background:#f0fdf4' : ($isLost ? 'border:2px solid #dc2626;background:#fef2f2' : '') ?>">
+                <?php if ($linked || $isLost): ?>
+                <button type="button" class="ps-clear-btn" title="Eşlemeyi temizle"
+                        style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:#64748b;cursor:pointer;font-size:14px;padding:2px 6px">✕</button>
                 <?php endif; ?>
-                <?php foreach ($parasutContacts as $c):
-                    $cName = $c['attributes']['name'] ?? '?';
-                    $cTax  = $c['attributes']['tax_number'] ?? '';
-                    $isSel = (string)($d['parasut_contact_id'] ?? '') === (string)$c['id'];
-                ?>
-                <option value="<?= h($c['id']) ?>"<?= $isSel ? ' selected' : '' ?>>
-                  <?= h($cName) ?><?= $cTax ? ' [VKN: ' . h($cTax) . ']' : '' ?> (ID: <?= h($c['id']) ?>)
-                </option>
-                <?php endforeach; ?>
-              </select>
-              <button type="submit" class="btn btn-sm" style="padding:4px 10px;font-size:11px;background:#16a34a;color:#fff;border:none">💾</button>
+                <div class="ps-suggestions" style="display:none;position:absolute;top:calc(100% + 2px);left:0;right:0;background:#fff;border:1px solid #cbd5e1;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.15);max-height:280px;overflow-y:auto;z-index:50"></div>
+              </div>
+              <button type="submit" class="btn btn-sm" style="padding:4px 10px;font-size:11px;background:#16a34a;color:#fff;border:none;height:32px">💾</button>
             </form>
           </td>
           <td>
@@ -1059,36 +1118,32 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
           <td style="font-size:12px"><?= moneyInc((float)$p['base_price'], $p['vat_rate'] ?? 20) ?></td>
           <td style="font-size:12px">%<?= (int)($p['vat_rate'] ?? 20) ?></td>
           <td>
-            <form method="post" style="display:flex;gap:6px;align-items:center">
+            <form method="post" class="parasut-search-form" data-kind="products" style="display:flex;gap:6px;align-items:center;position:relative">
               <?= csrfField() ?>
               <input type="hidden" name="action" value="map-product">
               <input type="hidden" name="product_id" value="<?= (int)$p['id'] ?>">
-              <select name="parasut_id" class="form-control" style="font-size:12px;padding:4px 8px;height:30px;min-height:30px;flex:1<?= $linked ? ';border:2px solid #16a34a' : ($isLost ? ';border:2px solid #dc2626' : '') ?>">
-                <option value="-">— Bağlı değil —</option>
-                <?php if ($isLost): ?>
-                <option value="<?= h($linkedId) ?>" selected style="color:#dc2626">⚠️ KAYIP ID: <?= h($linkedId) ?> (Paraşüt'te yok)</option>
+              <input type="hidden" name="parasut_id" class="ps-parasut-id" value="<?= h($linkedId !== '' ? $linkedId : '-') ?>">
+              <div style="position:relative;flex:1">
+                <input type="text" class="form-control ps-search-input"
+                       placeholder="🔎 Paraşüt ürün ara (en az 2 karakter)..."
+                       autocomplete="off"
+                       value="<?php
+                         if ($linked) {
+                           $ln = trim($linked['attributes']['name'] ?? '');
+                           echo h(($ln !== '' ? $ln : 'Adsız') . ' (ID: ' . $linkedId . ')');
+                         } elseif ($isLost) {
+                           echo h('⚠️ KAYIP ID: ' . $linkedId);
+                         }
+                       ?>"
+                       style="font-size:12px;padding:6px 30px 6px 10px;height:32px;<?= $linked ? 'border:2px solid #16a34a;background:#f0fdf4' : ($isLost ? 'border:2px solid #dc2626;background:#fef2f2' : '') ?>">
+                <?php if ($linked || $isLost): ?>
+                <button type="button" class="ps-clear-btn" title="Eşlemeyi temizle"
+                        style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:#64748b;cursor:pointer;font-size:14px;padding:2px 6px">✕</button>
                 <?php endif; ?>
-                <?php foreach ($parasutProducts as $pp):
-                    $ppAttr  = $pp['attributes'] ?? [];
-                    $ppName  = trim($ppAttr['name'] ?? '');
-                    $ppCode  = trim($ppAttr['code'] ?? '');
-                    $ppCat   = trim($ppAttr['_category_name'] ?? '');
-                    // Fallback chain — ürün adı boşsa kod, o da yoksa ID
-                    $display = $ppName !== '' ? $ppName
-                             : ($ppCode !== '' ? '[Adsız - ' . $ppCode . ']'
-                             : '[Adsız - ID: ' . $pp['id'] . ']');
-                    $isSel = (string)($p['parasut_product_id'] ?? '') === (string)$pp['id'];
-                ?>
-                <option value="<?= h($pp['id']) ?>"<?= $isSel ? ' selected' : '' ?>>
-                  <?= h($display) ?><?php
-                    if ($ppName !== '' && $ppCode !== '') echo ' [' . h($ppCode) . ']';
-                    if ($ppCat !== '') echo ' — ' . h($ppCat);
-                    echo ' (ID: ' . h($pp['id']) . ')';
-                  ?>
-                </option>
-                <?php endforeach; ?>
-              </select>
-              <button type="submit" class="btn btn-sm" style="padding:4px 10px;font-size:11px;background:#16a34a;color:#fff;border:none">💾</button>
+                <!-- Suggestion dropdown (JS doldurur) -->
+                <div class="ps-suggestions" style="display:none;position:absolute;top:calc(100% + 2px);left:0;right:0;background:#fff;border:1px solid #cbd5e1;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.15);max-height:280px;overflow-y:auto;z-index:50"></div>
+              </div>
+              <button type="submit" class="btn btn-sm" style="padding:4px 10px;font-size:11px;background:#16a34a;color:#fff;border:none;height:32px">💾</button>
             </form>
           </td>
           <td>
@@ -1456,6 +1511,201 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
         row.style.display = (q === '' || txt.includes(q)) ? '' : 'none';
       });
     });
+  }
+})();
+</script>
+
+<!-- ─── INLINE PARAŞÜT ARAMA COMPONENTİ ─── -->
+<script>
+(function() {
+  const SEARCH_URL = '?page=parasut-mapping&ajax=search';
+  let openSuggestions = null; // şu an açık olan dropdown
+  let debounceTimer = null;
+
+  // Sayfa içindeki tüm arama formlarını yakala
+  document.querySelectorAll('.parasut-search-form').forEach(form => {
+    const input    = form.querySelector('.ps-search-input');
+    const hiddenId = form.querySelector('.ps-parasut-id');
+    const sugBox   = form.querySelector('.ps-suggestions');
+    const clearBtn = form.querySelector('.ps-clear-btn');
+    const kind     = form.dataset.kind || 'products';
+
+    if (!input || !hiddenId || !sugBox) return;
+
+    // Eşleme zaten varsa input read-only başlasın
+    let isLocked = hiddenId.value && hiddenId.value !== '-' && hiddenId.value !== '';
+
+    if (isLocked) {
+      input.readOnly = true;
+      input.style.cursor = 'pointer';
+    }
+
+    // ✕ butonu - eşlemeyi temizle (henüz kaydedilmedi)
+    if (clearBtn) {
+      clearBtn.addEventListener('click', e => {
+        e.preventDefault();
+        hiddenId.value = '-';
+        input.value = '';
+        input.readOnly = false;
+        input.style.cursor = '';
+        input.style.border = '';
+        input.style.background = '';
+        clearBtn.remove();
+        isLocked = false;
+        input.focus();
+      });
+    }
+
+    // Input'a tıklayınca (kilitliyse) → kilidi aç + temizle
+    input.addEventListener('focus', e => {
+      if (isLocked) {
+        if (!confirm('Mevcut eşlemeyi değiştirmek istiyor musunuz?')) {
+          input.blur();
+          return;
+        }
+        hiddenId.value = '-';
+        input.value = '';
+        input.readOnly = false;
+        input.style.cursor = '';
+        input.style.border = '';
+        input.style.background = '';
+        if (clearBtn) clearBtn.remove();
+        isLocked = false;
+      }
+    });
+
+    // Yazınca → debounce + fetch
+    input.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      const q = input.value.trim();
+      if (q.length < 2) {
+        hideSuggestions(sugBox);
+        return;
+      }
+      debounceTimer = setTimeout(() => doSearch(q, kind, sugBox, input, hiddenId), 200);
+    });
+
+    // Klavye desteği (yukarı/aşağı/enter/escape)
+    input.addEventListener('keydown', e => {
+      if (sugBox.style.display === 'none') return;
+      const items = sugBox.querySelectorAll('.ps-suggestion-item');
+      const active = sugBox.querySelector('.ps-suggestion-active');
+      let idx = active ? Array.from(items).indexOf(active) : -1;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        idx = Math.min(items.length - 1, idx + 1);
+        if (active) active.classList.remove('ps-suggestion-active');
+        if (items[idx]) {
+          items[idx].classList.add('ps-suggestion-active');
+          items[idx].scrollIntoView({block: 'nearest'});
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        idx = Math.max(0, idx - 1);
+        if (active) active.classList.remove('ps-suggestion-active');
+        if (items[idx]) {
+          items[idx].classList.add('ps-suggestion-active');
+          items[idx].scrollIntoView({block: 'nearest'});
+        }
+      } else if (e.key === 'Enter') {
+        if (active) {
+          e.preventDefault();
+          active.click();
+        }
+      } else if (e.key === 'Escape') {
+        hideSuggestions(sugBox);
+      }
+    });
+
+    // Dışarı tıklayınca kapat
+    document.addEventListener('click', e => {
+      if (!form.contains(e.target)) hideSuggestions(sugBox);
+    });
+  });
+
+  function hideSuggestions(box) {
+    box.style.display = 'none';
+    box.innerHTML = '';
+    if (openSuggestions === box) openSuggestions = null;
+  }
+
+  function doSearch(q, kind, sugBox, input, hiddenId) {
+    sugBox.style.display = 'block';
+    sugBox.innerHTML = '<div style="padding:10px;color:#64748b;font-size:12px;text-align:center">🔎 Aranıyor...</div>';
+    openSuggestions = sugBox;
+
+    fetch(SEARCH_URL + '&kind=' + encodeURIComponent(kind) + '&q=' + encodeURIComponent(q) + '&limit=30')
+      .then(r => r.json())
+      .then(data => {
+        if (!data.success) {
+          sugBox.innerHTML = '<div style="padding:10px;color:#dc2626;font-size:12px">Hata: ' + (data.error || 'Bilinmeyen') + '</div>';
+          return;
+        }
+        if (!data.items || data.items.length === 0) {
+          sugBox.innerHTML = '<div style="padding:10px;color:#64748b;font-size:12px;text-align:center">Sonuç yok. Cache\'i senkronize ettiniz mi?</div>';
+          return;
+        }
+        renderSuggestions(data.items, sugBox, input, hiddenId);
+      })
+      .catch(err => {
+        sugBox.innerHTML = '<div style="padding:10px;color:#dc2626;font-size:12px">Bağlantı hatası: ' + err.message + '</div>';
+      });
+  }
+
+  function renderSuggestions(items, sugBox, input, hiddenId) {
+    sugBox.innerHTML = '';
+    items.forEach((it, idx) => {
+      const div = document.createElement('div');
+      div.className = 'ps-suggestion-item';
+      div.style.cssText = 'padding:8px 10px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:12px;line-height:1.4';
+      div.dataset.id = it.id;
+
+      // İsim + kod + kategori + ID
+      let html = '<div style="font-weight:600;color:#1e293b">' + escapeHtml(it.label || 'Adsız');
+      if (it.code && it.code !== it.label) {
+        html += ' <span style="font-family:monospace;font-size:11px;color:#64748b;background:#f1f5f9;padding:1px 5px;border-radius:3px">' + escapeHtml(it.code) + '</span>';
+      }
+      html += '</div>';
+      html += '<div style="font-size:10px;color:#64748b;margin-top:2px">';
+      if (it.category) html += '📁 ' + escapeHtml(it.category) + ' · ';
+      if (it.archived) html += '<span style="color:#dc2626;font-weight:600">📦 ARŞİVLİ</span> · ';
+      html += 'ID: ' + escapeHtml(it.id);
+      if (it.price !== null && it.price !== undefined) {
+        html += ' · ' + it.price.toFixed(2) + ' ₺';
+      }
+      html += '</div>';
+      div.innerHTML = html;
+
+      div.addEventListener('mouseenter', () => {
+        sugBox.querySelectorAll('.ps-suggestion-item').forEach(el => el.classList.remove('ps-suggestion-active'));
+        div.classList.add('ps-suggestion-active');
+      });
+
+      div.addEventListener('click', e => {
+        e.preventDefault();
+        hiddenId.value = it.id;
+        const ln = it.name || 'Adsız';
+        input.value = ln + (it.code ? ' [' + it.code + ']' : '') + ' (ID: ' + it.id + ')';
+        input.style.border = '2px solid #16a34a';
+        input.style.background = '#f0fdf4';
+        hideSuggestions(sugBox);
+      });
+
+      sugBox.appendChild(div);
+    });
+
+    // Stil ekle (sadece bir kez)
+    if (!document.getElementById('ps-suggestion-style')) {
+      const style = document.createElement('style');
+      style.id = 'ps-suggestion-style';
+      style.textContent = '.ps-suggestion-active { background:#eff6ff !important; }';
+      document.head.appendChild(style);
+    }
+  }
+
+  function escapeHtml(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 })();
 </script>
