@@ -462,6 +462,17 @@ if ($tab === 'dealers') {
         $parasutProducts[] = $p;
     }
 
+    // ─── PHP-side alfabetik sıralama (Türkçe karakter destekli) ───
+    // Paraşüt'ün sort=name Türkçe karakterlerde sorun çıkarıyor, PHP-side garanti.
+    usort($parasutProducts, function($a, $b) {
+        $nameA = mb_strtolower(trim($a['attributes']['name'] ?? ''), 'UTF-8');
+        $nameB = mb_strtolower(trim($b['attributes']['name'] ?? ''), 'UTF-8');
+        // Boş isimleri en alta at
+        if ($nameA === '' && $nameB !== '') return 1;
+        if ($nameA !== '' && $nameB === '') return -1;
+        return strnatcasecmp($nameA, $nameB);
+    });
+
     $parasutMeta = [
         'active_total'    => $activeRes['total_count'] ?? 0,
         'active_fetched'  => $activeRes['fetched'] ?? 0,

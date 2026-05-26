@@ -531,34 +531,40 @@ class Parasut {
 
     /**
      * Paraşüt'teki TÜM cari kayıtlarını otomatik pagination ile çek.
-     * 25 kayıt/sayfa x maxPages = max kayıt.
+     * KRITIK FIX: "count<25 break" bug'ı kaldırıldı, sadece tamamen boşsa dur.
      */
-    public function listAllContacts(int $maxPages = 40): array {
-        $all = [];
+    public function listAllContacts(int $maxPages = 200): array {
+        $all = []; $totalPages = 0;
         for ($p = 1; $p <= $maxPages; $p++) {
             $res = $this->listContacts($p, 25, [], 'name');
-            if (empty($res['data'])) break;
+            $cnt = count($res['data'] ?? []);
+            if ($p === 1) {
+                $totalPages = (int)($res['meta']['total_pages'] ?? 0);
+            }
+            if ($cnt === 0) break;
             $all = array_merge($all, $res['data']);
-            if (count($res['data']) < 25) break; // Son sayfa
+            if ($totalPages > 0 && $p >= $totalPages) break;
         }
         return $all;
     }
 
     /**
      * Cariler + metadata. Default sort=name (alfabetik).
+     * KRITIK FIX: erken kesme bug'ı kaldırıldı.
      */
-    public function listAllContactsWithMeta(int $maxPages = 40, array $filter = [], string $sort = 'name'): array {
+    public function listAllContactsWithMeta(int $maxPages = 200, array $filter = [], string $sort = 'name'): array {
         $all = []; $totalCount = 0; $totalPages = 0; $perPage = 25;
         for ($p = 1; $p <= $maxPages; $p++) {
             $res = $this->listContacts($p, 25, $filter, $sort);
-            if (empty($res['data'])) break;
-            $all = array_merge($all, $res['data']);
+            $cnt = count($res['data'] ?? []);
             if ($p === 1 && !empty($res['meta'])) {
                 $totalCount = (int)($res['meta']['total_count'] ?? 0);
                 $totalPages = (int)($res['meta']['total_pages'] ?? 0);
                 $perPage    = (int)($res['meta']['per_page']    ?? 25);
             }
-            if (count($res['data']) < 25) break;
+            if ($cnt === 0) break;
+            $all = array_merge($all, $res['data']);
+            if ($totalPages > 0 && $p >= $totalPages) break;
         }
         return [
             'data'        => $all,
@@ -609,25 +615,34 @@ class Parasut {
         ];
     }
 
-    /** Paraşüt'teki TÜM ürünleri otomatik pagination ile çek (sort YOK - default davranış) */
-    public function listAllProducts(int $maxPages = 80): array {
-        $all = [];
+    /** Paraşüt'teki TÜM ürünleri otomatik pagination ile çek (KRITIK FIX: erken kesme bug'ı yok) */
+    public function listAllProducts(int $maxPages = 200): array {
+        $all = []; $totalPages = 0;
         for ($p = 1; $p <= $maxPages; $p++) {
             $res = $this->listProducts($p, 25);
-            if (empty($res['data'])) break;
+            $cnt = count($res['data'] ?? []);
+            if ($p === 1) {
+                $totalPages = (int)($res['meta']['total_pages'] ?? 0);
+            }
+            if ($cnt === 0) break;
             $all = array_merge($all, $res['data']);
-            if (count($res['data']) < 25) break;
+            if ($totalPages > 0 && $p >= $totalPages) break;
         }
         return $all;
     }
 
     /**
+    /**
      * Ürünler + metadata + sayfa sayfa log (debug için).
-     * maxPages 80 = 2000 kayıt destek.
+     * maxPages 200 = 5000 kayıt destek.
+     *
+     * KRITIK FIX: Eskiden "count<25 ise dur" mantığı vardı, ama Paraşüt
+     * filter sonrası 22-24 kayıt dönebiliyor ortada → ERKEN KESILMESI bugı.
+     * Şimdi total_pages bilgisini kullanıyoruz, garanti çekim.
      */
-    public function listAllProductsWithMeta(int $maxPages = 80, array $filter = [], string $sort = ''): array {
+    public function listAllProductsWithMeta(int $maxPages = 200, array $filter = [], string $sort = ''): array {
         $all = []; $totalCount = 0; $totalPages = 0; $perPage = 25;
-        $pageLog = []; // sayfa sayfa tanı bilgisi
+        $pageLog = [];
 
         for ($p = 1; $p <= $maxPages; $p++) {
             $res = $this->listProducts($p, 25, $filter, $sort);
@@ -637,14 +652,19 @@ class Parasut {
                 'count' => $cnt,
                 'err'   => $res['err'] ?? null,
             ];
-            if (empty($res['data'])) break;
-            $all = array_merge($all, $res['data']);
+
             if ($p === 1 && !empty($res['meta'])) {
                 $totalCount = (int)($res['meta']['total_count'] ?? 0);
                 $totalPages = (int)($res['meta']['total_pages'] ?? 0);
                 $perPage    = (int)($res['meta']['per_page']    ?? 25);
             }
-            if ($cnt < 25) break;
+
+            // SADECE tamamen boşsa dur (eski "count<25" bug'ı kaldırıldı)
+            if ($cnt === 0) break;
+            $all = array_merge($all, $res['data']);
+
+            // total_pages biliniyorsa ona göre dur (gerçek son sayfa)
+            if ($totalPages > 0 && $p >= $totalPages) break;
         }
         return [
             'data'        => $all,
