@@ -550,18 +550,36 @@ class Parasut {
 
     /**
      * Cariler + metadata. Default sort=name (alfabetik).
-     * KRITIK FIX: erken kesme bug'ı kaldırıldı.
+     * BOŞ SAYFA RESCUE + 250ms throttle ile rate limit'e takılmaya karşı korumalı.
      */
     public function listAllContactsWithMeta(int $maxPages = 200, array $filter = [], string $sort = 'name'): array {
         $all = []; $totalCount = 0; $totalPages = 0; $perPage = 25;
+        $rescued = 0;
         for ($p = 1; $p <= $maxPages; $p++) {
+            if ($p > 1) usleep(250000); // 250ms throttle
+
             $res = $this->listContacts($p, 25, $filter, $sort);
             $cnt = count($res['data'] ?? []);
+
             if ($p === 1 && !empty($res['meta'])) {
                 $totalCount = (int)($res['meta']['total_count'] ?? 0);
                 $totalPages = (int)($res['meta']['total_pages'] ?? 0);
                 $perPage    = (int)($res['meta']['per_page']    ?? 25);
             }
+
+            // BOŞ SAYFA RESCUE: rate limit ihtimali
+            if ($cnt === 0 && $totalPages > 0 && $p < $totalPages) {
+                for ($retry = 1; $retry <= 3; $retry++) {
+                    sleep(5);
+                    $res = $this->listContacts($p, 25, $filter, $sort);
+                    $cnt = count($res['data'] ?? []);
+                    if ($cnt > 0) {
+                        $rescued++;
+                        break;
+                    }
+                }
+            }
+
             if ($cnt === 0) break;
             $all = array_merge($all, $res['data']);
             if ($totalPages > 0 && $p >= $totalPages) break;
@@ -572,6 +590,7 @@ class Parasut {
             'total_count' => $totalCount,
             'total_pages' => $totalPages,
             'per_page'    => $perPage,
+            'rescued'     => $rescued,
         ];
     }
 
@@ -665,10 +684,11 @@ class Parasut {
     /**
      * Ürünler + metadata + sayfa sayfa log (debug için).
      * - maxPages 200 = 5000 kayıt destek
-     * - Sayfalar arası 100ms throttle (rate limit'ten kaçınmak için)
+     * - Sayfalar arası 250ms throttle (rate limit'ten kaçınmak için)
+     * - BOŞ SAYFA RESCUE: total_pages > current_page ama 0 dönüyorsa rate limit'e
+     *   takıldık demek → 5 saniye bekle ve aynı sayfayı tekrar dene (3 kez)
      * - RESULT CACHE: aynı filter+sort kombinasyonu aynı request içinde tekrar
-     *   çağrılırsa önbellekten döner (tanı + normal liste çift çağırınca rate limit
-     *   tetikleniyordu, bu fix onu çözer).
+     *   çağrılırsa önbellekten döner.
      */
     public function listAllProductsWithMeta(int $maxPages = 200, array $filter = [], string $sort = ''): array {
         // Result cache
@@ -678,13 +698,36 @@ class Parasut {
 
         $all = []; $totalCount = 0; $totalPages = 0; $perPage = 25;
         $pageLog = [];
+        $rescued = 0; // rate limit rescue sayisi
 
         for ($p = 1; $p <= $maxPages; $p++) {
-            // İlk sayfa hariç sayfalar arası 100ms throttle
-            if ($p > 1) usleep(100000);
+            // İlk sayfa hariç sayfalar arası 250ms throttle
+            if ($p > 1) usleep(250000);
 
             $res = $this->listProducts($p, 25, $filter, $sort);
             $cnt = count($res['data'] ?? []);
+
+            if ($p === 1 && !empty($res['meta'])) {
+                $totalCount = (int)($res['meta']['total_count'] ?? 0);
+                $totalPages = (int)($res['meta']['total_pages'] ?? 0);
+                $perPage    = (int)($res['meta']['per_page']    ?? 25);
+            }
+
+            // ─── BOŞ SAYFA RESCUE ───
+            // total_pages > current ama 0 döndü → büyük olasılıkla rate limit
+            // 5 saniye bekle ve tekrar dene (3 kez)
+            if ($cnt === 0 && $totalPages > 0 && $p < $totalPages) {
+                for ($retry = 1; $retry <= 3; $retry++) {
+                    sleep(5); // 5 saniye sabırlı bekleme
+                    $res = $this->listProducts($p, 25, $filter, $sort);
+                    $cnt = count($res['data'] ?? []);
+                    if ($cnt > 0) {
+                        $rescued++;
+                        break;
+                    }
+                }
+            }
+
             $pageLog[] = [
                 'page'    => $p,
                 'count'   => $cnt,
@@ -692,12 +735,6 @@ class Parasut {
                 'http'    => $res['meta']['_http'] ?? null,
                 'attempts'=> $res['meta']['_attempts'] ?? 1,
             ];
-
-            if ($p === 1 && !empty($res['meta'])) {
-                $totalCount = (int)($res['meta']['total_count'] ?? 0);
-                $totalPages = (int)($res['meta']['total_pages'] ?? 0);
-                $perPage    = (int)($res['meta']['per_page']    ?? 25);
-            }
 
             if ($cnt === 0) break;
             $all = array_merge($all, $res['data']);
@@ -710,6 +747,7 @@ class Parasut {
             'total_count' => $totalCount,
             'total_pages' => $totalPages,
             'per_page'    => $perPage,
+            'rescued'     => $rescued,
             'page_log'    => $pageLog,
         ];
         $resultCache[$cacheKey] = $result;
@@ -1535,13 +1573,15 @@ function parasut_cache_sync_products(): array {
         }
 
         // GÜVENLİK: Eğer çok az ürün döndüyse şüphelidir → cache'e dokunma
-        // (Eski 1144 ürün vardı, şimdi 50 dönerse rate limit/hata var demek)
+        // Sadece DÜŞÜŞ durumunda uyarı ver (artış normaldir, ürün eklenmiş olabilir)
         $existingTotal = (int)(parasut_cache_stats()['total'] ?? 0);
         $newCount = count($allProducts);
-        if ($existingTotal > 100 && $newCount < ($existingTotal * 0.3)) {
+        // YENİ MANTIK: cache 200+ ise ve yeni sync %50'den az ise şüpheli
+        // (örn: 1144 cache vardı, 250 dönerse → ŞÜPHELİ; 500 vardı 600 dönerse → NORMAL)
+        if ($existingTotal > 200 && $newCount < ($existingTotal * 0.5)) {
             $result['error'] = sprintf(
-                'Şüpheli sync: Paraşüt sadece %d ürün döndü (eskiden %d vardı). Cache korundu, lütfen tekrar deneyin.',
-                $newCount, $existingTotal
+                'Şüpheli sync: Paraşüt sadece %d ürün döndü (eskiden %d vardı, %.0f%% düşüş). Rate limit veya pagination sorunu olabilir. Cache korundu, lütfen birkaç dakika sonra tekrar deneyin.',
+                $newCount, $existingTotal, (1 - $newCount/$existingTotal) * 100
             );
             return $result;
         }
@@ -1597,7 +1637,23 @@ function parasut_cache_sync_products(): array {
         $result['active']   = $stats['active'];
         $result['archived'] = $stats['archived'];
         $result['stale']    = $stale;
+        $result['parasut_total_active']   = (int)($active['total_count'] ?? 0);
+        $result['parasut_total_archived'] = (int)($archived['total_count'] ?? 0);
+        $result['rescued_active']         = (int)($active['rescued'] ?? 0);
+        $result['rescued_archived']       = (int)($archived['rescued'] ?? 0);
         $result['duration'] = round(microtime(true) - $start, 2);
+
+        // Hâlâ eksik var mı?
+        $missingActive   = max(0, $result['parasut_total_active']   - count($active['data']));
+        $missingArchived = max(0, $result['parasut_total_archived'] - count($archived['data']));
+        if ($missingActive > 0 || $missingArchived > 0) {
+            $result['warning'] = sprintf(
+                'Eksik var: Paraşüt %d aktif + %d arşivli diyor, biz %d + %d çektik. Rate limit nedeniyle %d aktif + %d arşivli ürün çekilemedi.',
+                $result['parasut_total_active'], $result['parasut_total_archived'],
+                count($active['data']), count($archived['data']),
+                $missingActive, $missingArchived
+            );
+        }
 
         settingSave('parasut_cache_last_sync_at', $syncTime);
         settingSave('parasut_cache_last_sync_status', json_encode([
