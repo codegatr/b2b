@@ -1,24 +1,24 @@
 <?php
 /**
- * Admin — Paraşüt Eşleme (Mapping)
+ * Admin â€” ParaÅŸÃ¼t EÅŸleme (Mapping)
  *
- * Amaç: Çift kayıt önleme. Bayi ve ürünleri Paraşüt'tekilerle
- * önceden eşleştir (otomatik veya manuel), sonra eksik olanları
- * Paraşüt'te yeni oluştur.
+ * AmaÃ§: Ã‡ift kayÄ±t Ã¶nleme. Bayi ve Ã¼rÃ¼nleri ParaÅŸÃ¼t'tekilerle
+ * Ã¶nceden eÅŸleÅŸtir (otomatik veya manuel), sonra eksik olanlarÄ±
+ * ParaÅŸÃ¼t'te yeni oluÅŸtur.
  *
  * URL: ?page=parasut-mapping&tab=dealers|products
  */
 requireAdmin();
 
 if (!parasut()->isEnabled()) {
-    echo '<div class="alert alert-warning" style="margin:20px">Paraşüt entegrasyonu yapılandırılmamış. Önce <a href="?page=settings&tab=parasut">Ayarlar</a> sayfasından credentials gir.</div>';
+    echo '<div class="alert alert-warning" style="margin:20px">ParaÅŸÃ¼t entegrasyonu yapÄ±landÄ±rÄ±lmamÄ±ÅŸ. Ã–nce <a href="?page=settings&tab=parasut">Ayarlar</a> sayfasÄ±ndan credentials gir.</div>';
     return;
 }
 
-// ─── AJAX SEARCH ENDPOINT ──────────────────────────────────────
-// JS'den fetch ile çağrılır: ?page=parasut-mapping&ajax=search&kind=products&q=cheddar
+// â”€â”€â”€ AJAX SEARCH ENDPOINT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// JS'den fetch ile Ã§aÄŸrÄ±lÄ±r: ?page=parasut-mapping&ajax=search&kind=products&q=cheddar
 if (($_GET['ajax'] ?? '') === 'search') {
-    // Tüm output buffer'ı temizle (header conflict önleme)
+    // TÃ¼m output buffer'Ä± temizle (header conflict Ã¶nleme)
     while (ob_get_level()) ob_end_clean();
     header('Content-Type: application/json; charset=utf-8');
 
@@ -33,10 +33,10 @@ if (($_GET['ajax'] ?? '') === 'search') {
             $items = parasut_cache_get_products($q, true);
         }
 
-        // İlk N tane (sayfa hızı için sınırla)
+        // Ä°lk N tane (sayfa hÄ±zÄ± iÃ§in sÄ±nÄ±rla)
         $items = array_slice($items, 0, $limit);
 
-        // Sadeleştir
+        // SadeleÅŸtir
         $out = [];
         foreach ($items as $it) {
             $attrs = $it['attributes'] ?? [];
@@ -47,8 +47,8 @@ if (($_GET['ajax'] ?? '') === 'search') {
             $price = isset($attrs['list_price']) ? (float)$attrs['list_price'] : null;
             $arch  = !empty($attrs['archived']);
 
-            // Görünür label
-            $label = $name !== '' ? $name : ($code !== '' ? '[Adsız - ' . $code . ']' : '[Adsız - ID: ' . $it['id'] . ']');
+            // GÃ¶rÃ¼nÃ¼r label
+            $label = $name !== '' ? $name : ($code !== '' ? '[AdsÄ±z - ' . $code . ']' : '[AdsÄ±z - ID: ' . $it['id'] . ']');
 
             $out[] = [
                 'id'       => $it['id'],
@@ -72,30 +72,30 @@ $tab = $_GET['tab'] ?? 'dealers';
 if (!in_array($tab, ['dealers', 'products'], true)) $tab = 'dealers';
 $msg = '';
 
-// ──────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // POST HANDLERS
-// ──────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-// 🔄 Paraşüt Cache Senkronizasyonu (manuel buton)
+// ğŸ”„ ParaÅŸÃ¼t Cache Senkronizasyonu (manuel buton)
 if (isPost() && ($_POST['action'] ?? '') === 'sync-parasut-cache') {
     csrfCheck();
-    // Uzun sürebilir (1144 ürün × ~150ms = ~3 dakika)
+    // Uzun sÃ¼rebilir (1144 Ã¼rÃ¼n Ã— ~150ms = ~3 dakika)
     @set_time_limit(600);
     @ini_set('max_execution_time', 600);
     @ignore_user_abort(true);
 
     $r = parasut_cache_sync_products();
     if ($r['success']) {
-        $msg = 'success:✓ Senkronizasyon tamamlandı! ' . $r['total'] . ' ürün cache\'de (' . $r['active'] . ' aktif + ' . $r['archived'] . ' arşivli). Süre: ' . $r['duration'] . ' sn.';
+        $msg = 'success:âœ“ Senkronizasyon tamamlandÄ±! ' . $r['total'] . ' Ã¼rÃ¼n cache\'de (' . $r['active'] . ' aktif + ' . $r['archived'] . ' arÅŸivli). SÃ¼re: ' . $r['duration'] . ' sn.';
     } else {
-        $msg = 'danger:✗ Senkronizasyon başarısız: ' . ($r['error'] ?? 'Bilinmeyen hata');
+        $msg = 'danger:âœ— Senkronizasyon baÅŸarÄ±sÄ±z: ' . ($r['error'] ?? 'Bilinmeyen hata');
     }
-    // POST sonrası redirect (PRG pattern) — sayfa yenilensin
+    // POST sonrasÄ± redirect (PRG pattern) â€” sayfa yenilensin
     $_SESSION['flash'] = ['type' => $r['success'] ? 'success' : 'danger', 'msg' => substr($msg, strpos($msg, ':') + 1)];
     redirect('?page=parasut-mapping&tab=products');
 }
 
-// Bayi → Paraşüt cari eşleme (manuel)
+// Bayi â†’ ParaÅŸÃ¼t cari eÅŸleme (manuel)
 if (isPost() && ($_POST['action'] ?? '') === 'map-dealer') {
     csrfCheck();
     $dealerId   = (int)($_POST['dealer_id'] ?? 0);
@@ -103,15 +103,15 @@ if (isPost() && ($_POST['action'] ?? '') === 'map-dealer') {
     if ($dealerId) {
         if ($parasutId === '' || $parasutId === '-') {
             dbExec("UPDATE b2b_dealers SET parasut_contact_id=NULL WHERE id=?", [$dealerId]);
-            $msg = 'success:Eşleme kaldırıldı.';
+            $msg = 'success:EÅŸleme kaldÄ±rÄ±ldÄ±.';
         } else {
             dbExec("UPDATE b2b_dealers SET parasut_contact_id=? WHERE id=?", [$parasutId, $dealerId]);
-            $msg = 'success:Eşleme kaydedildi.';
+            $msg = 'success:EÅŸleme kaydedildi.';
         }
     }
 }
 
-// Ürün → Paraşüt ürün eşleme (manuel)
+// ÃœrÃ¼n â†’ ParaÅŸÃ¼t Ã¼rÃ¼n eÅŸleme (manuel)
 if (isPost() && ($_POST['action'] ?? '') === 'map-product') {
     csrfCheck();
     $productId = (int)($_POST['product_id'] ?? 0);
@@ -119,15 +119,15 @@ if (isPost() && ($_POST['action'] ?? '') === 'map-product') {
     if ($productId) {
         if ($parasutId === '' || $parasutId === '-') {
             dbExec("UPDATE b2b_products SET parasut_product_id=NULL WHERE id=?", [$productId]);
-            $msg = 'success:Eşleme kaldırıldı.';
+            $msg = 'success:EÅŸleme kaldÄ±rÄ±ldÄ±.';
         } else {
             dbExec("UPDATE b2b_products SET parasut_product_id=? WHERE id=?", [$parasutId, $productId]);
-            $msg = 'success:Eşleme kaydedildi.';
+            $msg = 'success:EÅŸleme kaydedildi.';
         }
     }
 }
 
-// Akıllı otomatik eşleştirme — bayiler
+// AkÄ±llÄ± otomatik eÅŸleÅŸtirme â€” bayiler
 if (isPost() && ($_POST['action'] ?? '') === 'auto-match-dealers') {
     csrfCheck();
     $contacts = parasut()->listAllContacts();
@@ -137,7 +137,7 @@ if (isPost() && ($_POST['action'] ?? '') === 'auto-match-dealers') {
     foreach ($dealers as $d) {
         $candidate = null;
 
-        // Önce vergi no eşleşmesi (en güvenilir)
+        // Ã–nce vergi no eÅŸleÅŸmesi (en gÃ¼venilir)
         $taxNo = trim($d['tax_number'] ?? '');
         if ($taxNo !== '') {
             foreach ($contacts as $c) {
@@ -149,7 +149,7 @@ if (isPost() && ($_POST['action'] ?? '') === 'auto-match-dealers') {
             }
         }
 
-        // Sonra e-mail eşleşmesi
+        // Sonra e-mail eÅŸleÅŸmesi
         if (!$candidate && !empty($d['email'])) {
             $email = strtolower(trim($d['email']));
             foreach ($contacts as $c) {
@@ -161,7 +161,7 @@ if (isPost() && ($_POST['action'] ?? '') === 'auto-match-dealers') {
             }
         }
 
-        // En son isim eşleşmesi (case-insensitive, tam) — company_name veya display_name
+        // En son isim eÅŸleÅŸmesi (case-insensitive, tam) â€” company_name veya display_name
         $matchName = !empty($d['company_name']) ? $d['company_name'] : (trim(($d['first_name']??'').' '.($d['last_name']??'')) ?: '');
         if (!$candidate && $matchName !== '') {
             $name = mb_strtolower(trim($matchName));
@@ -179,10 +179,10 @@ if (isPost() && ($_POST['action'] ?? '') === 'auto-match-dealers') {
             $matched++;
         }
     }
-    $msg = "success:Otomatik eşleştirme tamamlandı. {$matched} bayi Paraşüt cari kayıtlarıyla eşleştirildi.";
+    $msg = "success:Otomatik eÅŸleÅŸtirme tamamlandÄ±. {$matched} bayi ParaÅŸÃ¼t cari kayÄ±tlarÄ±yla eÅŸleÅŸtirildi.";
 }
 
-// Akıllı otomatik eşleştirme — ürünler
+// AkÄ±llÄ± otomatik eÅŸleÅŸtirme â€” Ã¼rÃ¼nler
 if (isPost() && ($_POST['action'] ?? '') === 'auto-match-products') {
     csrfCheck();
     $parasutProducts = function_exists('parasut_cache_get_products') ? parasut_cache_get_products('', false) : parasut()->listAllProducts();
@@ -192,7 +192,7 @@ if (isPost() && ($_POST['action'] ?? '') === 'auto-match-products') {
     foreach ($products as $p) {
         $candidate = null;
 
-        // Önce SKU (kod) eşleşmesi
+        // Ã–nce SKU (kod) eÅŸleÅŸmesi
         $sku = trim($p['sku'] ?? '');
         if ($sku !== '') {
             foreach ($parasutProducts as $pp) {
@@ -204,7 +204,7 @@ if (isPost() && ($_POST['action'] ?? '') === 'auto-match-products') {
             }
         }
 
-        // Sonra isim eşleşmesi (tam, case-insensitive)
+        // Sonra isim eÅŸleÅŸmesi (tam, case-insensitive)
         if (!$candidate && !empty($p['name'])) {
             $name = mb_strtolower(trim($p['name']));
             foreach ($parasutProducts as $pp) {
@@ -221,10 +221,10 @@ if (isPost() && ($_POST['action'] ?? '') === 'auto-match-products') {
             $matched++;
         }
     }
-    $msg = "success:Otomatik eşleştirme tamamlandı. {$matched} ürün Paraşüt stok kayıtlarıyla eşleştirildi.";
+    $msg = "success:Otomatik eÅŸleÅŸtirme tamamlandÄ±. {$matched} Ã¼rÃ¼n ParaÅŸÃ¼t stok kayÄ±tlarÄ±yla eÅŸleÅŸtirildi.";
 }
 
-// Eşleşmemiş tek bayiyi Paraşüt'te oluştur
+// EÅŸleÅŸmemiÅŸ tek bayiyi ParaÅŸÃ¼t'te oluÅŸtur
 if (isPost() && ($_POST['action'] ?? '') === 'create-dealer') {
     csrfCheck();
     $dealerId = (int)($_POST['dealer_id'] ?? 0);
@@ -233,9 +233,9 @@ if (isPost() && ($_POST['action'] ?? '') === 'create-dealer') {
             $newId = parasut()->syncDealer($dealerId);
             if ($newId) {
                 dbExec("UPDATE b2b_dealers SET parasut_contact_id=? WHERE id=?", [$newId, $dealerId]);
-                $msg = "success:Paraşüt'te yeni cari oluşturuldu (ID: {$newId}).";
+                $msg = "success:ParaÅŸÃ¼t'te yeni cari oluÅŸturuldu (ID: {$newId}).";
             } else {
-                $msg = 'error:Cari oluşturulamadı. İşlem geçmişinde detayı görün.';
+                $msg = 'error:Cari oluÅŸturulamadÄ±. Ä°ÅŸlem geÃ§miÅŸinde detayÄ± gÃ¶rÃ¼n.';
             }
         } catch (\Throwable $e) {
             $msg = 'error:Hata: ' . $e->getMessage();
@@ -243,7 +243,7 @@ if (isPost() && ($_POST['action'] ?? '') === 'create-dealer') {
     }
 }
 
-// Eşleşmemiş tek ürünü Paraşüt'te oluştur
+// EÅŸleÅŸmemiÅŸ tek Ã¼rÃ¼nÃ¼ ParaÅŸÃ¼t'te oluÅŸtur
 if (isPost() && ($_POST['action'] ?? '') === 'create-product') {
     csrfCheck();
     $productId = (int)($_POST['product_id'] ?? 0);
@@ -251,9 +251,9 @@ if (isPost() && ($_POST['action'] ?? '') === 'create-product') {
         try {
             $newId = parasut()->syncProduct($productId);
             if ($newId) {
-                $msg = "success:Paraşüt'te yeni ürün oluşturuldu (ID: {$newId}).";
+                $msg = "success:ParaÅŸÃ¼t'te yeni Ã¼rÃ¼n oluÅŸturuldu (ID: {$newId}).";
             } else {
-                $msg = 'error:Ürün oluşturulamadı. İşlem geçmişinde detayı görün.';
+                $msg = 'error:ÃœrÃ¼n oluÅŸturulamadÄ±. Ä°ÅŸlem geÃ§miÅŸinde detayÄ± gÃ¶rÃ¼n.';
             }
         } catch (\Throwable $e) {
             $msg = 'error:Hata: ' . $e->getMessage();
@@ -261,14 +261,14 @@ if (isPost() && ($_POST['action'] ?? '') === 'create-product') {
     }
 }
 
-// ─── Paraşüt'ten seçilen carileri B2B'ye aktar ──
+// â”€â”€â”€ ParaÅŸÃ¼t'ten seÃ§ilen carileri B2B'ye aktar â”€â”€
 if (isPost() && ($_POST['action'] ?? '') === 'import-contacts') {
     csrfCheck();
     $ids = $_POST['parasut_ids'] ?? [];
     if (!is_array($ids) || empty($ids)) {
-        $msg = 'error:Lütfen aktarılacak cari(leri) seçin.';
+        $msg = 'error:LÃ¼tfen aktarÄ±lacak cari(leri) seÃ§in.';
     } else {
-        // Paraşüt cari listesini bir kere çek, lookup yap
+        // ParaÅŸÃ¼t cari listesini bir kere Ã§ek, lookup yap
         $allContacts = parasut()->listAllContacts();
         $byId = [];
         foreach ($allContacts as $c) $byId[(string)$c['id']] = $c;
@@ -281,7 +281,7 @@ if (isPost() && ($_POST['action'] ?? '') === 'import-contacts') {
             $c = $byId[$pid];
             $a = $c['attributes'] ?? [];
 
-            // Aynı parasut_contact_id zaten varsa atla
+            // AynÄ± parasut_contact_id zaten varsa atla
             $exists = dbVal("SELECT COUNT(*) FROM b2b_dealers WHERE parasut_contact_id=?", [$pid]);
             if ($exists > 0) { $skipped++; continue; }
 
@@ -295,7 +295,7 @@ if (isPost() && ($_POST['action'] ?? '') === 'import-contacts') {
 
             if ($name === '') { $skipped++; continue; }
 
-            // Bayi tipi — VKN 10 hane ise kurumsal, 11 ise bireysel
+            // Bayi tipi â€” VKN 10 hane ise kurumsal, 11 ise bireysel
             $type = (strlen($taxNo) === 11) ? 'bireysel' : 'kurumsal';
 
             try {
@@ -315,19 +315,19 @@ if (isPost() && ($_POST['action'] ?? '') === 'import-contacts') {
 
         auditLog('parasut_contacts_imported', 'b2b_dealers', 0, ['created'=>$created, 'skipped'=>$skipped]);
         $parts = [];
-        if ($created > 0) $parts[] = "{$created} bayi oluşturuldu";
-        if ($skipped > 0) $parts[] = "{$skipped} kayıt atlandı (zaten var veya geçersiz)";
+        if ($created > 0) $parts[] = "{$created} bayi oluÅŸturuldu";
+        if ($skipped > 0) $parts[] = "{$skipped} kayÄ±t atlandÄ± (zaten var veya geÃ§ersiz)";
         if (!empty($errors)) $parts[] = 'hatalar: ' . implode(' | ', array_slice($errors, 0, 3));
-        $msg = 'success:✓ Aktarım tamamlandı — ' . implode(' · ', $parts);
+        $msg = 'success:âœ“ AktarÄ±m tamamlandÄ± â€” ' . implode(' Â· ', $parts);
     }
 }
 
-// ─── Paraşüt'ten seçilen ürünleri B2B'ye aktar ──
+// â”€â”€â”€ ParaÅŸÃ¼t'ten seÃ§ilen Ã¼rÃ¼nleri B2B'ye aktar â”€â”€
 if (isPost() && ($_POST['action'] ?? '') === 'import-products') {
     csrfCheck();
     $ids = $_POST['parasut_ids'] ?? [];
     if (!is_array($ids) || empty($ids)) {
-        $msg = 'error:Lütfen aktarılacak ürün(leri) seçin.';
+        $msg = 'error:LÃ¼tfen aktarÄ±lacak Ã¼rÃ¼n(leri) seÃ§in.';
     } else {
         $allProds = function_exists('parasut_cache_get_products') ? parasut_cache_get_products('', true) : parasut()->listAllProducts();
         $byId = [];
@@ -350,7 +350,7 @@ if (isPost() && ($_POST['action'] ?? '') === 'import-products') {
 
             $vatRate = (float)($a['vat_rate'] ?? 20);
             $price   = (float)($a['list_price'] ?? 0);
-            // Paraşüt list_price KDV Dahil — net'e çevir
+            // ParaÅŸÃ¼t list_price KDV Dahil â€” net'e Ã§evir
             if ($vatRate > 0 && $price > 0) {
                 $price = round($price / (1 + $vatRate / 100), 4);
             }
@@ -371,22 +371,22 @@ if (isPost() && ($_POST['action'] ?? '') === 'import-products') {
 
         auditLog('parasut_products_imported', 'b2b_products', 0, ['created'=>$created, 'skipped'=>$skipped]);
         $parts = [];
-        if ($created > 0) $parts[] = "{$created} ürün oluşturuldu";
-        if ($skipped > 0) $parts[] = "{$skipped} kayıt atlandı (zaten var veya geçersiz)";
+        if ($created > 0) $parts[] = "{$created} Ã¼rÃ¼n oluÅŸturuldu";
+        if ($skipped > 0) $parts[] = "{$skipped} kayÄ±t atlandÄ± (zaten var veya geÃ§ersiz)";
         if (!empty($errors)) $parts[] = 'hatalar: ' . implode(' | ', array_slice($errors, 0, 3));
-        $msg = 'success:✓ Aktarım tamamlandı — ' . implode(' · ', $parts);
+        $msg = 'success:âœ“ AktarÄ±m tamamlandÄ± â€” ' . implode(' Â· ', $parts);
     }
 }
 
-// ─── TOPLU KAYIP EŞLEŞMELERİ SIFIRLA ──
-// Paraşüt'te bulunamayan ID'lere sahip tüm B2B kayıtlarının
-// parasut_*_id alanlarını NULL yapar. Sonra yeniden eşleme yapılabilir.
+// â”€â”€â”€ TOPLU KAYIP EÅLEÅMELERÄ° SIFIRLA â”€â”€
+// ParaÅŸÃ¼t'te bulunamayan ID'lere sahip tÃ¼m B2B kayÄ±tlarÄ±nÄ±n
+// parasut_*_id alanlarÄ±nÄ± NULL yapar. Sonra yeniden eÅŸleme yapÄ±labilir.
 if (isPost() && ($_POST['action'] ?? '') === 'reset-lost-matches') {
     csrfCheck();
     $type = $_POST['type'] ?? '';
 
     if ($type === 'dealers') {
-        // Tüm B2B bayilerin parasut_contact_id'sini al, Paraşüt listesinde olmayanları sıfırla
+        // TÃ¼m B2B bayilerin parasut_contact_id'sini al, ParaÅŸÃ¼t listesinde olmayanlarÄ± sÄ±fÄ±rla
         $allContacts = parasut()->listAllContacts();
         $existingIds = array_map(fn($c) => (string)$c['id'], $allContacts);
 
@@ -402,9 +402,9 @@ if (isPost() && ($_POST['action'] ?? '') === 'reset-lost-matches') {
             $placeholders = implode(',', array_fill(0, count($resetIds), '?'));
             dbExec("UPDATE b2b_dealers SET parasut_contact_id=NULL WHERE id IN ({$placeholders})", $resetIds);
             auditLog('parasut_lost_dealer_matches_reset', 'b2b_dealers', 0, ['count'=>count($resetIds)]);
-            $msg = 'success:✓ ' . count($resetIds) . ' kayıp bayi eşleşmesi sıfırlandı. Şimdi "🤖 Otomatik Eşleştir" ile yeniden bağlayın.';
+            $msg = 'success:âœ“ ' . count($resetIds) . ' kayÄ±p bayi eÅŸleÅŸmesi sÄ±fÄ±rlandÄ±. Åimdi "ğŸ¤– Otomatik EÅŸleÅŸtir" ile yeniden baÄŸlayÄ±n.';
         } else {
-            $msg = 'success:Kayıp eşleşme bulunamadı, hepsi geçerli.';
+            $msg = 'success:KayÄ±p eÅŸleÅŸme bulunamadÄ±, hepsi geÃ§erli.';
         }
     } elseif ($type === 'products') {
         $allProds = function_exists('parasut_cache_get_products') ? parasut_cache_get_products('', true) : parasut()->listAllProducts();
@@ -422,16 +422,16 @@ if (isPost() && ($_POST['action'] ?? '') === 'reset-lost-matches') {
             $placeholders = implode(',', array_fill(0, count($resetIds), '?'));
             dbExec("UPDATE b2b_products SET parasut_product_id=NULL WHERE id IN ({$placeholders})", $resetIds);
             auditLog('parasut_lost_product_matches_reset', 'b2b_products', 0, ['count'=>count($resetIds)]);
-            $msg = 'success:✓ ' . count($resetIds) . ' kayıp ürün eşleşmesi sıfırlandı. Şimdi "🤖 Otomatik Eşleştir" ile yeniden bağlayın.';
+            $msg = 'success:âœ“ ' . count($resetIds) . ' kayÄ±p Ã¼rÃ¼n eÅŸleÅŸmesi sÄ±fÄ±rlandÄ±. Åimdi "ğŸ¤– Otomatik EÅŸleÅŸtir" ile yeniden baÄŸlayÄ±n.';
         } else {
-            $msg = 'success:Kayıp eşleşme bulunamadı, hepsi geçerli.';
+            $msg = 'success:KayÄ±p eÅŸleÅŸme bulunamadÄ±, hepsi geÃ§erli.';
         }
     }
 }
 
-// ──────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // DATA HAZIRLA (her render'da)
-// ──────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 if ($tab === 'dealers') {
     $b2bDealers = dbRows("SELECT id, company_name, first_name, last_name, email, phone, tax_number, parasut_contact_id,
@@ -439,7 +439,7 @@ if ($tab === 'dealers') {
                           FROM b2b_dealers WHERE is_active=1
                           ORDER BY (parasut_contact_id IS NOT NULL AND parasut_contact_id != '') DESC, display_name");
 
-    // Paraşüt'ten cari listesi — aktif + arşivlenmiş ayrı ayrı
+    // ParaÅŸÃ¼t'ten cari listesi â€” aktif + arÅŸivlenmiÅŸ ayrÄ± ayrÄ±
     $activeRes = parasut()->listAllContactsWithMeta(40);
     $archivedRes = parasut()->listAllContactsWithMeta(40, ['archived' => 'true']);
     $parasutContacts = array_merge($activeRes['data'], $archivedRes['data']);
@@ -451,22 +451,22 @@ if ($tab === 'dealers') {
         'archived_fetched' => $archivedRes['fetched'],
     ];
 
-    // Hızlı lookup için ID→object map (string-key)
+    // HÄ±zlÄ± lookup iÃ§in IDâ†’object map (string-key)
     $parasutContactsById = [];
     foreach ($parasutContacts as $c) {
         $parasutContactsById[(string)$c['id']] = $c;
     }
 
-    // Eşleşmiş bayilerin Paraşüt ID'lerini topla
+    // EÅŸleÅŸmiÅŸ bayilerin ParaÅŸÃ¼t ID'lerini topla
     $usedContactIds = array_map('strval', array_filter(array_column($b2bDealers, 'parasut_contact_id')));
 
-    // Paraşüt'te olup B2B'de eşleşmemiş cariler (yetimler)
+    // ParaÅŸÃ¼t'te olup B2B'de eÅŸleÅŸmemiÅŸ cariler (yetimler)
     $orphanContacts = [];
     foreach ($parasutContacts as $c) {
         if (!in_array((string)$c['id'], $usedContactIds, true)) $orphanContacts[] = $c;
     }
 
-    // B2B'de eşleşmiş AMA Paraşüt'te bulunamayan ID'ler (silinmiş/yanlış)
+    // B2B'de eÅŸleÅŸmiÅŸ AMA ParaÅŸÃ¼t'te bulunamayan ID'ler (silinmiÅŸ/yanlÄ±ÅŸ)
     $missingMatches = 0;
     foreach ($b2bDealers as $d) {
         $pid = (string)($d['parasut_contact_id'] ?? '');
@@ -486,26 +486,26 @@ if ($tab === 'dealers') {
     // products tab
     $b2bProducts = dbRows("SELECT id, name, sku, base_price, vat_rate, parasut_product_id FROM b2b_products WHERE is_active=1 ORDER BY name");
 
-    // ?q=XXX — cache içinde anlık arama (Paraşüt'e gitmez)
+    // ?q=XXX â€” cache iÃ§inde anlÄ±k arama (ParaÅŸÃ¼t'e gitmez)
     $searchQuery = trim($_GET['q'] ?? '');
 
-    // ?show_all=1 — muhasebe hesap kalemleri dahil
+    // ?show_all=1 â€” muhasebe hesap kalemleri dahil
     $showAll = isset($_GET['show_all']) && $_GET['show_all'] === '1';
 
-    // CACHE FIRST: arka planda DB'de hazır ürünler
+    // CACHE FIRST: arka planda DB'de hazÄ±r Ã¼rÃ¼nler
     $cacheStats = parasut_cache_stats();
 
-    // YENI MANTIK (v1.1.81+): Sayfa açıldığında otomatik 1144 ürün gösterme.
-    // Sadece kullanıcı arama yaparsa cache'den çek (LIKE prefix optimized).
-    // Bu sayfa hızlı yüklenir, scroll uzun olmaz.
+    // YENI MANTIK (v1.1.81+): Sayfa aÃ§Ä±ldÄ±ÄŸÄ±nda otomatik 1144 Ã¼rÃ¼n gÃ¶sterme.
+    // Sadece kullanÄ±cÄ± arama yaparsa cache'den Ã§ek (LIKE prefix optimized).
+    // Bu sayfa hÄ±zlÄ± yÃ¼klenir, scroll uzun olmaz.
     if ($searchQuery !== '') {
         $rawProducts = parasut_cache_get_products($searchQuery, true);
     } else {
-        $rawProducts = []; // Boş arama → ürün listesi gösterme
+        $rawProducts = []; // BoÅŸ arama â†’ Ã¼rÃ¼n listesi gÃ¶sterme
     }
 
-    // KRITIK (v1.1.83): Mevcut eşleştirilmiş ürünleri HER ZAMAN dropdown'a dahil et
-    // Aksi takdirde arama yokken kullanıcı eşleşmeleri "kayıp" görür
+    // KRITIK (v1.1.83): Mevcut eÅŸleÅŸtirilmiÅŸ Ã¼rÃ¼nleri HER ZAMAN dropdown'a dahil et
+    // Aksi takdirde arama yokken kullanÄ±cÄ± eÅŸleÅŸmeleri "kayÄ±p" gÃ¶rÃ¼r
     $linkedIds = array_filter(array_column($b2bProducts, 'parasut_product_id'));
     if (!empty($linkedIds)) {
         $placeholders = implode(',', array_fill(0, count($linkedIds), '?'));
@@ -515,7 +515,7 @@ if ($tab === 'dealers') {
         );
         $existingIds = array_column($rawProducts, 'id');
         foreach ($linkedRows as $row) {
-            // Eğer bu ID zaten rawProducts'ta yoksa ekle
+            // EÄŸer bu ID zaten rawProducts'ta yoksa ekle
             if (!in_array($row['parasut_id'], $existingIds, true)) {
                 $attrs = !empty($row['raw_data']) ? (json_decode($row['raw_data'], true) ?: []) : [];
                 if (empty($attrs['name']))         $attrs['name']     = $row['name'];
@@ -558,7 +558,7 @@ if ($tab === 'dealers') {
         $parasutProducts[] = $p;
     }
 
-    // PHP-side alfabetik sıralama (Türkçe karakter destekli)
+    // PHP-side alfabetik sÄ±ralama (TÃ¼rkÃ§e karakter destekli)
     usort($parasutProducts, function($a, $b) {
         $nameA = mb_strtolower(trim($a['attributes']['name'] ?? ''), 'UTF-8');
         $nameB = mb_strtolower(trim($b['attributes']['name'] ?? ''), 'UTF-8');
@@ -593,7 +593,7 @@ if ($tab === 'dealers') {
         if (!in_array((string)$p['id'], $usedProductIds, true)) $orphanProducts[] = $p;
     }
 
-    // B2B'de eşleşmiş AMA Paraşüt'te bulunamayan ID'ler
+    // B2B'de eÅŸleÅŸmiÅŸ AMA ParaÅŸÃ¼t'te bulunamayan ID'ler
     $missingMatches = 0;
     foreach ($b2bProducts as $p) {
         $pid = (string)($p['parasut_product_id'] ?? '');
@@ -606,7 +606,7 @@ if ($tab === 'dealers') {
         'total_b2b'       => count($b2bProducts),
         'matched'         => count(array_filter($b2bProducts, fn($p) => !empty($p['parasut_product_id']))),
         'unmatched_b2b'   => count(array_filter($b2bProducts, fn($p) => empty($p['parasut_product_id']))),
-        'total_parasut'   => (int)$cacheStats['total'], // Cache'deki TOPLAM ürün sayısı (sayfada arama yoksa bile)
+        'total_parasut'   => (int)$cacheStats['total'], // Cache'deki TOPLAM Ã¼rÃ¼n sayÄ±sÄ± (sayfada arama yoksa bile)
         'orphan_parasut'  => count($orphanProducts),
     ];
 }
@@ -614,11 +614,11 @@ if ($tab === 'dealers') {
 
 <div class="page-header">
   <div>
-    <h1 class="page-title">Paraşüt — Eşleme & Önizleme</h1>
-    <p class="page-sub">Bayileri ve ürünleri Paraşüt kayıtlarıyla eşleştirin · Çift kayıt önleyin</p>
+    <h1 class="page-title">ParaÅŸÃ¼t â€” EÅŸleme & Ã–nizleme</h1>
+    <p class="page-sub">Bayileri ve Ã¼rÃ¼nleri ParaÅŸÃ¼t kayÄ±tlarÄ±yla eÅŸleÅŸtirin Â· Ã‡ift kayÄ±t Ã¶nleyin</p>
   </div>
   <div class="btn-group">
-    <a href="?page=parasut" class="btn btn-secondary btn-sm">← Paraşüt Anasayfa</a>
+    <a href="?page=parasut" class="btn btn-secondary btn-sm">â† ParaÅŸÃ¼t Anasayfa</a>
   </div>
 </div>
 
@@ -626,141 +626,141 @@ if ($tab === 'dealers') {
 <div class="alert alert-<?= $t==='error'?'danger':'success' ?>"><?= h($m) ?></div>
 <?php endif; ?>
 
-<!-- ─── Paraşüt API DURUMU ─── -->
+<!-- â”€â”€â”€ ParaÅŸÃ¼t API DURUMU â”€â”€â”€ -->
 <?php
 $apiCount = ($tab === 'dealers') ? count($parasutContacts) : count($parasutProducts);
-$apiKind  = ($tab === 'dealers') ? 'cari' : 'ürün';
+$apiKind  = ($tab === 'dealers') ? 'cari' : 'Ã¼rÃ¼n';
 $activeSearchQuery = ($tab === 'products') ? trim($parasutMeta['search_query'] ?? '') : '';
 $isSearching = $activeSearchQuery !== '';
 $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
 ?>
 <?php if ($apiError): ?>
-<!-- EXCEPTION yakalandı — Paraşüt'e bağlantı/yetki sorunu var -->
+<!-- EXCEPTION yakalandÄ± â€” ParaÅŸÃ¼t'e baÄŸlantÄ±/yetki sorunu var -->
 <div class="alert" style="background:#fef2f2;border:2px solid #dc2626;color:#7f1d1d;padding:14px 16px;margin-bottom:16px">
   <div style="display:flex;align-items:flex-start;gap:12px">
-    <div style="font-size:24px">⛔</div>
+    <div style="font-size:24px">â›”</div>
     <div style="flex:1">
       <div style="font-weight:700;font-size:14px;color:#b91c1c;margin-bottom:6px">
-        Paraşüt API Hatası
+        ParaÅŸÃ¼t API HatasÄ±
       </div>
       <div style="font-size:12px;line-height:1.6;background:#fff;padding:8px 10px;border-radius:6px;font-family:monospace;color:#7f1d1d;border:1px solid #fca5a5;margin-bottom:8px">
         <?= h($apiError) ?>
       </div>
       <div style="font-size:11px;color:#7f1d1d">
-        Bu hatayla karşılaştığınızda eşleme yapılamaz. Lütfen tanı araçlarını kullanın:
+        Bu hatayla karÅŸÄ±laÅŸtÄ±ÄŸÄ±nÄ±zda eÅŸleme yapÄ±lamaz. LÃ¼tfen tanÄ± araÃ§larÄ±nÄ± kullanÄ±n:
       </div>
       <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
-        <a href="?page=parasut&diag=1" class="btn btn-sm" style="background:#dc2626;color:#fff;border:none">🩺 Endpoint Tanı</a>
-        <a href="?page=parasut&clear_token=1" class="btn btn-sm" style="background:#fff;color:#dc2626;border:1px solid #dc2626" onclick="return confirm('Token cache temizlensin mi?');">🔄 Token Yenile</a>
-        <a href="?page=parasut-mapping&tab=products&diag_products=1" class="btn btn-sm" style="background:#fff;color:#dc2626;border:1px solid #dc2626">🩺 Ürün Tanı</a>
+        <a href="?page=parasut&diag=1" class="btn btn-sm" style="background:#dc2626;color:#fff;border:none">ğŸ©º Endpoint TanÄ±</a>
+        <a href="?page=parasut&clear_token=1" class="btn btn-sm" style="background:#fff;color:#dc2626;border:1px solid #dc2626" onclick="return confirm('Token cache temizlensin mi?');">ğŸ”„ Token Yenile</a>
+        <a href="?page=parasut-mapping&tab=products&diag_products=1" class="btn btn-sm" style="background:#fff;color:#dc2626;border:1px solid #dc2626">ğŸ©º ÃœrÃ¼n TanÄ±</a>
       </div>
     </div>
   </div>
 </div>
 <?php elseif ($apiCount === 0 && !$isSearching && $tab === 'products'): ?>
-<?php /* Products tab'ta cache boş veya arama sonucu yok durumu için ayrıca uyarı göstermiyoruz —
-         yukarıdaki cache durum kartı ve "İpucu" rehberi yeterli. Buradan herhangi bir uyarı
-         çıkarmıyoruz, sayfa temiz görünür. */ ?>
+<?php /* Products tab'ta cache boÅŸ veya arama sonucu yok durumu iÃ§in ayrÄ±ca uyarÄ± gÃ¶stermiyoruz â€”
+         yukarÄ±daki cache durum kartÄ± ve "Ä°pucu" rehberi yeterli. Buradan herhangi bir uyarÄ±
+         Ã§Ä±karmÄ±yoruz, sayfa temiz gÃ¶rÃ¼nÃ¼r. */ ?>
 <?php elseif ($apiCount === 0 && !$isSearching && $tab === 'dealers'): ?>
-<!-- DEALERS TAB: Paraşüt'ten direkt çekiyoruz, BOŞ ciddi sorun -->
+<!-- DEALERS TAB: ParaÅŸÃ¼t'ten direkt Ã§ekiyoruz, BOÅ ciddi sorun -->
 <div class="alert" style="background:#fef2f2;border:2px solid #dc2626;color:#7f1d1d;padding:14px 16px;margin-bottom:16px">
   <div style="display:flex;align-items:flex-start;gap:12px">
-    <div style="font-size:24px">🚨</div>
+    <div style="font-size:24px">ğŸš¨</div>
     <div style="flex:1">
       <div style="font-weight:700;font-size:14px;color:#b91c1c;margin-bottom:4px">
-        Paraşüt'ten <?= $apiKind ?> listesi BOŞ döndü
+        ParaÅŸÃ¼t'ten <?= $apiKind ?> listesi BOÅ dÃ¶ndÃ¼
       </div>
       <div style="font-size:12px;line-height:1.6">
-        Bu durumda eşleştirme yapılamaz. Olası sebepler:
+        Bu durumda eÅŸleÅŸtirme yapÄ±lamaz. OlasÄ± sebepler:
         <ul style="margin:6px 0 0 18px;padding:0">
-          <li><strong>Token sorunu:</strong> Erişim tokeni geçersiz veya süresi dolmuş</li>
-          <li><strong>Yanlış Company ID:</strong> Settings'teki <code>parasut_company_id</code> başka bir hesaba ait</li>
-          <li><strong>Yetki eksikliği:</strong> Bu API kullanıcısının <?= $apiKind ?>leri okuma izni yok</li>
-          <li><strong>Hesabınız boş:</strong> Paraşüt hesabınızda gerçekten kayıt yok</li>
+          <li><strong>Token sorunu:</strong> EriÅŸim tokeni geÃ§ersiz veya sÃ¼resi dolmuÅŸ</li>
+          <li><strong>YanlÄ±ÅŸ Company ID:</strong> Settings'teki <code>parasut_company_id</code> baÅŸka bir hesaba ait</li>
+          <li><strong>Yetki eksikliÄŸi:</strong> Bu API kullanÄ±cÄ±sÄ±nÄ±n <?= $apiKind ?>leri okuma izni yok</li>
+          <li><strong>HesabÄ±nÄ±z boÅŸ:</strong> ParaÅŸÃ¼t hesabÄ±nÄ±zda gerÃ§ekten kayÄ±t yok</li>
         </ul>
         <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-          <a href="?page=parasut&diag=1" class="btn btn-sm" style="background:#dc2626;color:#fff;border:none">🩺 Endpoint Tanı</a>
-          <a href="?page=parasut&test=1" class="btn btn-sm" style="background:#fff;color:#dc2626;border:1px solid #dc2626">🔌 Bağlantı Test Et</a>
-          <a href="?page=parasut&clear_token=1" class="btn btn-sm" style="background:#fff;color:#dc2626;border:1px solid #dc2626" onclick="return confirm('Token cache temizlensin mi?');">🔄 Token Yenile</a>
-          <a href="?page=settings&tab=parasut" class="btn btn-sm" style="background:#fff;color:#dc2626;border:1px solid #dc2626">⚙ Credentials Kontrol</a>
+          <a href="?page=parasut&diag=1" class="btn btn-sm" style="background:#dc2626;color:#fff;border:none">ğŸ©º Endpoint TanÄ±</a>
+          <a href="?page=parasut&test=1" class="btn btn-sm" style="background:#fff;color:#dc2626;border:1px solid #dc2626">ğŸ”Œ BaÄŸlantÄ± Test Et</a>
+          <a href="?page=parasut&clear_token=1" class="btn btn-sm" style="background:#fff;color:#dc2626;border:1px solid #dc2626" onclick="return confirm('Token cache temizlensin mi?');">ğŸ”„ Token Yenile</a>
+          <a href="?page=settings&tab=parasut" class="btn btn-sm" style="background:#fff;color:#dc2626;border:1px solid #dc2626">âš™ Credentials Kontrol</a>
         </div>
       </div>
     </div>
   </div>
 </div>
 <?php elseif ($apiCount === 0 && $isSearching): ?>
-<!-- Arama yapıldı, ürün bulunamadı (Paraşüt veritabanı boş DEĞİL!) -->
+<!-- Arama yapÄ±ldÄ±, Ã¼rÃ¼n bulunamadÄ± (ParaÅŸÃ¼t veritabanÄ± boÅŸ DEÄÄ°L!) -->
 <div class="alert" style="background:#fefce8;border:2px solid #fde68a;color:#713f12;padding:14px 16px;margin-bottom:16px">
   <div style="display:flex;align-items:flex-start;gap:12px">
-    <div style="font-size:24px">🔍</div>
+    <div style="font-size:24px">ğŸ”</div>
     <div style="flex:1">
       <div style="font-weight:700;font-size:14px;color:#854d0e;margin-bottom:4px">
-        "<?= h($activeSearchQuery) ?>" araması Paraşüt'te eşleşme bulamadı
+        "<?= h($activeSearchQuery) ?>" aramasÄ± ParaÅŸÃ¼t'te eÅŸleÅŸme bulamadÄ±
       </div>
       <div style="font-size:12px;line-height:1.6">
-        Paraşüt'te bu ada/koda sahip <strong>aktif veya arşivli ürün yok</strong>. Şunları deneyin:
+        ParaÅŸÃ¼t'te bu ada/koda sahip <strong>aktif veya arÅŸivli Ã¼rÃ¼n yok</strong>. ÅunlarÄ± deneyin:
         <ul style="margin:6px 0 0 18px;padding:0">
-          <li>Aramayı temizleyip <strong>tüm ürünleri görün</strong></li>
-          <li>Daha kısa anahtar kelime deneyin (örn "tavuk" → "tav")</li>
-          <li>Paraşüt'te ürünün gerçek adını kontrol edin</li>
+          <li>AramayÄ± temizleyip <strong>tÃ¼m Ã¼rÃ¼nleri gÃ¶rÃ¼n</strong></li>
+          <li>Daha kÄ±sa anahtar kelime deneyin (Ã¶rn "tavuk" â†’ "tav")</li>
+          <li>ParaÅŸÃ¼t'te Ã¼rÃ¼nÃ¼n gerÃ§ek adÄ±nÄ± kontrol edin</li>
         </ul>
         <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-          <a href="?page=parasut-mapping&tab=products" class="btn btn-sm" style="background:#854d0e;color:#fff;border:none">✕ Aramayı Temizle</a>
-          <a href="?page=parasut-mapping&tab=products&diag_products=1" class="btn btn-sm" style="background:#fff;color:#854d0e;border:1px solid #854d0e">🩺 Tanı Aç</a>
+          <a href="?page=parasut-mapping&tab=products" class="btn btn-sm" style="background:#854d0e;color:#fff;border:none">âœ• AramayÄ± Temizle</a>
+          <a href="?page=parasut-mapping&tab=products&diag_products=1" class="btn btn-sm" style="background:#fff;color:#854d0e;border:1px solid #854d0e">ğŸ©º TanÄ± AÃ§</a>
         </div>
       </div>
     </div>
   </div>
 </div>
 <?php elseif (!empty($missingMatches)): ?>
-<!-- Eşleşmiş ama Paraşüt'te bulunamayan kayıtlar var -->
+<!-- EÅŸleÅŸmiÅŸ ama ParaÅŸÃ¼t'te bulunamayan kayÄ±tlar var -->
 <div class="alert" style="background:#fef3c7;border:1px solid #fcd34d;color:#78350f;padding:12px 14px;margin-bottom:16px">
   <div style="display:flex;align-items:flex-start;gap:10px">
-    <div style="font-size:20px">⚠️</div>
+    <div style="font-size:20px">âš ï¸</div>
     <div style="flex:1">
       <div style="font-weight:700;font-size:13px;color:#92400e">
-        <?= $missingMatches ?> kayıp eşleşme tespit edildi
+        <?= $missingMatches ?> kayÄ±p eÅŸleÅŸme tespit edildi
       </div>
       <div style="font-size:12px;line-height:1.5;margin-top:4px">
-        <?= $missingMatches ?> <?= $apiKind ?> için kayıtlı Paraşüt ID'si var, ancak Paraşüt'ten gelen listede bulunamadı.
-        Bu kayıtlar Paraşüt'te silinmiş veya başka bir hesapta olabilir.
+        <?= $missingMatches ?> <?= $apiKind ?> iÃ§in kayÄ±tlÄ± ParaÅŸÃ¼t ID'si var, ancak ParaÅŸÃ¼t'ten gelen listede bulunamadÄ±.
+        Bu kayÄ±tlar ParaÅŸÃ¼t'te silinmiÅŸ veya baÅŸka bir hesapta olabilir.
       </div>
       <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <form method="post" onsubmit="return confirm('⚠️ TOPLU SIFIRLAMA\n\n<?= $missingMatches ?> kayıp <?= $apiKind ?> eşleşmesinin parasut_<?= $tab === 'dealers' ? 'contact' : 'product' ?>_id alanları NULL yapılacak.\n\nBu işlem GERİ ALINAMAZ. Sonra \"Otomatik Eşleştir\" ile yeniden bağlayabilirsiniz.\n\nDevam edilsin mi?');">
+        <form method="post" onsubmit="return confirm('âš ï¸ TOPLU SIFIRLAMA\n\n<?= $missingMatches ?> kayÄ±p <?= $apiKind ?> eÅŸleÅŸmesinin parasut_<?= $tab === 'dealers' ? 'contact' : 'product' ?>_id alanlarÄ± NULL yapÄ±lacak.\n\nBu iÅŸlem GERÄ° ALINAMAZ. Sonra \"Otomatik EÅŸleÅŸtir\" ile yeniden baÄŸlayabilirsiniz.\n\nDevam edilsin mi?');">
           <?= csrfField() ?>
           <input type="hidden" name="action" value="reset-lost-matches">
           <input type="hidden" name="type" value="<?= $tab === 'dealers' ? 'dealers' : 'products' ?>">
           <button type="submit" class="btn btn-sm" style="background:#dc2626;color:#fff;border:none">
-            🧹 Hepsini Sıfırla (<?= $missingMatches ?>)
+            ğŸ§¹ Hepsini SÄ±fÄ±rla (<?= $missingMatches ?>)
           </button>
         </form>
-        <span style="font-size:11px;color:#78350f">Sonra ⬇ aşağıdan 🤖 Otomatik Eşleştir tıkla</span>
+        <span style="font-size:11px;color:#78350f">Sonra â¬‡ aÅŸaÄŸÄ±dan ğŸ¤– Otomatik EÅŸleÅŸtir tÄ±kla</span>
       </div>
     </div>
   </div>
 </div>
 <?php else: ?>
-<!-- Sağlıklı durum - kısa bilgi + meta detayı -->
+<!-- SaÄŸlÄ±klÄ± durum - kÄ±sa bilgi + meta detayÄ± -->
 <div style="background:#f0fdf4;border:1px solid #86efac;color:#166534;padding:10px 14px;border-radius:8px;margin-bottom:16px;font-size:12px">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
     <div>
-      ✓ Paraşüt'ten <strong><?= $apiCount ?></strong> <?= $apiKind ?> çekildi
+      âœ“ ParaÅŸÃ¼t'ten <strong><?= $apiCount ?></strong> <?= $apiKind ?> Ã§ekildi
       <?php if (isset($parasutMeta)): ?>
         <span style="color:#166534;margin-left:8px">
           (<?= (int)$parasutMeta['active_fetched'] ?>/<?= (int)$parasutMeta['active_total'] ?> aktif
-          + <?= (int)$parasutMeta['archived_fetched'] ?>/<?= (int)$parasutMeta['archived_total'] ?> arşivli)
+          + <?= (int)$parasutMeta['archived_fetched'] ?>/<?= (int)$parasutMeta['archived_total'] ?> arÅŸivli)
         </span>
       <?php endif; ?>
     </div>
     <?php
-    // Çekilen vs toplam fark var mı? (eksik kayıt tespiti)
+    // Ã‡ekilen vs toplam fark var mÄ±? (eksik kayÄ±t tespiti)
     if (isset($parasutMeta)) {
         $expected = $parasutMeta['active_total'] + $parasutMeta['archived_total'];
         $missing  = $expected - $apiCount;
         if ($missing > 0):
     ?>
     <div style="background:#fef3c7;color:#92400e;padding:4px 10px;border-radius:6px;font-weight:600;font-size:11px">
-      ⚠️ <?= $missing ?> kayıt çekilemedi (sayfa limiti?)
+      âš ï¸ <?= $missing ?> kayÄ±t Ã§ekilemedi (sayfa limiti?)
     </div>
     <?php endif; } ?>
   </div>
@@ -770,14 +770,14 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
 <!-- Sekme Navigasyonu -->
 <div style="display:flex;gap:4px;margin-bottom:20px;border-bottom:2px solid var(--border)">
   <a href="?page=parasut-mapping&tab=dealers" style="padding:10px 18px;border-bottom:2px solid <?= $tab==='dealers'?'var(--accent)':'transparent' ?>;color:<?= $tab==='dealers'?'var(--text)':'var(--text-muted)' ?>;font-weight:<?= $tab==='dealers'?'700':'500' ?>;margin-bottom:-2px;text-decoration:none">
-    👥 Bayiler (Cariler)
+    ğŸ‘¥ Bayiler (Cariler)
   </a>
   <a href="?page=parasut-mapping&tab=products" style="padding:10px 18px;border-bottom:2px solid <?= $tab==='products'?'var(--accent)':'transparent' ?>;color:<?= $tab==='products'?'var(--text)':'var(--text-muted)' ?>;font-weight:<?= $tab==='products'?'700':'500' ?>;margin-bottom:-2px;text-decoration:none">
-    📦 Ürünler (Stoklar)
+    ğŸ“¦ ÃœrÃ¼nler (Stoklar)
   </a>
 </div>
 
-<!-- Stat Kartları -->
+<!-- Stat KartlarÄ± -->
 <div class="stats-grid" style="margin-bottom:20px">
   <div class="stat-card">
     <div class="stat-icon blue">
@@ -796,7 +796,7 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
     </div>
     <div class="stat-info">
       <div class="stat-value"><?= $stats['matched'] ?></div>
-      <div class="stat-label">Eşleşmiş</div>
+      <div class="stat-label">EÅŸleÅŸmiÅŸ</div>
     </div>
   </div>
   <div class="stat-card">
@@ -805,7 +805,7 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
     </div>
     <div class="stat-info">
       <div class="stat-value"><?= $stats['unmatched_b2b'] ?></div>
-      <div class="stat-label">B2B'de Bağlanmamış</div>
+      <div class="stat-label">B2B'de BaÄŸlanmamÄ±ÅŸ</div>
     </div>
   </div>
   <div class="stat-card">
@@ -814,7 +814,7 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
     </div>
     <div class="stat-info">
       <div class="stat-value"><?= $stats['total_parasut'] ?></div>
-      <div class="stat-label">Paraşüt'te Toplam</div>
+      <div class="stat-label">ParaÅŸÃ¼t'te Toplam</div>
     </div>
   </div>
   <div class="stat-card">
@@ -823,7 +823,7 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
     </div>
     <div class="stat-info">
       <div class="stat-value"><?= $stats['orphan_parasut'] ?></div>
-      <div class="stat-label">Sadece Paraşüt'te</div>
+      <div class="stat-label">Sadece ParaÅŸÃ¼t'te</div>
     </div>
   </div>
 </div>
@@ -832,29 +832,29 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
 <div class="card" style="margin-bottom:20px">
   <div class="card-body" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
     <div style="flex:1;min-width:240px">
-      <div style="font-weight:700;font-size:14px;margin-bottom:4px">🔄 Akıllı Otomatik Eşleştir</div>
+      <div style="font-weight:700;font-size:14px;margin-bottom:4px">ğŸ”„ AkÄ±llÄ± Otomatik EÅŸleÅŸtir</div>
       <div style="font-size:12px;color:var(--text-muted);line-height:1.5">
         <?php if ($tab === 'dealers'): ?>
-        Vergi numarası, e-mail veya isim eşleşmesine göre B2B bayileri Paraşüt cari kayıtlarıyla otomatik bağlar.
-        Sadece <strong>henüz eşleşmemiş</strong> bayileri etkiler.
+        Vergi numarasÄ±, e-mail veya isim eÅŸleÅŸmesine gÃ¶re B2B bayileri ParaÅŸÃ¼t cari kayÄ±tlarÄ±yla otomatik baÄŸlar.
+        Sadece <strong>henÃ¼z eÅŸleÅŸmemiÅŸ</strong> bayileri etkiler.
         <?php else: ?>
-        SKU (stok kodu) veya isim eşleşmesine göre B2B ürünleri Paraşüt stok kayıtlarıyla otomatik bağlar.
-        Sadece <strong>henüz eşleşmemiş</strong> ürünleri etkiler.
+        SKU (stok kodu) veya isim eÅŸleÅŸmesine gÃ¶re B2B Ã¼rÃ¼nleri ParaÅŸÃ¼t stok kayÄ±tlarÄ±yla otomatik baÄŸlar.
+        Sadece <strong>henÃ¼z eÅŸleÅŸmemiÅŸ</strong> Ã¼rÃ¼nleri etkiler.
         <?php endif; ?>
       </div>
     </div>
-    <form method="post" onsubmit="return confirm('Akıllı eşleştirme çalışacak. Devam edilsin mi?');">
+    <form method="post" onsubmit="return confirm('AkÄ±llÄ± eÅŸleÅŸtirme Ã§alÄ±ÅŸacak. Devam edilsin mi?');">
       <?= csrfField() ?>
       <input type="hidden" name="action" value="auto-match-<?= $tab ?>">
-      <button type="submit" class="btn btn-primary">🤖 Otomatik Eşleştir</button>
+      <button type="submit" class="btn btn-primary">ğŸ¤– Otomatik EÅŸleÅŸtir</button>
     </form>
   </div>
 </div>
 
 <?php if ($tab === 'dealers'): ?>
-<!-- BAYİLER TAB -->
+<!-- BAYÄ°LER TAB -->
 <div class="card">
-  <div class="card-header"><h3 class="card-title">B2B Bayiler ↔ Paraşüt Cariler</h3></div>
+  <div class="card-header"><h3 class="card-title">B2B Bayiler â†” ParaÅŸÃ¼t Cariler</h3></div>
   <div class="table-wrap">
     <table class="table" style="font-size:13px">
       <thead>
@@ -862,7 +862,7 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
           <th>B2B Bayi</th>
           <th>Vergi No</th>
           <th>E-posta</th>
-          <th>Paraşüt Cari Eşleşmesi</th>
+          <th>ParaÅŸÃ¼t Cari EÅŸleÅŸmesi</th>
           <th style="width:130px">Aksiyon</th>
         </tr>
       </thead>
@@ -870,7 +870,7 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
         <?php foreach ($b2bDealers as $d):
             $linkedId = (string)($d['parasut_contact_id'] ?? '');
             $linked   = null;
-            $isLost   = false;  // Eşleşme var ama Paraşüt'te bulunamayan ID
+            $isLost   = false;  // EÅŸleÅŸme var ama ParaÅŸÃ¼t'te bulunamayan ID
 
             if ($linkedId !== '') {
                 if (isset($parasutContactsById[$linkedId])) {
@@ -880,10 +880,10 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
                 }
             }
 
-            // Satır arka plan rengi:
-            // - Eşleşmiş ve sağlam: hafif yeşil
-            // - Eşleşmiş ama kayıp: kırmızı (uyarı)
-            // - Bağlanmamış: sarımsı
+            // SatÄ±r arka plan rengi:
+            // - EÅŸleÅŸmiÅŸ ve saÄŸlam: hafif yeÅŸil
+            // - EÅŸleÅŸmiÅŸ ama kayÄ±p: kÄ±rmÄ±zÄ± (uyarÄ±)
+            // - BaÄŸlanmamÄ±ÅŸ: sarÄ±msÄ±
             if ($linked)      $rowBg = '#f0fdf4'; // green-50
             elseif ($isLost)  $rowBg = '#fef2f2'; // red-50
             else              $rowBg = '#fffbeb'; // yellow-50
@@ -897,14 +897,14 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
             <div style="font-size:11px;color:var(--text-muted)"><?= h($d['phone']) ?></div>
             <?php endif; ?>
             <?php if ($linked): ?>
-            <div style="margin-top:4px;font-size:10px;color:#15803d;font-weight:700">✓ <?= h($linked['attributes']['name'] ?? 'Eşleşti') ?> (ID: <?= h($linkedId) ?>)</div>
+            <div style="margin-top:4px;font-size:10px;color:#15803d;font-weight:700">âœ“ <?= h($linked['attributes']['name'] ?? 'EÅŸleÅŸti') ?> (ID: <?= h($linkedId) ?>)</div>
             <?php elseif ($isLost): ?>
-            <div style="margin-top:4px;font-size:10px;color:#b91c1c;font-weight:700">⚠️ Paraşüt'te bu ID bulunamadı: <?= h($linkedId) ?></div>
-            <div style="font-size:10px;color:#7f1d1d">Bu kayıt Paraşüt'te silinmiş olabilir. Aşağıdan "— Bağlı değil —" seç + 💾 ile eşlemeyi sıfırla.</div>
+            <div style="margin-top:4px;font-size:10px;color:#b91c1c;font-weight:700">âš ï¸ ParaÅŸÃ¼t'te bu ID bulunamadÄ±: <?= h($linkedId) ?></div>
+            <div style="font-size:10px;color:#7f1d1d">Bu kayÄ±t ParaÅŸÃ¼t'te silinmiÅŸ olabilir. AÅŸaÄŸÄ±dan "â€” BaÄŸlÄ± deÄŸil â€”" seÃ§ + ğŸ’¾ ile eÅŸlemeyi sÄ±fÄ±rla.</div>
             <?php endif; ?>
           </td>
-          <td style="font-family:monospace;font-size:12px"><?= h($d['tax_number'] ?: '—') ?></td>
-          <td style="font-size:12px"><?= h($d['email'] ?: '—') ?></td>
+          <td style="font-family:monospace;font-size:12px"><?= h($d['tax_number'] ?: 'â€”') ?></td>
+          <td style="font-size:12px"><?= h($d['email'] ?: 'â€”') ?></td>
           <td>
             <form method="post" class="parasut-search-form map-form" data-kind="contacts" style="display:flex;gap:6px;align-items:center;position:relative">
               <?= csrfField() ?>
@@ -913,37 +913,37 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
               <input type="hidden" name="parasut_id" class="ps-parasut-id" value="<?= h($linkedId !== '' ? $linkedId : '-') ?>">
               <div style="position:relative;flex:1">
                 <input type="text" class="form-control ps-search-input"
-                       placeholder="🔎 Paraşüt cari ara (en az 2 karakter)..."
+                       placeholder="ğŸ” ParaÅŸÃ¼t cari ara (en az 2 karakter)..."
                        autocomplete="off"
                        value="<?php
                          if ($linked) {
                            $ln = trim($linked['attributes']['name'] ?? '');
                            $vt = trim($linked['attributes']['tax_number'] ?? '');
-                           echo h(($ln !== '' ? $ln : 'Adsız') . ($vt ? ' [VKN: ' . $vt . ']' : '') . ' (ID: ' . $linkedId . ')');
+                           echo h(($ln !== '' ? $ln : 'AdsÄ±z') . ($vt ? ' [VKN: ' . $vt . ']' : '') . ' (ID: ' . $linkedId . ')');
                          } elseif ($isLost) {
-                           echo h('⚠️ KAYIP ID: ' . $linkedId);
+                           echo h('âš ï¸ KAYIP ID: ' . $linkedId);
                          }
                        ?>"
                        style="font-size:12px;padding:6px 30px 6px 10px;height:32px;<?= $linked ? 'border:2px solid #16a34a;background:#f0fdf4' : ($isLost ? 'border:2px solid #dc2626;background:#fef2f2' : '') ?>">
                 <?php if ($linked || $isLost): ?>
-                <button type="button" class="ps-clear-btn" title="Eşlemeyi temizle"
-                        style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:#64748b;cursor:pointer;font-size:14px;padding:2px 6px">✕</button>
+                <button type="button" class="ps-clear-btn" title="EÅŸlemeyi temizle"
+                        style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:#64748b;cursor:pointer;font-size:14px;padding:2px 6px">âœ•</button>
                 <?php endif; ?>
                 <div class="ps-suggestions" style="display:none;position:absolute;top:calc(100% + 2px);left:0;right:0;background:#fff;border:1px solid #cbd5e1;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.15);max-height:280px;overflow-y:auto;z-index:50"></div>
               </div>
-              <button type="submit" class="btn btn-sm" style="padding:4px 10px;font-size:11px;background:#16a34a;color:#fff;border:none;height:32px">💾</button>
+              <button type="submit" class="btn btn-sm" style="padding:4px 10px;font-size:11px;background:#16a34a;color:#fff;border:none;height:32px">ğŸ’¾</button>
             </form>
           </td>
           <td>
             <?php if (!$linked): ?>
-            <form method="post" onsubmit="return confirm('Bu bayi Paraşüt\'te yeni cari olarak oluşturulacak. Önce eşleşme aramayı düşündünüz mü?');">
+            <form method="post" onsubmit="return confirm('Bu bayi ParaÅŸÃ¼t\'te yeni cari olarak oluÅŸturulacak. Ã–nce eÅŸleÅŸme aramayÄ± dÃ¼ÅŸÃ¼ndÃ¼nÃ¼z mÃ¼?');">
               <?= csrfField() ?>
               <input type="hidden" name="action" value="create-dealer">
               <input type="hidden" name="dealer_id" value="<?= (int)$d['id'] ?>">
-              <button type="submit" class="btn btn-sm" style="background:#0ea5e9;color:#fff;border:none;font-size:11px;padding:4px 10px">+ Paraşüt'te Oluştur</button>
+              <button type="submit" class="btn btn-sm" style="background:#0ea5e9;color:#fff;border:none;font-size:11px;padding:4px 10px">+ ParaÅŸÃ¼t'te OluÅŸtur</button>
             </form>
             <?php else: ?>
-            <span style="font-size:11px;color:#15803d">Senkron hazır</span>
+            <span style="font-size:11px;color:#15803d">Senkron hazÄ±r</span>
             <?php endif; ?>
           </td>
         </tr>
@@ -956,16 +956,16 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
 <?php if (!empty($orphanContacts)): ?>
 <div class="card" style="margin-top:20px;border:2px solid #0ea5e9">
   <div class="card-header" style="background:linear-gradient(135deg,#e0f2fe,#bae6fd);color:#075985;display:flex;justify-content:space-between;align-items:center">
-    <h3 class="card-title" style="color:#075985">📥 Paraşüt'ten B2B'ye Aktarılabilir Cariler — <?= count($orphanContacts) ?> kayıt</h3>
-    <div style="font-size:11px;color:#0c4a6e">Bu kayıtlar Paraşüt'te var, B2B'de yok</div>
+    <h3 class="card-title" style="color:#075985">ğŸ“¥ ParaÅŸÃ¼t'ten B2B'ye AktarÄ±labilir Cariler â€” <?= count($orphanContacts) ?> kayÄ±t</h3>
+    <div style="font-size:11px;color:#0c4a6e">Bu kayÄ±tlar ParaÅŸÃ¼t'te var, B2B'de yok</div>
   </div>
   <div class="card-body" style="padding:0">
     <div style="background:#fffbeb;border-bottom:1px solid #fde68a;padding:10px 16px;font-size:12px;color:#78350f">
-      ℹ️ Seçilen carileri B2B'ye <strong>yeni bayi</strong> olarak aktarın (parasut_contact_id otomatik bağlanır, çift kayıt olmaz). Karmaşa olmasın diye <strong>tek tek veya küçük gruplar</strong> halinde seçin.
+      â„¹ï¸ SeÃ§ilen carileri B2B'ye <strong>yeni bayi</strong> olarak aktarÄ±n (parasut_contact_id otomatik baÄŸlanÄ±r, Ã§ift kayÄ±t olmaz). KarmaÅŸa olmasÄ±n diye <strong>tek tek veya kÃ¼Ã§Ã¼k gruplar</strong> halinde seÃ§in.
     </div>
     <!-- Arama kutusu -->
     <div style="padding:12px 16px;border-bottom:1px solid var(--border);background:#fafafa">
-      <input type="search" id="orphanContactSearch" placeholder="🔍 İsim, VKN, e-mail veya ID ile ara…"
+      <input type="search" id="orphanContactSearch" placeholder="ğŸ” Ä°sim, VKN, e-mail veya ID ile araâ€¦"
              class="form-control" style="font-size:13px;padding:8px 12px">
     </div>
     <form method="post" id="importContactsForm">
@@ -976,14 +976,14 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
           <thead>
             <tr style="background:#f9fafb">
               <th style="width:40px;text-align:center">
-                <input type="checkbox" id="orphanSelectAll" title="Tümünü seç/kaldır">
+                <input type="checkbox" id="orphanSelectAll" title="TÃ¼mÃ¼nÃ¼ seÃ§/kaldÄ±r">
               </th>
-              <th>Paraşüt Adı</th>
+              <th>ParaÅŸÃ¼t AdÄ±</th>
               <th>Vergi No</th>
               <th>Vergi Dairesi</th>
               <th>E-posta</th>
               <th>Telefon</th>
-              <th>Paraşüt ID</th>
+              <th>ParaÅŸÃ¼t ID</th>
             </tr>
           </thead>
           <tbody>
@@ -1003,15 +1003,15 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
                 <input type="checkbox" name="parasut_ids[]" value="<?= h($c['id']) ?>" class="orphan-check">
               </td>
               <td style="font-weight:600">
-                <?= h($a['name'] ?? '—') ?>
+                <?= h($a['name'] ?? 'â€”') ?>
                 <?php if ($isArch): ?>
-                  <span class="badge" style="background:#e5e7eb;color:#6b7280;font-size:9px;font-weight:600;margin-left:6px">ARŞİVLİ</span>
+                  <span class="badge" style="background:#e5e7eb;color:#6b7280;font-size:9px;font-weight:600;margin-left:6px">ARÅÄ°VLÄ°</span>
                 <?php endif; ?>
               </td>
-              <td style="font-family:monospace"><?= h($a['tax_number'] ?? '—') ?></td>
-              <td><?= h($a['tax_office'] ?? '—') ?></td>
-              <td><?= h($a['email'] ?? '—') ?></td>
-              <td><?= h($a['phone'] ?? '—') ?></td>
+              <td style="font-family:monospace"><?= h($a['tax_number'] ?? 'â€”') ?></td>
+              <td><?= h($a['tax_office'] ?? 'â€”') ?></td>
+              <td><?= h($a['email'] ?? 'â€”') ?></td>
+              <td><?= h($a['phone'] ?? 'â€”') ?></td>
               <td style="font-family:monospace;color:var(--text-muted)"><?= h($c['id']) ?></td>
             </tr>
             <?php endforeach; ?>
@@ -1020,10 +1020,10 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
       </div>
       <div style="padding:14px 16px;background:#f9fafb;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
         <div style="font-size:12px;color:var(--text-muted)">
-          <span id="orphanCount">0</span> kayıt seçildi
+          <span id="orphanCount">0</span> kayÄ±t seÃ§ildi
         </div>
-        <button type="submit" class="btn btn-primary" id="importContactsBtn" disabled style="background:#0ea5e9;border-color:#0ea5e9" onclick="return confirm('Seçilen ' + document.querySelectorAll('.orphan-check:checked').length + ' cariyi B2B\'ye yeni bayi olarak aktarmak istediğinize emin misiniz?\n\nHer biri için yeni bir b2b_dealers kaydı oluşturulur, Paraşüt ID otomatik bağlanır.');">
-          📥 Seçilenleri B2B'ye Aktar
+        <button type="submit" class="btn btn-primary" id="importContactsBtn" disabled style="background:#0ea5e9;border-color:#0ea5e9" onclick="return confirm('SeÃ§ilen ' + document.querySelectorAll('.orphan-check:checked').length + ' cariyi B2B\'ye yeni bayi olarak aktarmak istediÄŸinize emin misiniz?\n\nHer biri iÃ§in yeni bir b2b_dealers kaydÄ± oluÅŸturulur, ParaÅŸÃ¼t ID otomatik baÄŸlanÄ±r.');">
+          ğŸ“¥ SeÃ§ilenleri B2B'ye Aktar
         </button>
       </div>
     </form>
@@ -1044,7 +1044,7 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
   }
   cb.forEach(b => b.addEventListener('change', refresh));
   if (all) all.addEventListener('change', () => {
-    // Sadece görünür satırları seç (filtreden geçmişleri)
+    // Sadece gÃ¶rÃ¼nÃ¼r satÄ±rlarÄ± seÃ§ (filtreden geÃ§miÅŸleri)
     document.querySelectorAll('.orphan-contact-row').forEach(row => {
       if (row.style.display !== 'none') {
         const c = row.querySelector('.orphan-check');
@@ -1069,18 +1069,18 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
 <?php endif; ?>
 
 <?php else: ?>
-<!-- ÜRÜNLER TAB -->
+<!-- ÃœRÃœNLER TAB -->
 <div class="card">
-  <div class="card-header"><h3 class="card-title">B2B Ürünler ↔ Paraşüt Stoklar</h3></div>
+  <div class="card-header"><h3 class="card-title">B2B ÃœrÃ¼nler â†” ParaÅŸÃ¼t Stoklar</h3></div>
   <div class="table-wrap">
     <table class="table" style="font-size:13px">
       <thead>
         <tr>
-          <th>B2B Ürün</th>
+          <th>B2B ÃœrÃ¼n</th>
           <th>SKU</th>
           <th>Baz Fiyat</th>
           <th>KDV</th>
-          <th>Paraşüt Stok Eşleşmesi</th>
+          <th>ParaÅŸÃ¼t Stok EÅŸleÅŸmesi</th>
           <th style="width:130px">Aksiyon</th>
         </tr>
       </thead>
@@ -1108,13 +1108,13 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
           <td>
             <div style="font-weight:600"><?= h($p['name']) ?></div>
             <?php if ($linked): ?>
-            <div style="margin-top:4px;font-size:10px;color:#15803d;font-weight:700">✓ <?= h($linked['attributes']['name'] ?? 'Eşleşti') ?> (ID: <?= h($linkedId) ?>)</div>
+            <div style="margin-top:4px;font-size:10px;color:#15803d;font-weight:700">âœ“ <?= h($linked['attributes']['name'] ?? 'EÅŸleÅŸti') ?> (ID: <?= h($linkedId) ?>)</div>
             <?php elseif ($isLost): ?>
-            <div style="margin-top:4px;font-size:10px;color:#b91c1c;font-weight:700">⚠️ Paraşüt'te bu ID bulunamadı: <?= h($linkedId) ?></div>
-            <div style="font-size:10px;color:#7f1d1d">Aşağıdan "— Bağlı değil —" seç + 💾 ile eşlemeyi sıfırla.</div>
+            <div style="margin-top:4px;font-size:10px;color:#b91c1c;font-weight:700">âš ï¸ ParaÅŸÃ¼t'te bu ID bulunamadÄ±: <?= h($linkedId) ?></div>
+            <div style="font-size:10px;color:#7f1d1d">AÅŸaÄŸÄ±dan "â€” BaÄŸlÄ± deÄŸil â€”" seÃ§ + ğŸ’¾ ile eÅŸlemeyi sÄ±fÄ±rla.</div>
             <?php endif; ?>
           </td>
-          <td style="font-family:monospace;font-size:12px"><?= h($p['sku'] ?: '—') ?></td>
+          <td style="font-family:monospace;font-size:12px"><?= h($p['sku'] ?: 'â€”') ?></td>
           <td style="font-size:12px"><?= moneyInc((float)$p['base_price'], $p['vat_rate'] ?? 20) ?></td>
           <td style="font-size:12px">%<?= (int)($p['vat_rate'] ?? 20) ?></td>
           <td>
@@ -1125,37 +1125,37 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
               <input type="hidden" name="parasut_id" class="ps-parasut-id" value="<?= h($linkedId !== '' ? $linkedId : '-') ?>">
               <div style="position:relative;flex:1">
                 <input type="text" class="form-control ps-search-input"
-                       placeholder="🔎 Paraşüt ürün ara (en az 2 karakter)..."
+                       placeholder="ğŸ” ParaÅŸÃ¼t Ã¼rÃ¼n ara (en az 2 karakter)..."
                        autocomplete="off"
                        value="<?php
                          if ($linked) {
                            $ln = trim($linked['attributes']['name'] ?? '');
-                           echo h(($ln !== '' ? $ln : 'Adsız') . ' (ID: ' . $linkedId . ')');
+                           echo h(($ln !== '' ? $ln : 'AdsÄ±z') . ' (ID: ' . $linkedId . ')');
                          } elseif ($isLost) {
-                           echo h('⚠️ KAYIP ID: ' . $linkedId);
+                           echo h('âš ï¸ KAYIP ID: ' . $linkedId);
                          }
                        ?>"
                        style="font-size:12px;padding:6px 30px 6px 10px;height:32px;<?= $linked ? 'border:2px solid #16a34a;background:#f0fdf4' : ($isLost ? 'border:2px solid #dc2626;background:#fef2f2' : '') ?>">
                 <?php if ($linked || $isLost): ?>
-                <button type="button" class="ps-clear-btn" title="Eşlemeyi temizle"
-                        style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:#64748b;cursor:pointer;font-size:14px;padding:2px 6px">✕</button>
+                <button type="button" class="ps-clear-btn" title="EÅŸlemeyi temizle"
+                        style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:#64748b;cursor:pointer;font-size:14px;padding:2px 6px">âœ•</button>
                 <?php endif; ?>
                 <!-- Suggestion dropdown (JS doldurur) -->
                 <div class="ps-suggestions" style="display:none;position:absolute;top:calc(100% + 2px);left:0;right:0;background:#fff;border:1px solid #cbd5e1;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.15);max-height:280px;overflow-y:auto;z-index:50"></div>
               </div>
-              <button type="submit" class="btn btn-sm" style="padding:4px 10px;font-size:11px;background:#16a34a;color:#fff;border:none;height:32px">💾</button>
+              <button type="submit" class="btn btn-sm" style="padding:4px 10px;font-size:11px;background:#16a34a;color:#fff;border:none;height:32px">ğŸ’¾</button>
             </form>
           </td>
           <td>
             <?php if (!$linked): ?>
-            <form method="post" onsubmit="return confirm('Bu ürün Paraşüt\'te yeni stok olarak oluşturulacak. Önce eşleşme aramayı düşündünüz mü?');">
+            <form method="post" onsubmit="return confirm('Bu Ã¼rÃ¼n ParaÅŸÃ¼t\'te yeni stok olarak oluÅŸturulacak. Ã–nce eÅŸleÅŸme aramayÄ± dÃ¼ÅŸÃ¼ndÃ¼nÃ¼z mÃ¼?');">
               <?= csrfField() ?>
               <input type="hidden" name="action" value="create-product">
               <input type="hidden" name="product_id" value="<?= (int)$p['id'] ?>">
-              <button type="submit" class="btn btn-sm" style="background:#0ea5e9;color:#fff;border:none;font-size:11px;padding:4px 10px">+ Paraşüt'te Oluştur</button>
+              <button type="submit" class="btn btn-sm" style="background:#0ea5e9;color:#fff;border:none;font-size:11px;padding:4px 10px">+ ParaÅŸÃ¼t'te OluÅŸtur</button>
             </form>
             <?php else: ?>
-            <span style="font-size:11px;color:#15803d">Senkron hazır</span>
+            <span style="font-size:11px;color:#15803d">Senkron hazÄ±r</span>
             <?php endif; ?>
           </td>
         </tr>
@@ -1168,18 +1168,18 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
 <?php if (!empty($orphanProducts)): ?>
 <div class="card" style="margin-top:20px;border:2px solid #0ea5e9">
   <div class="card-header" style="background:linear-gradient(135deg,#e0f2fe,#bae6fd);color:#075985;display:flex;justify-content:space-between;align-items:center">
-    <h3 class="card-title" style="color:#075985">📥 Paraşüt'ten B2B'ye Aktarılabilir Ürünler — <?= count($orphanProducts) ?> kayıt</h3>
-    <div style="font-size:11px;color:#0c4a6e">Bu ürünler Paraşüt'te var, B2B'de yok</div>
+    <h3 class="card-title" style="color:#075985">ğŸ“¥ ParaÅŸÃ¼t'ten B2B'ye AktarÄ±labilir ÃœrÃ¼nler â€” <?= count($orphanProducts) ?> kayÄ±t</h3>
+    <div style="font-size:11px;color:#0c4a6e">Bu Ã¼rÃ¼nler ParaÅŸÃ¼t'te var, B2B'de yok</div>
   </div>
   <div class="card-body" style="padding:0">
     <div style="background:#fffbeb;border-bottom:1px solid #fde68a;padding:10px 16px;font-size:12px;color:#78350f">
-      ℹ️ Seçilen ürünleri B2B'ye <strong>yeni ürün</strong> olarak aktarın (parasut_product_id otomatik bağlanır). Stok 0 ve aktif olarak eklenir, sonra admin → Ürünler'den düzenleyin.
+      â„¹ï¸ SeÃ§ilen Ã¼rÃ¼nleri B2B'ye <strong>yeni Ã¼rÃ¼n</strong> olarak aktarÄ±n (parasut_product_id otomatik baÄŸlanÄ±r). Stok 0 ve aktif olarak eklenir, sonra admin â†’ ÃœrÃ¼nler'den dÃ¼zenleyin.
     </div>
 
     <!-- Filtre durumu -->
     <?php if (isset($parasutMeta) && $tab === 'products'): ?>
 
-    <!-- ─── PARAŞÜT CACHE DURUMU + SYNC BUTONU ─── -->
+    <!-- â”€â”€â”€ PARAÅÃœT CACHE DURUMU + SYNC BUTONU â”€â”€â”€ -->
     <?php
       $lastSync = $parasutMeta['last_synced'] ?? null;
       $isCacheEmpty = ((int)$parasutMeta['cache_total']) === 0;
@@ -1189,33 +1189,33 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
     <div style="background:linear-gradient(135deg,<?= $isCacheEmpty ? '#fef2f2,#fee2e2' : ($isCacheStale ? '#fffbeb,#fef3c7' : '#f0fdf4,#dcfce7') ?>);border-bottom:1px solid <?= $isCacheEmpty ? '#fca5a5' : ($isCacheStale ? '#fcd34d' : '#86efac') ?>;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
       <div>
         <?php if ($isCacheEmpty): ?>
-          <div style="font-weight:700;color:#b91c1c;font-size:13px;margin-bottom:3px">🔴 Cache Boş — Senkronizasyon Gerekli</div>
-          <div style="font-size:11px;color:#7f1d1d">Paraşüt ürünleri henüz çekilmedi. "Şimdi Senkronize Et" butonuna basın.</div>
+          <div style="font-weight:700;color:#b91c1c;font-size:13px;margin-bottom:3px">ğŸ”´ Cache BoÅŸ â€” Senkronizasyon Gerekli</div>
+          <div style="font-size:11px;color:#7f1d1d">ParaÅŸÃ¼t Ã¼rÃ¼nleri henÃ¼z Ã§ekilmedi. "Åimdi Senkronize Et" butonuna basÄ±n.</div>
         <?php else: ?>
           <div style="font-weight:700;color:<?= $isCacheStale ? '#92400e' : '#15803d' ?>;font-size:13px;margin-bottom:3px">
-            <?= $isCacheStale ? '🟡' : '✅' ?>
-            Cache'de <strong><?= (int)$parasutMeta['cache_total'] ?></strong> ürün hazır
-            (<?= (int)$parasutMeta['cache_active'] ?> aktif + <?= (int)$parasutMeta['cache_archived'] ?> arşivli)
+            <?= $isCacheStale ? 'ğŸŸ¡' : 'âœ…' ?>
+            Cache'de <strong><?= (int)$parasutMeta['cache_total'] ?></strong> Ã¼rÃ¼n hazÄ±r
+            (<?= (int)$parasutMeta['cache_active'] ?> aktif + <?= (int)$parasutMeta['cache_archived'] ?> arÅŸivli)
           </div>
           <div style="font-size:11px;color:<?= $isCacheStale ? '#78350f' : '#166534' ?>">
             Son senkron: <strong><?= h(date('d.m.Y H:i', strtotime($lastSync))) ?></strong>
             <?php if ($cacheAgeMinutes !== null): ?>
-              · <?= $cacheAgeMinutes < 60 ? ($cacheAgeMinutes . ' dakika önce') : (floor($cacheAgeMinutes/60) . ' saat önce') ?>
-              <?php if ($isCacheStale): ?> · <strong>Yenilenmesi öneriliyor</strong><?php endif; ?>
+              Â· <?= $cacheAgeMinutes < 60 ? ($cacheAgeMinutes . ' dakika Ã¶nce') : (floor($cacheAgeMinutes/60) . ' saat Ã¶nce') ?>
+              <?php if ($isCacheStale): ?> Â· <strong>Yenilenmesi Ã¶neriliyor</strong><?php endif; ?>
             <?php endif; ?>
           </div>
         <?php endif; ?>
       </div>
-      <form method="post" onsubmit="return confirm('Paraşüt\'ten tüm ürünler tekrar çekilecek. Bu işlem 1-3 dakika sürebilir. Devam edilsin mi?');" style="display:inline">
+      <form method="post" onsubmit="return confirm('ParaÅŸÃ¼t\'ten tÃ¼m Ã¼rÃ¼nler tekrar Ã§ekilecek. Bu iÅŸlem 1-3 dakika sÃ¼rebilir. Devam edilsin mi?');" style="display:inline">
         <?= csrfField() ?>
         <input type="hidden" name="action" value="sync-parasut-cache">
         <button type="submit" class="btn" style="background:<?= $isCacheEmpty ? '#dc2626' : ($isCacheStale ? '#d97706' : '#16a34a') ?>;color:#fff;border:none;font-weight:700;padding:10px 18px;font-size:13px">
-          🔄 <?= $isCacheEmpty ? 'Şimdi Senkronize Et' : 'Yeniden Senkronize Et' ?>
+          ğŸ”„ <?= $isCacheEmpty ? 'Åimdi Senkronize Et' : 'Yeniden Senkronize Et' ?>
         </button>
       </form>
     </div>
 
-    <!-- Server-side arama formu - cache içinde anlık -->
+    <!-- Server-side arama formu - cache iÃ§inde anlÄ±k -->
     <div style="padding:14px 16px;border-bottom:1px solid var(--border);background:#f8fafc">
       <form method="get" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <input type="hidden" name="page" value="parasut-mapping">
@@ -1223,35 +1223,35 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
         <?php if ($parasutMeta['show_all']): ?><input type="hidden" name="show_all" value="1"><?php endif; ?>
         <div style="flex:1;min-width:240px">
           <input type="search" name="q" value="<?= h($parasutMeta['search_query']) ?>"
-                 placeholder="🔎 Cache'de ara (örn: G-14, churros, tavuk)..."
+                 placeholder="ğŸ” Cache'de ara (Ã¶rn: G-14, churros, tavuk)..."
                  class="form-control" style="font-size:13px;padding:8px 12px"
                  autofocus>
         </div>
         <button type="submit" class="btn btn-primary btn-sm" style="height:36px;padding:0 16px">
-          🔎 Ara
+          ğŸ” Ara
         </button>
         <?php if ($parasutMeta['search_query'] !== ''): ?>
         <a href="?page=parasut-mapping&tab=products<?= $parasutMeta['show_all'] ? '&show_all=1' : '' ?>"
-           class="btn btn-secondary btn-sm" style="height:36px">✕ Aramayı Temizle</a>
+           class="btn btn-secondary btn-sm" style="height:36px">âœ• AramayÄ± Temizle</a>
         <?php endif; ?>
-        <a href="?page=parasut-mapping&tab=products&diag_products=1" class="btn btn-sm" style="background:#7c3aed;color:#fff;border:none;height:36px;padding:0 16px;font-size:12px" title="Sayfa sayfa çekim detayını gör">
-          🩺 Tanı
+        <a href="?page=parasut-mapping&tab=products&diag_products=1" class="btn btn-sm" style="background:#7c3aed;color:#fff;border:none;height:36px;padding:0 16px;font-size:12px" title="Sayfa sayfa Ã§ekim detayÄ±nÄ± gÃ¶r">
+          ğŸ©º TanÄ±
         </a>
       </form>
       <?php if ($parasutMeta['search_query'] !== ''): ?>
       <div style="margin-top:8px;font-size:11px;color:#1e40af;background:#eff6ff;border-left:3px solid #1e40af;padding:6px 10px;border-radius:4px">
-        🔎 <strong>"<?= h($parasutMeta['search_query']) ?>"</strong> için cache'de <strong><?= count($parasutProducts) ?></strong> ürün bulundu
+        ğŸ” <strong>"<?= h($parasutMeta['search_query']) ?>"</strong> iÃ§in cache'de <strong><?= count($parasutProducts) ?></strong> Ã¼rÃ¼n bulundu
       </div>
       <?php elseif (!$isCacheEmpty): ?>
-      <!-- Boş arama, cache hazır: kullanıcıyı yönlendir -->
+      <!-- BoÅŸ arama, cache hazÄ±r: kullanÄ±cÄ±yÄ± yÃ¶nlendir -->
       <div style="margin-top:8px;font-size:12px;color:#475569;background:#f1f5f9;border-left:3px solid #64748b;padding:8px 12px;border-radius:4px;line-height:1.6">
-        💡 <strong>İpucu:</strong> Yukarıdaki arama kutusuna yazmaya başlayın.
-        Ürün adı, SKU veya Paraşüt ID ile cache'de anlık arama yapabilirsiniz.
-        Boş listeleme yapılmaz — sayfayı hızlı tutmak için sadece <strong>arama sonuçları</strong> gösterilir.
+        ğŸ’¡ <strong>Ä°pucu:</strong> YukarÄ±daki arama kutusuna yazmaya baÅŸlayÄ±n.
+        ÃœrÃ¼n adÄ±, SKU veya ParaÅŸÃ¼t ID ile cache'de anlÄ±k arama yapabilirsiniz.
+        BoÅŸ listeleme yapÄ±lmaz â€” sayfayÄ± hÄ±zlÄ± tutmak iÃ§in sadece <strong>arama sonuÃ§larÄ±</strong> gÃ¶sterilir.
         <br>
         <span style="font-size:11px;color:#64748b">
-          Cache'de <strong><?= (int)$parasutMeta['cache_total'] ?> ürün</strong> hazır (<?= (int)$parasutMeta['cache_active'] ?> aktif).
-          Örnek aramalar: <code style="background:#fff;padding:2px 5px;border-radius:3px">G-14</code>,
+          Cache'de <strong><?= (int)$parasutMeta['cache_total'] ?> Ã¼rÃ¼n</strong> hazÄ±r (<?= (int)$parasutMeta['cache_active'] ?> aktif).
+          Ã–rnek aramalar: <code style="background:#fff;padding:2px 5px;border-radius:3px">G-14</code>,
           <code style="background:#fff;padding:2px 5px;border-radius:3px">churros</code>,
           <code style="background:#fff;padding:2px 5px;border-radius:3px">tavuk</code>
         </span>
@@ -1260,42 +1260,42 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
     </div>
 
     <?php
-    // ─── DETAYLI TANI PANELİ ───
+    // â”€â”€â”€ DETAYLI TANI PANELÄ° â”€â”€â”€
     if (isset($_GET['diag_products'])) {
         $diagActive   = parasut()->listAllProductsWithMeta(200);
         $diagArchived = parasut()->listAllProductsWithMeta(200, ['archived' => 'true']);
     ?>
     <div style="background:#faf5ff;border-top:3px solid #7c3aed;border-bottom:3px solid #7c3aed;padding:18px 20px;font-size:12px">
-      <h3 style="margin:0 0 12px;font-size:14px;color:#5b21b6">🩺 Paraşüt Ürün Çekimi — Detaylı Tanı</h3>
+      <h3 style="margin:0 0 12px;font-size:14px;color:#5b21b6">ğŸ©º ParaÅŸÃ¼t ÃœrÃ¼n Ã‡ekimi â€” DetaylÄ± TanÄ±</h3>
 
-      <!-- AKTİF ÇEKİM -->
+      <!-- AKTÄ°F Ã‡EKÄ°M -->
       <div style="background:#fff;border-radius:8px;padding:12px;margin-bottom:10px">
-        <div style="font-weight:700;color:#15803d;margin-bottom:8px">✅ Aktif Ürünler</div>
+        <div style="font-weight:700;color:#15803d;margin-bottom:8px">âœ… Aktif ÃœrÃ¼nler</div>
         <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:11px;margin-bottom:8px">
-          <div><strong>Paraşüt diyor:</strong> <?= (int)$diagActive['total_count'] ?> aktif ürün var</div>
-          <div><strong>Biz çektik:</strong> <?= (int)$diagActive['fetched'] ?> ürün</div>
+          <div><strong>ParaÅŸÃ¼t diyor:</strong> <?= (int)$diagActive['total_count'] ?> aktif Ã¼rÃ¼n var</div>
+          <div><strong>Biz Ã§ektik:</strong> <?= (int)$diagActive['fetched'] ?> Ã¼rÃ¼n</div>
           <div><strong>Toplam sayfa:</strong> <?= (int)$diagActive['total_pages'] ?></div>
           <?php
           $fark = (int)$diagActive['total_count'] - (int)$diagActive['fetched'];
           ?>
           <?php if ($fark > 0): ?>
-          <div style="color:#dc2626;font-weight:700">⚠️ <?= $fark ?> ürün eksik!</div>
+          <div style="color:#dc2626;font-weight:700">âš ï¸ <?= $fark ?> Ã¼rÃ¼n eksik!</div>
           <?php else: ?>
-          <div style="color:#15803d;font-weight:700">✓ Tam çekildi</div>
+          <div style="color:#15803d;font-weight:700">âœ“ Tam Ã§ekildi</div>
           <?php endif; ?>
         </div>
         <details>
-          <summary style="cursor:pointer;font-size:11px;color:#6b21a8">Sayfa sayfa detay göster</summary>
+          <summary style="cursor:pointer;font-size:11px;color:#6b21a8">Sayfa sayfa detay gÃ¶ster</summary>
           <table style="width:100%;margin-top:8px;font-size:10px;font-family:monospace">
-            <thead><tr style="background:#f3f4f6"><th style="text-align:left;padding:4px">Sayfa</th><th style="text-align:left;padding:4px">Gelen kayıt</th><th style="text-align:left;padding:4px">HTTP</th><th style="text-align:left;padding:4px">Deneme</th><th style="text-align:left;padding:4px">Hata</th></tr></thead>
+            <thead><tr style="background:#f3f4f6"><th style="text-align:left;padding:4px">Sayfa</th><th style="text-align:left;padding:4px">Gelen kayÄ±t</th><th style="text-align:left;padding:4px">HTTP</th><th style="text-align:left;padding:4px">Deneme</th><th style="text-align:left;padding:4px">Hata</th></tr></thead>
             <tbody>
               <?php foreach (($diagActive['page_log'] ?? []) as $pl): ?>
               <tr style="border-bottom:1px solid #f3f4f6">
                 <td style="padding:4px">Sayfa #<?= $pl['page'] ?></td>
-                <td style="padding:4px"><strong><?= $pl['count'] ?></strong> kayıt</td>
-                <td style="padding:4px"><?= h((string)($pl['http'] ?? '—')) ?></td>
+                <td style="padding:4px"><strong><?= $pl['count'] ?></strong> kayÄ±t</td>
+                <td style="padding:4px"><?= h((string)($pl['http'] ?? 'â€”')) ?></td>
                 <td style="padding:4px"><?= (int)($pl['attempts'] ?? 1) ?>x</td>
-                <td style="padding:4px;color:#dc2626"><?= $pl['err'] ? h($pl['err']) : '—' ?></td>
+                <td style="padding:4px;color:#dc2626"><?= $pl['err'] ? h($pl['err']) : 'â€”' ?></td>
               </tr>
               <?php endforeach; ?>
             </tbody>
@@ -1303,33 +1303,33 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
         </details>
       </div>
 
-      <!-- ARŞİVLİ ÇEKİM -->
+      <!-- ARÅÄ°VLÄ° Ã‡EKÄ°M -->
       <div style="background:#fff;border-radius:8px;padding:12px;margin-bottom:10px">
-        <div style="font-weight:700;color:#6b7280;margin-bottom:8px">📁 Arşivli Ürünler</div>
+        <div style="font-weight:700;color:#6b7280;margin-bottom:8px">ğŸ“ ArÅŸivli ÃœrÃ¼nler</div>
         <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:11px;margin-bottom:8px">
-          <div><strong>Paraşüt diyor:</strong> <?= (int)$diagArchived['total_count'] ?> arşivli ürün var</div>
-          <div><strong>Biz çektik:</strong> <?= (int)$diagArchived['fetched'] ?> ürün</div>
+          <div><strong>ParaÅŸÃ¼t diyor:</strong> <?= (int)$diagArchived['total_count'] ?> arÅŸivli Ã¼rÃ¼n var</div>
+          <div><strong>Biz Ã§ektik:</strong> <?= (int)$diagArchived['fetched'] ?> Ã¼rÃ¼n</div>
           <?php
           $fark2 = (int)$diagArchived['total_count'] - (int)$diagArchived['fetched'];
           ?>
           <?php if ($fark2 > 0): ?>
-          <div style="color:#dc2626;font-weight:700">⚠️ <?= $fark2 ?> ürün eksik!</div>
+          <div style="color:#dc2626;font-weight:700">âš ï¸ <?= $fark2 ?> Ã¼rÃ¼n eksik!</div>
           <?php else: ?>
-          <div style="color:#15803d;font-weight:700">✓ Tam çekildi</div>
+          <div style="color:#15803d;font-weight:700">âœ“ Tam Ã§ekildi</div>
           <?php endif; ?>
         </div>
         <details>
-          <summary style="cursor:pointer;font-size:11px;color:#6b21a8">Sayfa sayfa detay göster</summary>
+          <summary style="cursor:pointer;font-size:11px;color:#6b21a8">Sayfa sayfa detay gÃ¶ster</summary>
           <table style="width:100%;margin-top:8px;font-size:10px;font-family:monospace">
-            <thead><tr style="background:#f3f4f6"><th style="text-align:left;padding:4px">Sayfa</th><th style="text-align:left;padding:4px">Gelen kayıt</th><th style="text-align:left;padding:4px">HTTP</th><th style="text-align:left;padding:4px">Deneme</th><th style="text-align:left;padding:4px">Hata</th></tr></thead>
+            <thead><tr style="background:#f3f4f6"><th style="text-align:left;padding:4px">Sayfa</th><th style="text-align:left;padding:4px">Gelen kayÄ±t</th><th style="text-align:left;padding:4px">HTTP</th><th style="text-align:left;padding:4px">Deneme</th><th style="text-align:left;padding:4px">Hata</th></tr></thead>
             <tbody>
               <?php foreach (($diagArchived['page_log'] ?? []) as $pl): ?>
               <tr style="border-bottom:1px solid #f3f4f6">
                 <td style="padding:4px">Sayfa #<?= $pl['page'] ?></td>
-                <td style="padding:4px"><strong><?= $pl['count'] ?></strong> kayıt</td>
-                <td style="padding:4px"><?= h((string)($pl['http'] ?? '—')) ?></td>
+                <td style="padding:4px"><strong><?= $pl['count'] ?></strong> kayÄ±t</td>
+                <td style="padding:4px"><?= h((string)($pl['http'] ?? 'â€”')) ?></td>
                 <td style="padding:4px"><?= (int)($pl['attempts'] ?? 1) ?>x</td>
-                <td style="padding:4px;color:#dc2626"><?= $pl['err'] ? h($pl['err']) : '—' ?></td>
+                <td style="padding:4px;color:#dc2626"><?= $pl['err'] ? h($pl['err']) : 'â€”' ?></td>
               </tr>
               <?php endforeach; ?>
             </tbody>
@@ -1337,28 +1337,28 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
         </details>
       </div>
 
-      <!-- ÖZET -->
+      <!-- Ã–ZET -->
       <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:12px;font-size:11px;color:#78350f">
-        <strong>💡 Yorum:</strong>
+        <strong>ğŸ’¡ Yorum:</strong>
         <?php
         $totalApi = (int)$diagActive['total_count'] + (int)$diagArchived['total_count'];
         $totalUs  = (int)$diagActive['fetched'] + (int)$diagArchived['fetched'];
         ?>
         <ul style="margin:6px 0 0 18px;padding:0">
-          <li>Paraşüt'ün söylediği <strong>TOPLAM</strong>: <?= $totalApi ?> ürün</li>
-          <li>Biz çekebildik: <strong><?= $totalUs ?></strong> ürün</li>
+          <li>ParaÅŸÃ¼t'Ã¼n sÃ¶ylediÄŸi <strong>TOPLAM</strong>: <?= $totalApi ?> Ã¼rÃ¼n</li>
+          <li>Biz Ã§ekebildik: <strong><?= $totalUs ?></strong> Ã¼rÃ¼n</li>
           <?php if ($totalApi > $totalUs): ?>
-          <li style="color:#b91c1c"><strong>⚠️ <?= ($totalApi - $totalUs) ?> ürün eksik kalıyor!</strong>
-              Olası sebepler: pagination kesilmesi, draft/silinmiş ürünler, custom statü</li>
+          <li style="color:#b91c1c"><strong>âš ï¸ <?= ($totalApi - $totalUs) ?> Ã¼rÃ¼n eksik kalÄ±yor!</strong>
+              OlasÄ± sebepler: pagination kesilmesi, draft/silinmiÅŸ Ã¼rÃ¼nler, custom statÃ¼</li>
           <?php else: ?>
-          <li style="color:#15803d"><strong>✓ Tüm ürünler çekildi.</strong>
-              Eğer hâlâ aradığın bir ürünü göremiyorsan, yukarıdan "Paraşüt'te direkt ara" kutusunu kullan.</li>
+          <li style="color:#15803d"><strong>âœ“ TÃ¼m Ã¼rÃ¼nler Ã§ekildi.</strong>
+              EÄŸer hÃ¢lÃ¢ aradÄ±ÄŸÄ±n bir Ã¼rÃ¼nÃ¼ gÃ¶remiyorsan, yukarÄ±dan "ParaÅŸÃ¼t'te direkt ara" kutusunu kullan.</li>
           <?php endif; ?>
         </ul>
       </div>
 
       <div style="margin-top:10px">
-        <a href="?page=parasut-mapping&tab=products" class="btn btn-sm btn-secondary" style="font-size:11px">← Tanı'yı Kapat</a>
+        <a href="?page=parasut-mapping&tab=products" class="btn btn-sm btn-secondary" style="font-size:11px">â† TanÄ±'yÄ± Kapat</a>
       </div>
     </div>
     <?php } ?>
@@ -1366,27 +1366,27 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
     <div style="background:#eff6ff;border-bottom:1px solid #bfdbfe;padding:10px 16px;font-size:12px;color:#1e40af;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
       <div>
         <?php if (!empty($parasutMeta['show_all'])): ?>
-        ⚠️ <strong>TÜM kayıtlar gösteriliyor</strong> — muhasebe kalemleri (TDHP) dahil
+        âš ï¸ <strong>TÃœM kayÄ±tlar gÃ¶steriliyor</strong> â€” muhasebe kalemleri (TDHP) dahil
         <?php else: ?>
-        📦 <strong>Gerçek ürünler</strong> gösteriliyor
+        ğŸ“¦ <strong>GerÃ§ek Ã¼rÃ¼nler</strong> gÃ¶steriliyor
         <?php if ($parasutMeta['filtered_count'] > 0): ?>
-        · <strong><?= (int)$parasutMeta['filtered_count'] ?></strong> muhasebe kalemi gizlendi
+        Â· <strong><?= (int)$parasutMeta['filtered_count'] ?></strong> muhasebe kalemi gizlendi
         <?php endif; ?>
         <?php endif; ?>
-        ·
-        <strong>Paraşüt toplam:</strong>
+        Â·
+        <strong>ParaÅŸÃ¼t toplam:</strong>
         <?= (int)($parasutMeta['active_total'] ?: $parasutMeta['active_fetched']) ?> aktif +
-        <?= (int)($parasutMeta['archived_total'] ?: $parasutMeta['archived_fetched']) ?> arşivli
+        <?= (int)($parasutMeta['archived_total'] ?: $parasutMeta['archived_fetched']) ?> arÅŸivli
       </div>
       <?php if (!empty($parasutMeta['show_all'])): ?>
-      <a href="?page=parasut-mapping&tab=products<?= $parasutMeta['search_query'] !== '' ? '&q=' . urlencode($parasutMeta['search_query']) : '' ?>" class="btn btn-sm" style="background:#1e40af;color:#fff;border:none;font-size:11px">📦 Sadece Gerçek Ürünler</a>
+      <a href="?page=parasut-mapping&tab=products<?= $parasutMeta['search_query'] !== '' ? '&q=' . urlencode($parasutMeta['search_query']) : '' ?>" class="btn btn-sm" style="background:#1e40af;color:#fff;border:none;font-size:11px">ğŸ“¦ Sadece GerÃ§ek ÃœrÃ¼nler</a>
       <?php else: ?>
-      <a href="?page=parasut-mapping&tab=products&show_all=1<?= $parasutMeta['search_query'] !== '' ? '&q=' . urlencode($parasutMeta['search_query']) : '' ?>" class="btn btn-sm" style="background:#fff;color:#1e40af;border:1px solid #1e40af;font-size:11px">📋 Tüm Kayıtlar</a>
+      <a href="?page=parasut-mapping&tab=products&show_all=1<?= $parasutMeta['search_query'] !== '' ? '&q=' . urlencode($parasutMeta['search_query']) : '' ?>" class="btn btn-sm" style="background:#fff;color:#1e40af;border:1px solid #1e40af;font-size:11px">ğŸ“‹ TÃ¼m KayÄ±tlar</a>
       <?php endif; ?>
     </div>
 
     <?php
-    // ─── Eksik ürün otomatik uyarı bandı ───
+    // â”€â”€â”€ Eksik Ã¼rÃ¼n otomatik uyarÄ± bandÄ± â”€â”€â”€
     $activeMissing   = max(0, (int)$parasutMeta['active_total'] - (int)$parasutMeta['active_fetched']);
     $archivedMissing = max(0, (int)$parasutMeta['archived_total'] - (int)$parasutMeta['archived_fetched']);
     $totalMissing    = $activeMissing + $archivedMissing;
@@ -1394,20 +1394,20 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
     ?>
     <div style="background:#fef2f2;border-bottom:2px solid #fca5a5;padding:12px 16px;font-size:12px;color:#7f1d1d;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
       <div>
-        ⚠️ <strong style="color:#b91c1c">DİKKAT:</strong>
-        Paraşüt'te <strong><?= $activeMissing + $archivedMissing ?></strong> ürün daha var ama çekemedik!
+        âš ï¸ <strong style="color:#b91c1c">DÄ°KKAT:</strong>
+        ParaÅŸÃ¼t'te <strong><?= $activeMissing + $archivedMissing ?></strong> Ã¼rÃ¼n daha var ama Ã§ekemedik!
         <span style="font-size:11px;color:#7f1d1d">
-          (<?= $activeMissing ?> aktif, <?= $archivedMissing ?> arşivli eksik)
+          (<?= $activeMissing ?> aktif, <?= $archivedMissing ?> arÅŸivli eksik)
         </span>
       </div>
-      <a href="?page=parasut-mapping&tab=products&diag_products=1" class="btn btn-sm" style="background:#b91c1c;color:#fff;border:none;font-size:11px">🩺 Detaylı Tanı</a>
+      <a href="?page=parasut-mapping&tab=products&diag_products=1" class="btn btn-sm" style="background:#b91c1c;color:#fff;border:none;font-size:11px">ğŸ©º DetaylÄ± TanÄ±</a>
     </div>
     <?php endif; ?>
     <?php endif; ?>
 
     <!-- Arama kutusu -->
     <div style="padding:12px 16px;border-bottom:1px solid var(--border);background:#fafafa">
-      <input type="search" id="orphanProdSearch" placeholder="🔍 İsim, SKU/kod veya ID ile ara… (örn: G-01, tavuk, KNORR)"
+      <input type="search" id="orphanProdSearch" placeholder="ğŸ” Ä°sim, SKU/kod veya ID ile araâ€¦ (Ã¶rn: G-01, tavuk, KNORR)"
              class="form-control" style="font-size:13px;padding:8px 12px">
     </div>
     <form method="post" id="importProductsForm">
@@ -1418,26 +1418,26 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
           <thead>
             <tr style="background:#f9fafb">
               <th style="width:40px;text-align:center">
-                <input type="checkbox" id="orphanProdSelectAll" title="Tümünü seç/kaldır">
+                <input type="checkbox" id="orphanProdSelectAll" title="TÃ¼mÃ¼nÃ¼ seÃ§/kaldÄ±r">
               </th>
-              <th>Paraşüt Adı</th>
+              <th>ParaÅŸÃ¼t AdÄ±</th>
               <th>Stok Kodu</th>
               <th>KDV</th>
               <th>Birim Fiyat</th>
-              <th>Paraşüt ID</th>
+              <th>ParaÅŸÃ¼t ID</th>
             </tr>
           </thead>
           <tbody>
             <?php foreach ($orphanProducts as $pp):
               $a = $pp['attributes'] ?? [];
               $isArch = !empty($a['archived']);
-              // İsim fallback chain
+              // Ä°sim fallback chain
               $rawName = trim($a['name'] ?? '');
               $code    = trim($a['code'] ?? '');
               $catName = trim($a['_category_name'] ?? '');
               $display = $rawName !== '' ? $rawName
-                       : ($code !== '' ? '[Adsız - Kod: ' . $code . ']'
-                       : '[Adsız - ID: ' . $pp['id'] . ']');
+                       : ($code !== '' ? '[AdsÄ±z - Kod: ' . $code . ']'
+                       : '[AdsÄ±z - ID: ' . $pp['id'] . ']');
               $searchText = mb_strtolower(
                   $rawName . ' ' . $code . ' ' . $catName . ' ' . $pp['id']
               );
@@ -1450,18 +1450,18 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
                 <div style="font-weight:600;color:<?= $rawName === '' ? '#dc2626' : 'inherit' ?>">
                   <?= h($display) ?>
                   <?php if ($isArch): ?>
-                    <span class="badge" style="background:#e5e7eb;color:#6b7280;font-size:9px;font-weight:600;margin-left:6px">ARŞİVLİ</span>
+                    <span class="badge" style="background:#e5e7eb;color:#6b7280;font-size:9px;font-weight:600;margin-left:6px">ARÅÄ°VLÄ°</span>
                   <?php endif; ?>
                 </div>
                 <?php if ($catName !== ''): ?>
                 <div style="margin-top:3px">
-                  <span class="badge" style="background:#fef3c7;color:#92400e;font-size:9px;font-weight:600;padding:2px 6px;border-radius:3px;text-transform:uppercase;letter-spacing:.3px">📁 <?= h($catName) ?></span>
+                  <span class="badge" style="background:#fef3c7;color:#92400e;font-size:9px;font-weight:600;padding:2px 6px;border-radius:3px;text-transform:uppercase;letter-spacing:.3px">ğŸ“ <?= h($catName) ?></span>
                 </div>
                 <?php endif; ?>
               </td>
-              <td style="font-family:monospace"><?= h($code ?: '—') ?></td>
+              <td style="font-family:monospace"><?= h($code ?: 'â€”') ?></td>
               <td>%<?= (int)($a['vat_rate'] ?? 0) ?></td>
-              <td><?= isset($a['list_price']) ? money((float)$a['list_price']) : '—' ?></td>
+              <td><?= isset($a['list_price']) ? money((float)$a['list_price']) : 'â€”' ?></td>
               <td style="font-family:monospace;color:var(--text-muted);font-size:11px"><?= h($pp['id']) ?></td>
             </tr>
             <?php endforeach; ?>
@@ -1470,10 +1470,10 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
       </div>
       <div style="padding:14px 16px;background:#f9fafb;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
         <div style="font-size:12px;color:var(--text-muted)">
-          <span id="orphanProdCount">0</span> ürün seçildi
+          <span id="orphanProdCount">0</span> Ã¼rÃ¼n seÃ§ildi
         </div>
-        <button type="submit" class="btn btn-primary" id="importProductsBtn" disabled style="background:#0ea5e9;border-color:#0ea5e9" onclick="return confirm('Seçilen ' + document.querySelectorAll('.orphan-prod-check:checked').length + ' ürünü B2B\'ye yeni ürün olarak aktarmak istediğinize emin misiniz?\n\nHer biri için yeni b2b_products kaydı oluşturulur, Paraşüt ID otomatik bağlanır.');">
-          📥 Seçilenleri B2B'ye Aktar
+        <button type="submit" class="btn btn-primary" id="importProductsBtn" disabled style="background:#0ea5e9;border-color:#0ea5e9" onclick="return confirm('SeÃ§ilen ' + document.querySelectorAll('.orphan-prod-check:checked').length + ' Ã¼rÃ¼nÃ¼ B2B\'ye yeni Ã¼rÃ¼n olarak aktarmak istediÄŸinize emin misiniz?\n\nHer biri iÃ§in yeni b2b_products kaydÄ± oluÅŸturulur, ParaÅŸÃ¼t ID otomatik baÄŸlanÄ±r.');">
+          ğŸ“¥ SeÃ§ilenleri B2B'ye Aktar
         </button>
       </div>
     </form>
@@ -1515,14 +1515,14 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
 })();
 </script>
 
-<!-- ─── INLINE PARAŞÜT ARAMA COMPONENTİ ─── -->
+<!-- â”€â”€â”€ INLINE PARAÅÃœT ARAMA COMPONENTÄ° â”€â”€â”€ -->
 <script>
 (function() {
   const SEARCH_URL = '?page=parasut-mapping&ajax=search';
-  let openSuggestions = null; // şu an açık olan dropdown
+  let openSuggestions = null; // ÅŸu an aÃ§Ä±k olan dropdown
   let debounceTimer = null;
 
-  // Sayfa içindeki tüm arama formlarını yakala
+  // Sayfa iÃ§indeki tÃ¼m arama formlarÄ±nÄ± yakala
   document.querySelectorAll('.parasut-search-form').forEach(form => {
     const input    = form.querySelector('.ps-search-input');
     const hiddenId = form.querySelector('.ps-parasut-id');
@@ -1539,7 +1539,7 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
     sugBox.style.right = 'auto';
     sugBox.style.zIndex = '2000';
 
-    // Eşleme zaten varsa input read-only başlasın
+    // EÅŸleme zaten varsa input read-only baÅŸlasÄ±n
     let isLocked = hiddenId.value && hiddenId.value !== '-' && hiddenId.value !== '';
 
     if (isLocked) {
@@ -1547,7 +1547,7 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
       input.style.cursor = 'pointer';
     }
 
-    // ✕ butonu - eşlemeyi temizle (henüz kaydedilmedi)
+    // âœ• butonu - eÅŸlemeyi temizle (henÃ¼z kaydedilmedi)
     if (clearBtn) {
       clearBtn.addEventListener('click', e => {
         e.preventDefault();
@@ -1563,10 +1563,10 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
       });
     }
 
-    // Input'a tıklayınca (kilitliyse) → kilidi aç + temizle
+    // Input'a tÄ±klayÄ±nca (kilitliyse) â†’ kilidi aÃ§ + temizle
     input.addEventListener('focus', e => {
       if (isLocked) {
-        if (!confirm('Mevcut eşlemeyi değiştirmek istiyor musunuz?')) {
+        if (!confirm('Mevcut eÅŸlemeyi deÄŸiÅŸtirmek istiyor musunuz?')) {
           input.blur();
           return;
         }
@@ -1581,7 +1581,7 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
       }
     });
 
-    // Yazınca → debounce + fetch
+    // YazÄ±nca â†’ debounce + fetch
     input.addEventListener('input', () => {
       clearTimeout(debounceTimer);
       const q = input.value.trim();
@@ -1592,7 +1592,7 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
       debounceTimer = setTimeout(() => doSearch(q, kind, sugBox, input, hiddenId), 200);
     });
 
-    // Klavye desteği (yukarı/aşağı/enter/escape)
+    // Klavye desteÄŸi (yukarÄ±/aÅŸaÄŸÄ±/enter/escape)
     input.addEventListener('keydown', e => {
       if (sugBox.style.display === 'none') return;
       const items = sugBox.querySelectorAll('.ps-suggestion-item');
@@ -1624,7 +1624,7 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
       }
     });
 
-    // Dışarı tıklayınca kapat
+    // DÄ±ÅŸarÄ± tÄ±klayÄ±nca kapat
     document.addEventListener('click', e => {
       if (!form.contains(e.target)) hideSuggestions(sugBox);
     });
@@ -1648,7 +1648,7 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
   function doSearch(q, kind, sugBox, input, hiddenId) {
     positionSuggestions(sugBox, input);
     sugBox.style.display = 'block';
-    sugBox.innerHTML = '<div style="padding:10px;color:#64748b;font-size:12px;text-align:center">🔎 Aranıyor...</div>';
+    sugBox.innerHTML = '<div style="padding:10px;color:#64748b;font-size:12px;text-align:center">ğŸ” AranÄ±yor...</div>';
     openSuggestions = sugBox;
 
     fetch(SEARCH_URL + '&kind=' + encodeURIComponent(kind) + '&q=' + encodeURIComponent(q) + '&limit=30')
@@ -1659,13 +1659,13 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
           return;
         }
         if (!data.items || data.items.length === 0) {
-          sugBox.innerHTML = '<div style="padding:10px;color:#64748b;font-size:12px;text-align:center">Sonuç yok. Cache\'i senkronize ettiniz mi?</div>';
+          sugBox.innerHTML = '<div style="padding:10px;color:#64748b;font-size:12px;text-align:center">SonuÃ§ yok. Cache\'i senkronize ettiniz mi?</div>';
           return;
         }
         renderSuggestions(data.items, sugBox, input, hiddenId);
       })
       .catch(err => {
-        sugBox.innerHTML = '<div style="padding:10px;color:#dc2626;font-size:12px">Bağlantı hatası: ' + err.message + '</div>';
+        sugBox.innerHTML = '<div style="padding:10px;color:#dc2626;font-size:12px">BaÄŸlantÄ± hatasÄ±: ' + err.message + '</div>';
       });
   }
 
@@ -1677,18 +1677,18 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
       div.style.cssText = 'padding:8px 10px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:12px;line-height:1.4';
       div.dataset.id = it.id;
 
-      // İsim + kod + kategori + ID
-      let html = '<div style="font-weight:600;color:#1e293b">' + escapeHtml(it.label || 'Adsız');
+      // Ä°sim + kod + kategori + ID
+      let html = '<div style="font-weight:600;color:#1e293b">' + escapeHtml(it.label || 'AdsÄ±z');
       if (it.code && it.code !== it.label) {
         html += ' <span style="font-family:monospace;font-size:11px;color:#64748b;background:#f1f5f9;padding:1px 5px;border-radius:3px">' + escapeHtml(it.code) + '</span>';
       }
       html += '</div>';
       html += '<div style="font-size:10px;color:#64748b;margin-top:2px">';
-      if (it.category) html += '📁 ' + escapeHtml(it.category) + ' · ';
-      if (it.archived) html += '<span style="color:#dc2626;font-weight:600">📦 ARŞİVLİ</span> · ';
+      if (it.category) html += 'ğŸ“ ' + escapeHtml(it.category) + ' Â· ';
+      if (it.archived) html += '<span style="color:#dc2626;font-weight:600">ğŸ“¦ ARÅÄ°VLÄ°</span> Â· ';
       html += 'ID: ' + escapeHtml(it.id);
       if (it.price !== null && it.price !== undefined) {
-        html += ' · ' + it.price.toFixed(2) + ' ₺';
+        html += ' Â· ' + Number(it.price).toFixed(2) + ' â‚º';
       }
       html += '</div>';
       div.innerHTML = html;
@@ -1701,7 +1701,7 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
       div.addEventListener('click', e => {
         e.preventDefault();
         hiddenId.value = it.id;
-        const ln = it.name || 'Adsız';
+        const ln = it.name || 'AdsÄ±z';
         input.value = ln + (it.code ? ' [' + it.code + ']' : '') + ' (ID: ' + it.id + ')';
         input.style.border = '2px solid #16a34a';
         input.style.background = '#f0fdf4';
@@ -1736,3 +1736,4 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
 <?php endif; ?>
 
 <?php endif; ?>
+
