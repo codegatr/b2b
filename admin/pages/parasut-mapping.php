@@ -776,6 +776,35 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
 </div>
 <?php endif; ?>
 
+<?php
+// Native browser autocomplete fallback: AJAX arama bozulsa bile cache'deki kayıtlarla eşleme yapılabilsin.
+$psMapOptions = [];
+if ($tab === 'products' && !empty($rawProducts)) {
+    foreach ($rawProducts as $pp) {
+        $a = $pp['attributes'] ?? [];
+        $name = trim($a['name'] ?? '');
+        $code = trim($a['code'] ?? '');
+        $label = $name !== '' ? $name : ($code !== '' ? '[Adsız - Kod: ' . $code . ']' : '[Adsız - ID: ' . $pp['id'] . ']');
+        $value = $label . ($code !== '' ? ' [' . $code . ']' : '') . ' (ID: ' . $pp['id'] . ')';
+        $psMapOptions[$value] = (string)$pp['id'];
+    }
+} elseif ($tab === 'dealers' && !empty($parasutContacts)) {
+    foreach ($parasutContacts as $cc) {
+        $a = $cc['attributes'] ?? [];
+        $name = trim($a['name'] ?? '');
+        $tax = trim($a['tax_number'] ?? '');
+        $label = $name !== '' ? $name : '[Adsız - ID: ' . $cc['id'] . ']';
+        $value = $label . ($tax !== '' ? ' [VKN: ' . $tax . ']' : '') . ' (ID: ' . $cc['id'] . ')';
+        $psMapOptions[$value] = (string)$cc['id'];
+    }
+}
+?>
+<datalist id="ps-map-options">
+  <?php foreach ($psMapOptions as $value => $id): ?>
+    <option value="<?= h($value) ?>"></option>
+  <?php endforeach; ?>
+</datalist>
+<script type="application/json" id="ps-map-options-json"><?= json_encode($psMapOptions, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?></script>
 <!-- Sekme Navigasyonu -->
 <div style="display:flex;gap:4px;margin-bottom:20px;border-bottom:2px solid var(--border)">
   <a href="?page=parasut-mapping&tab=dealers" style="padding:10px 18px;border-bottom:2px solid <?= $tab==='dealers'?'var(--accent)':'transparent' ?>;color:<?= $tab==='dealers'?'var(--text)':'var(--text-muted)' ?>;font-weight:<?= $tab==='dealers'?'700':'500' ?>;margin-bottom:-2px;text-decoration:none">
@@ -924,6 +953,7 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
                 <input type="text" class="form-control ps-search-input"
                        placeholder="🔎 Paraşüt cari ara (en az 2 karakter)..."
                        autocomplete="off"
+                       list="ps-map-options"
                        value="<?php
                          if ($linked) {
                            $ln = trim($linked['attributes']['name'] ?? '');
@@ -1136,6 +1166,7 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
                 <input type="text" class="form-control ps-search-input"
                        placeholder="🔎 Paraşüt ürün ara (en az 2 karakter)..."
                        autocomplete="off"
+                       list="ps-map-options"
                        value="<?php
                          if ($linked) {
                            $ln = trim($linked['attributes']['name'] ?? '');
@@ -1528,6 +1559,11 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
 <script>
 (function() {
   const SEARCH_URL = '?page=parasut-mapping&ajax=search';
+  const NATIVE_OPTIONS = (() => {
+    const el = document.getElementById('ps-map-options-json');
+    if (!el) return {};
+    try { return JSON.parse(el.textContent || '{}'); } catch (err) { return {}; }
+  })();
   let openSuggestions = null; // şu an açık olan dropdown
   let debounceTimer = null;
 
@@ -1594,11 +1630,26 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
     input.addEventListener('input', () => {
       clearTimeout(debounceTimer);
       const q = input.value.trim();
+      if (applyNativeSelection(input, hiddenId)) {
+        hideSuggestions(sugBox);
+        return;
+      }
+      hiddenId.value = '-';
+      input.style.border = '';
+      input.style.background = '';
       if (q.length < 2) {
         hideSuggestions(sugBox);
         return;
       }
       debounceTimer = setTimeout(() => doSearch(q, kind, sugBox, input, hiddenId), 200);
+    });
+
+    input.addEventListener('change', () => {
+      applyNativeSelection(input, hiddenId);
+    });
+
+    form.addEventListener('submit', () => {
+      applyNativeSelection(input, hiddenId);
     });
 
     // Klavye desteği (yukarı/aşağı/enter/escape)
@@ -1643,6 +1694,20 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
     box.style.display = 'none';
     box.innerHTML = '';
     if (openSuggestions === box) openSuggestions = null;
+  }
+
+  function applyNativeSelection(input, hiddenId) {
+    const value = input.value.trim();
+    let id = NATIVE_OPTIONS[value] || '';
+    if (!id) {
+      const match = value.match(/\(ID:\s*([^)]+)\)\s*$/);
+      if (match) id = match[1].trim();
+    }
+    if (!id) return false;
+    hiddenId.value = id;
+    input.style.border = '2px solid #16a34a';
+    input.style.background = '#f0fdf4';
+    return true;
   }
 
   function positionSuggestions(box, input) {
