@@ -202,6 +202,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         settingSave('parasut_auto_invoice',  isset($_POST['parasut_auto_invoice'])?'1':'0');
         settingSave('parasut_auto_einvoice', isset($_POST['parasut_auto_einvoice'])?'1':'0');
         settingSave('parasut_save_pdf',      isset($_POST['parasut_save_pdf'])?'1':'0');
+        // Cron token kaydet (gönderildiyse) veya yoksa otomatik üret
+        if (!empty($_POST['cron_token'])) {
+            settingSave('cron_token', trim($_POST['cron_token']));
+        } elseif (empty(setting('cron_token'))) {
+            settingSave('cron_token', bin2hex(random_bytes(24))); // 48 karakter
+        }
         settingClearCache();
         // Test butonu ile geldiyse → test URL'sine yönlendir
         if (!empty($_POST['do_test_parasut'])) {
@@ -906,7 +912,102 @@ function fillParasutDefaults() {
 </div>
 </div>
 
-</div></div>
+<!-- ─── CRON BİLGİ KARTI ─── -->
+<?php
+  $cronToken = setting('cron_token', '');
+  $cronLastRun = setting('parasut_cron_last_run_at', '');
+  $cronLastResult = setting('parasut_cron_last_result', '');
+  $cronResult = $cronLastResult ? json_decode($cronLastResult, true) : null;
+  // İlk açılışta token üret
+  if ($cronToken === '') {
+    $cronToken = bin2hex(random_bytes(24));
+    settingSave('cron_token', $cronToken);
+  }
+  $cronUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https://' : 'http://')
+           . ($_SERVER['HTTP_HOST'] ?? 'site.com')
+           . '/cron/parasut-sync.php?token=' . $cronToken;
+?>
+<div class="card" style="margin-top:20px;border:2px solid #1e40af">
+  <div class="card-header" style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border-bottom:1px solid #1e40af">
+    <h3 class="card-title" style="color:#1e40af">⏰ Otomatik Senkronizasyon (Cron Job)</h3>
+  </div>
+  <div class="card-body">
+    <p style="font-size:13px;color:var(--text-muted);margin:0 0 14px">
+      Paraşüt ürün cache'ini otomatik olarak güncellemek için cPanel/DirectAdmin <strong>Cron Jobs</strong>
+      bölümüne aşağıdaki komutu ekleyin. Bu sayede 1144+ ürün her hafta otomatik senkronize olur.
+    </p>
+
+    <!-- Cron Token -->
+    <div class="form-group">
+      <label class="form-label">🔐 Cron Token (Güvenlik)</label>
+      <form method="post" style="display:flex;gap:8px;align-items:center">
+        <?= csrfField() ?>
+        <input type="hidden" name="tab" value="parasut">
+        <input type="text" name="cron_token" value="<?= htmlspecialchars($cronToken) ?>"
+               style="flex:1;font-family:monospace;font-size:12px;padding:8px 12px;border:1px solid #cbd5e1;border-radius:6px">
+        <button type="submit" class="btn btn-sm btn-primary" style="height:36px;padding:0 14px">💾 Kaydet</button>
+        <button type="button" onclick="document.querySelector('[name=cron_token]').value=Array.from(crypto.getRandomValues(new Uint8Array(24))).map(b=>b.toString(16).padStart(2,'0')).join('')" class="btn btn-sm btn-secondary" style="height:36px;padding:0 14px">🎲 Yeni Üret</button>
+      </form>
+      <p style="font-size:11px;color:var(--text-muted);margin-top:4px">
+        Cron URL'sine token zorunlu. Üçüncü kişiler URL'yi bulsa bile çağrı yapamaz.
+      </p>
+    </div>
+
+    <!-- Cron URL -->
+    <div class="form-group">
+      <label class="form-label">🔗 Cron URL (cPanel/DirectAdmin'a ekleyin)</label>
+      <div style="background:#1e293b;color:#e2e8f0;padding:14px;border-radius:6px;font-family:monospace;font-size:11px;overflow-x:auto;white-space:nowrap">
+        <span id="cronUrlText" style="user-select:all"><?= htmlspecialchars($cronUrl) ?></span>
+        <button onclick="navigator.clipboard.writeText(document.getElementById('cronUrlText').innerText); this.textContent='✓ Kopyalandı'; setTimeout(()=>this.textContent='📋 Kopyala', 2000)"
+                style="float:right;background:#334155;color:#fff;border:none;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px">📋 Kopyala</button>
+      </div>
+    </div>
+
+    <!-- Cron Komut Örnekleri -->
+    <div class="form-group">
+      <label class="form-label">📅 Cron Komut Örnekleri</label>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;font-family:monospace;font-size:11px;line-height:1.8">
+        <div style="color:#64748b;font-weight:600">Haftalık (Pazartesi 03:00):</div>
+        <div style="background:#fff;padding:6px 10px;border-radius:4px;margin:4px 0;border-left:3px solid #10b981;user-select:all">
+          0 3 * * 1 /usr/bin/curl -s "<?= htmlspecialchars($cronUrl) ?>" > /dev/null 2>&1
+        </div>
+        <div style="color:#64748b;font-weight:600;margin-top:8px">Günlük (her gece 03:00):</div>
+        <div style="background:#fff;padding:6px 10px;border-radius:4px;margin:4px 0;border-left:3px solid #3b82f6;user-select:all">
+          0 3 * * * /usr/bin/curl -s "<?= htmlspecialchars($cronUrl) ?>" > /dev/null 2>&1
+        </div>
+        <div style="color:#64748b;font-weight:600;margin-top:8px">Her 6 saatte bir:</div>
+        <div style="background:#fff;padding:6px 10px;border-radius:4px;margin:4px 0;border-left:3px solid #f59e0b;user-select:all">
+          0 */6 * * * /usr/bin/curl -s "<?= htmlspecialchars($cronUrl) ?>" > /dev/null 2>&1
+        </div>
+      </div>
+    </div>
+
+    <!-- Cron Son Çalışma -->
+    <?php if ($cronLastRun): ?>
+    <div class="form-group">
+      <label class="form-label">📊 Son Cron Çalışması</label>
+      <div style="background:<?= !empty($cronResult['success']) ? '#f0fdf4' : '#fef2f2' ?>;border:1px solid <?= !empty($cronResult['success']) ? '#86efac' : '#fca5a5' ?>;border-radius:6px;padding:10px 14px;font-size:12px">
+        <strong>Tarih:</strong> <?= htmlspecialchars($cronLastRun) ?><br>
+        <?php if ($cronResult): ?>
+          <strong>Sonuç:</strong> <?= !empty($cronResult['success']) ? '✓ Başarılı' : '✗ Başarısız' ?><br>
+          <?php if (!empty($cronResult['total'])): ?>
+            <strong>Senkronize edilen:</strong> <?= (int)$cronResult['total'] ?> ürün (<?= (int)$cronResult['active'] ?> aktif + <?= (int)$cronResult['archived'] ?> arşivli)<br>
+            <strong>Süre:</strong> <?= $cronResult['duration'] ?? '?' ?> saniye
+          <?php endif; ?>
+          <?php if (!empty($cronResult['error'])): ?>
+            <strong style="color:#dc2626">Hata:</strong> <?= htmlspecialchars($cronResult['error']) ?>
+          <?php endif; ?>
+        <?php endif; ?>
+      </div>
+    </div>
+    <?php else: ?>
+    <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:10px 14px;font-size:12px;color:#78350f">
+      ⚠️ Cron henüz hiç çalışmamış. cPanel/DirectAdmin'da yukarıdaki komutu ekleyin veya elle test edin:
+      <a href="<?= htmlspecialchars($cronUrl) ?>" target="_blank" style="color:#1e40af;text-decoration:underline">→ Şimdi Test Et</a>
+    </div>
+    <?php endif; ?>
+  </div>
+</div>
 
 <?php elseif ($activeTab === 'rubikpara'): ?>
 <div class="card">

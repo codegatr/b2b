@@ -566,8 +566,28 @@ $apiError = ($tab === 'products') ? ($parasutMeta['error'] ?? null) : null;
     </div>
   </div>
 </div>
-<?php elseif ($apiCount === 0 && !$isSearching): ?>
-<!-- Paraşüt'ten HİÇ veri gelmedi (arama YOKKEN) - SERT UYARI -->
+<?php elseif ($apiCount === 0 && !$isSearching && $tab === 'products'): ?>
+<!-- PRODUCTS TAB: Cache boş ise (Paraşüt'e gitmiyoruz, sadece cache'i kontrol) -->
+<div class="alert" style="background:#fffbeb;border:2px solid #fcd34d;color:#78350f;padding:14px 16px;margin-bottom:16px">
+  <div style="display:flex;align-items:flex-start;gap:12px">
+    <div style="font-size:24px">📭</div>
+    <div style="flex:1">
+      <div style="font-weight:700;font-size:14px;color:#92400e;margin-bottom:4px">
+        Cache Boş — İlk Senkronizasyon Gerekli
+      </div>
+      <div style="font-size:12px;line-height:1.6;color:#78350f">
+        Paraşüt ürün cache'i henüz doldurulmadı. <strong>Yukarıdaki "🔄 Şimdi Senkronize Et"</strong> butonuna basarak ilk senkronizasyonu başlatın.
+        İşlem 1-3 dakika sürer ve tüm ürünleriniz arama motorunda anlık olarak erişilebilir hale gelir.
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <a href="?page=parasut&diag=1" class="btn btn-sm" style="background:#92400e;color:#fff;border:none;font-size:11px">🩺 Endpoint Tanı (Token Kontrolü)</a>
+          <a href="?page=settings&tab=parasut" class="btn btn-sm" style="background:#fff;color:#92400e;border:1px solid #92400e;font-size:11px">⚙ Credentials</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<?php elseif ($apiCount === 0 && !$isSearching && $tab === 'dealers'): ?>
+<!-- DEALERS TAB: Paraşüt'ten direkt çekiyoruz, BOŞ ciddi sorun -->
 <div class="alert" style="background:#fef2f2;border:2px solid #dc2626;color:#7f1d1d;padding:14px 16px;margin-bottom:16px">
   <div style="display:flex;align-items:flex-start;gap:12px">
     <div style="font-size:24px">🚨</div>
