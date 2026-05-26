@@ -185,7 +185,7 @@ if (isPost() && ($_POST['action'] ?? '') === 'auto-match-dealers') {
 // Akıllı otomatik eşleştirme — ürünler
 if (isPost() && ($_POST['action'] ?? '') === 'auto-match-products') {
     csrfCheck();
-    $parasutProducts = parasut()->listAllProducts();
+    $parasutProducts = function_exists('parasut_cache_get_products') ? parasut_cache_get_products('', false) : parasut()->listAllProducts();
     $products = dbRows("SELECT * FROM b2b_products WHERE is_active=1 AND (parasut_product_id IS NULL OR parasut_product_id='')");
 
     $matched = 0;
@@ -329,7 +329,7 @@ if (isPost() && ($_POST['action'] ?? '') === 'import-products') {
     if (!is_array($ids) || empty($ids)) {
         $msg = 'error:Lütfen aktarılacak ürün(leri) seçin.';
     } else {
-        $allProds = parasut()->listAllProducts();
+        $allProds = function_exists('parasut_cache_get_products') ? parasut_cache_get_products('', true) : parasut()->listAllProducts();
         $byId = [];
         foreach ($allProds as $p) $byId[(string)$p['id']] = $p;
 
@@ -407,7 +407,7 @@ if (isPost() && ($_POST['action'] ?? '') === 'reset-lost-matches') {
             $msg = 'success:Kayıp eşleşme bulunamadı, hepsi geçerli.';
         }
     } elseif ($type === 'products') {
-        $allProds = parasut()->listAllProducts();
+        $allProds = function_exists('parasut_cache_get_products') ? parasut_cache_get_products('', true) : parasut()->listAllProducts();
         $existingIds = array_map(fn($p) => (string)$p['id'], $allProds);
 
         $allP = dbRows("SELECT id, parasut_product_id FROM b2b_products
