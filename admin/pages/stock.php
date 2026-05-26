@@ -8,9 +8,13 @@ $syncResult = null;
 
 // Paraşüt'ten stok al
 if (isset($_GET['parasut_sync'])) {
+    @set_time_limit(600);
+    @ini_set('max_execution_time', 600);
     $syncResult = parasutSyncStock();
     if (empty($syncResult['errors'])) {
-        $success = "Paraşüt stok sync tamamlandı. {$syncResult['synced']} ürün güncellendi.";
+        $synced  = (int)($syncResult['synced'] ?? 0);
+        $updated = (int)($syncResult['stock_updated'] ?? 0);
+        $success = "Paraşüt sync tamamlandı. {$synced} ürün eşleştirildi, {$updated} stok güncellendi.";
     } else {
         $error = implode(', ', $syncResult['errors']);
     }

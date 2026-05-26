@@ -745,12 +745,16 @@ function pagination(int $total, int $perPage, int $currentPage, string $baseUrl)
 
 /**
  * Paraşüt'ten stok senkronize et
- * v1.1.81+ : Yeni cache mimarisi kullanır. Eğer cache hazır değilse,
- *            önce parasut_cache_sync_products() çağrılır (Paraşüt'ten çek).
- *            Sonra cache içindeki stok bilgilerini b2b_products'a yansıtır.
+ *
+ * 2 AŞAMA:
+ *   1) Cache'i taze tut (parasut_cache_sync_products)
+ *   2) Cache'deki ürünleri B2B'deki ürünlerle SKU eşleştir
+ *      + Paraşüt'ün inventory_levels'ından gerçek stok çek
+ *      + b2b_products.stock güncelle
  */
 function parasutSyncStock(): array {
-    $synced = 0;
+    $synced = 0;       // parasut_product_id eşleştirilen
+    $stockUpdated = 0; // stock değeri güncellenen
     $errors = [];
 
     try {
@@ -758,7 +762,7 @@ function parasutSyncStock(): array {
             throw new Exception('Paraşüt entegrasyonu kapalı veya credential eksik.');
         }
 
-        // Cache'i taze tut — Paraşüt'ten yeniden çek
+        // 1) Cache'i taze tut (Paraşüt'ten ürünleri çek)
         if (function_exists('parasut_cache_sync_products')) {
             $r = parasut_cache_sync_products();
             if (!$r['success']) {
@@ -766,28 +770,56 @@ function parasutSyncStock(): array {
             }
         }
 
-        // Cache'deki ürünleri SKU ile b2b_products ile eşle ve stok güncelle
-        $cacheRows = dbRows("SELECT parasut_id, code, raw_data FROM b2b_parasut_cache WHERE kind='products' AND code IS NOT NULL AND code != ''");
+        // 2) Eşleme + stok güncelleme
+        // Önce SKU bazlı eşleştirme, sonra parasut_product_id ile stok çek
+        $cacheRows = dbRows(
+            "SELECT parasut_id, name, code, raw_data
+               FROM b2b_parasut_cache
+              WHERE kind='products' AND archived=0"
+        );
 
+        // SKU index
+        $cacheBySku = [];
+        $cacheById  = [];
         foreach ($cacheRows as $row) {
-            $sku = trim($row['code']);
-            if ($sku === '') continue;
+            $sku = trim($row['code'] ?? '');
+            if ($sku !== '') $cacheBySku[mb_strtolower($sku, 'UTF-8')] = $row;
+            $cacheById[$row['parasut_id']] = $row;
+        }
 
-            $attrs = !empty($row['raw_data']) ? (json_decode($row['raw_data'], true) ?: []) : [];
+        // B2B ürünlerini getir
+        $b2bProducts = dbRows("SELECT id, sku, name, parasut_product_id FROM b2b_products WHERE is_active=1");
 
-            // Paraşüt'te quantity veya stock_count alanı yok (stok takibi ayrı endpoint)
-            // Buradaki amaç: B2B'deki ürünleri Paraşüt'le eşle, manuel stok güncelleme yapma
-            $product = dbRow("SELECT id FROM b2b_products WHERE sku=? AND is_active=1", [$sku]);
-            if ($product) {
+        foreach ($b2bProducts as $bp) {
+            $parasutId = $bp['parasut_product_id'] ?? null;
+
+            // Eşleşme yoksa SKU ile bulmaya çalış
+            if (!$parasutId) {
+                $sku = trim($bp['sku'] ?? '');
+                if ($sku === '') continue;
+                $match = $cacheBySku[mb_strtolower($sku, 'UTF-8')] ?? null;
+                if (!$match) continue;
+                $parasutId = $match['parasut_id'];
                 dbExec("UPDATE b2b_products SET parasut_product_id=?, updated_at=NOW() WHERE id=?",
-                       [$row['parasut_id'], $product['id']]);
+                       [$parasutId, $bp['id']]);
                 $synced++;
+            }
+
+            // Paraşüt'ten gerçek stok çek (inventory_levels)
+            // NOT: Bu Paraşüt'e ekstra istek yapar — 100ms throttle uygulanır
+            $invQty = parasut()->getProductInventory($parasutId);
+            if ($invQty !== null) {
+                $newStock = (int)round($invQty);
+                dbExec("UPDATE b2b_products SET stock=?, updated_at=NOW() WHERE id=?",
+                       [$newStock, $bp['id']]);
+                $stockUpdated++;
+                usleep(100000); // 100ms throttle — rate limit'e takılma
             }
         }
 
         try {
             dbExec("INSERT INTO b2b_parasut_log (action, status, response, created_at) VALUES (?,?,?,NOW())",
-                   ['stock_sync', 'success', "Senkronize: $synced ürün (cache mimari)"]);
+                   ['stock_sync', 'success', "Eşleme: $synced, Stok güncelleme: $stockUpdated"]);
         } catch (Exception $le) {}
 
     } catch (Exception $e) {
@@ -798,7 +830,11 @@ function parasutSyncStock(): array {
         } catch (Exception $le) {}
     }
 
-    return ['synced' => $synced, 'errors' => $errors];
+    return [
+        'synced'        => $synced,
+        'stock_updated' => $stockUpdated,
+        'errors'        => $errors,
+    ];
 }
 
 /**
