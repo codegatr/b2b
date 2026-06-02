@@ -16,7 +16,7 @@ if ($action === 'dealer_orders') {
     }
 
     $orders = dbRows(
-        "SELECT o.id, o.order_no, o.grand_total, o.status, o.payment_status,
+        "SELECT o.id, o.order_no, o.grand_total, o.status, o.payment_status, o.payment_method,
                 COALESCE(SUM(CASE WHEN p.status='onaylandi' THEN p.amount ELSE 0 END), 0) AS paid
          FROM b2b_orders o
          LEFT JOIN b2b_payments p ON p.order_id=o.id
@@ -36,6 +36,15 @@ if ($action === 'dealer_orders') {
         'kargoda'       => 'Teslimata Çıktı',
         'teslim_edildi' => 'Teslim Edildi',
     ];
+    $methodMap = [
+        'havale'       => 'Havale/EFT',
+        'havale_eft'   => 'Havale/EFT',
+        'kredi_karti'  => 'Kredi Kartı',
+        'nakit'        => 'Nakit',
+        'kapida'       => 'Kapıda Ödeme',
+        'cek'          => 'Çek',
+        'senet'        => 'Senet',
+    ];
 
     $result = [];
     foreach ($orders as $o) {
@@ -43,6 +52,7 @@ if ($action === 'dealer_orders') {
         $paid    = (float)$o['paid'];
         $balance = round($total - $paid, 2);
         if ($balance <= 0.01) continue; // Tamamen ödenmiş, atla
+        $method  = $o['payment_method'] ?? '';
         $result[] = [
             'id'                => (int)$o['id'],
             'order_no'          => $o['order_no'],
@@ -52,6 +62,8 @@ if ($action === 'dealer_orders') {
             'balance_formatted' => 'Kalan: ' . number_format($balance, 2, ',', '.') . ' ₺',
             'status'            => $o['status'],
             'status_label'      => $statusMap[$o['status']] ?? $o['status'],
+            'payment_method'    => $method,
+            'method_label'      => $methodMap[$method] ?? ($method ?: '—'),
         ];
     }
 
@@ -248,7 +260,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Sipariş ödeme durumunu güncelle (sipariş bazlı hesap)
             if ($orderId) {
-                $order = dbRow("SELECT grand_total FROM b2b_orders WHERE id=?", [$orderId]);
+                $order = dbRow("SELECT grand_total, payment_method, order_no FROM b2b_orders WHERE id=?", [$orderId]);
                 if ($order) {
                     $totalPaid = (float)dbVal(
                         "SELECT COALESCE(SUM(amount),0) FROM b2b_payments
@@ -256,6 +268,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         [$orderId]
                     );
                     $orderTotal = (float)$order['grand_total'];
+
+                    // ÖDEME YÖNTEMİ DEĞİŞİKLİĞİ: Bu manuel tahsilatın yöntemi
+                    // mevcut sipariş ödeme yönteminden farklıysa GÜNCELLE
+                    // (örn: bayi "havale" seçmişti, sonra kartla ödedi)
+                    $oldMethod = $order['payment_method'] ?? '';
+                    if ($method !== $oldMethod && $method !== '') {
+                        dbExec("UPDATE b2b_orders SET payment_method=? WHERE id=?", [$method, $orderId]);
+                        auditLog('order_payment_method_changed', 'b2b_orders', $orderId, [
+                            'from'    => $oldMethod,
+                            'to'      => $method,
+                            'reason'  => 'manual_payment_recorded',
+                            'payment' => $newId,
+                        ]);
+                    }
+
                     if ($totalPaid >= $orderTotal - 0.01) {
                         dbExec("UPDATE b2b_orders SET payment_status='odendi' WHERE id=?", [$orderId]);
                         closeOrderLedgerIfPaid((int)$orderId);
@@ -265,8 +292,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
-            auditLog('payment_manual', 'b2b_payments', $newId, ['dealer_id'=>$did,'order_id'=>$orderId,'amount'=>$amount]);
-            $success = 'Manuel tahsilat kaydedildi' . ($orderId ? ' ve sipariş ödeme durumu güncellendi.' : '.');
+            auditLog('payment_manual', 'b2b_payments', $newId, ['dealer_id'=>$did,'order_id'=>$orderId,'amount'=>$amount,'method'=>$method]);
+
+            $successParts = ['Manuel tahsilat kaydedildi'];
+            if ($orderId) {
+                $orderNo = dbVal("SELECT order_no FROM b2b_orders WHERE id=?", [$orderId]);
+                $successParts[] = '<strong>' . h($orderNo) . '</strong> sipariş ödeme durumu güncellendi';
+                if (isset($oldMethod) && $method !== $oldMethod) {
+                    $successParts[] = 'ödeme yöntemi: <strong>' . h($oldMethod) . '</strong> → <strong>' . h($method) . '</strong>';
+                }
+            }
+            $success = implode(' · ', $successParts) . '.';
         } else { $error = 'Bayi ve tutar zorunludur.'; }
     }
 }
@@ -475,6 +511,8 @@ $_tabs = ['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','reddedildi'=>'Reddedi
                     <option value="">— Genel tahsilat (siparişe bağlı değil) —</option>
                 </select>
                 <div id="manual-order-loading" style="display:none;font-size:11px;color:var(--text-muted);margin-top:4px">Siparişler yükleniyor…</div>
+                <!-- Sipariş seçilince JS dolduracak -->
+                <div id="manual-order-info" style="display:none;margin-top:8px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:6px;padding:10px 12px"></div>
             </div>
             <div class="form-group">
                 <label>Tutar (₺) *</label>
@@ -541,6 +579,7 @@ async function loadDealerOrders(dealerId) {
     const sel = document.getElementById('manual-order-select');
     const loading = document.getElementById('manual-order-loading');
     sel.innerHTML = '<option value="">— Genel tahsilat (siparişe bağlı değil) —</option>';
+    document.getElementById('manual-order-info').style.display = 'none';
     if (!dealerId) return;
 
     loading.style.display = 'block';
@@ -552,19 +591,58 @@ async function loadDealerOrders(dealerId) {
                 const opt = document.createElement('option');
                 opt.value = o.id;
                 opt.dataset.balance = o.balance;
-                opt.textContent = `${o.order_no} — ${o.balance_formatted} (${o.status_label})`;
+                opt.dataset.total   = o.grand_total;
+                opt.dataset.paid    = o.paid;
+                opt.dataset.method  = o.payment_method || '';
+                opt.dataset.methodLabel = o.method_label || '—';
+                opt.dataset.status  = o.status_label || '—';
+                opt.textContent = `${o.order_no} — ${o.balance_formatted} · ${o.method_label}`;
                 sel.appendChild(opt);
             });
+            if (data.orders.length === 0) {
+                const opt = document.createElement('option');
+                opt.disabled = true;
+                opt.textContent = '— Açık (ödenmemiş) sipariş bulunamadı —';
+                sel.appendChild(opt);
+            }
         }
     } catch (e) { console.error(e); }
     loading.style.display = 'none';
 }
 
-// Sipariş seçildiğinde tutarı otomatik doldur (kalan bakiye)
+// Sipariş seçildiğinde tutarı otomatik doldur + bilgi göster
 document.getElementById('manual-order-select').addEventListener('change', function() {
     const opt = this.selectedOptions[0];
+    const info = document.getElementById('manual-order-info');
     if (opt && opt.dataset.balance) {
+        // Tutar input'u otomatik doldur (kalan bakiye)
         document.getElementById('manual-amount').value = opt.dataset.balance;
+
+        // Sipariş bilgi kartı
+        const tot   = parseFloat(opt.dataset.total).toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2});
+        const paid  = parseFloat(opt.dataset.paid).toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2});
+        const bal   = parseFloat(opt.dataset.balance).toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2});
+        const meth  = opt.dataset.methodLabel || '—';
+        const stat  = opt.dataset.status || '—';
+
+        info.innerHTML = `
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px;line-height:1.5">
+              <div><span style="color:#64748b">Toplam:</span> <strong>${tot} ₺</strong></div>
+              <div><span style="color:#64748b">Ödenmiş:</span> <strong style="color:#16a34a">${paid} ₺</strong></div>
+              <div><span style="color:#64748b">Kalan:</span> <strong style="color:#dc2626">${bal} ₺</strong></div>
+              <div><span style="color:#64748b">Durum:</span> <strong>${stat}</strong></div>
+              <div style="grid-column:1/-1;padding-top:6px;border-top:1px solid #e2e8f0;margin-top:4px">
+                <span style="color:#64748b">Siparişteki ödeme yöntemi:</span>
+                <span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:4px;font-weight:600;font-size:11px">${meth}</span>
+              </div>
+              <div style="grid-column:1/-1;font-size:10px;color:#1e40af;background:#eff6ff;padding:6px 10px;border-radius:4px;border-left:3px solid #1e40af">
+                💡 Yeni bir ödeme yöntemi (örn. Kredi Kartı) seçtiğinizde, kayıt sonrası sipariş ödeme yöntemi de güncellenecektir.
+              </div>
+            </div>
+        `;
+        info.style.display = 'block';
+    } else {
+        info.style.display = 'none';
     }
 });
 
