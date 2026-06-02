@@ -679,12 +679,33 @@ if ($action === 'archive_list') {
     $perPage = 25;
     $offset  = ($page-1)*$perPage;
     $search  = trim($_GET['q'] ?? '');
+    $billing = $_GET['billing'] ?? ''; // 'kesildi' | 'beklemede' | ''
     $where = ['o.is_archived=1']; $params = [];
     if ($search) { $where[]='(o.order_no LIKE ? OR d.company_name LIKE ?)'; $s="%$search%"; $params[]=$s; $params[]=$s; }
+    if ($billing === 'kesildi') {
+        $where[] = "o.invoice_billing_status='kesildi'";
+    } elseif ($billing === 'beklemede') {
+        $where[] = "(o.invoice_billing_status='beklemede' OR o.invoice_billing_status IS NULL)";
+    }
     $w = implode(' AND ',$where);
     $total        = dbVal("SELECT COUNT(*) FROM b2b_orders o JOIN b2b_dealers d ON d.id=o.dealer_id WHERE $w",$params);
     $archivedOrders = dbRows("SELECT o.*,d.company_name FROM b2b_orders o JOIN b2b_dealers d ON d.id=o.dealer_id WHERE $w ORDER BY o.archived_at DESC LIMIT $perPage OFFSET $offset",$params);
-    $pager = pagination($total,$perPage,$page,"?page=orders&action=archive_list&q=".urlencode($search)."&p=");
+    $pager = pagination($total,$perPage,$page,"?page=orders&action=archive_list&q=".urlencode($search)."&billing=$billing&p=");
+
+    // Arşivdeki billing count'ları
+    $archiveBillingRaw = dbRows(
+        "SELECT
+           SUM(CASE WHEN o.invoice_billing_status='kesildi' THEN 1 ELSE 0 END) AS kesildi,
+           SUM(CASE WHEN o.invoice_billing_status='beklemede' OR o.invoice_billing_status IS NULL THEN 1 ELSE 0 END) AS beklemede
+         FROM b2b_orders o JOIN b2b_dealers d ON d.id=o.dealer_id
+         WHERE o.is_archived=1 "
+        . ($search ? " AND (o.order_no LIKE ? OR d.company_name LIKE ?)" : ''),
+        $search ? ["%$search%", "%$search%"] : []
+    );
+    $archiveBillingCounts = [
+        'kesildi'   => (int)($archiveBillingRaw[0]['kesildi']   ?? 0),
+        'beklemede' => (int)($archiveBillingRaw[0]['beklemede'] ?? 0),
+    ];
 }
 
 $statuses = ['bekliyor','onaylandi','hazirlaniyor','kargoda','teslim_edildi','iptal','iade'];
@@ -952,19 +973,51 @@ $completedNotArchived = (int)dbVal(
 <form method="get" style="margin-bottom:12px">
   <input type="hidden" name="page" value="orders">
   <input type="hidden" name="action" value="archive_list">
+  <?php if (!empty($billing)): ?><input type="hidden" name="billing" value="<?= h($billing) ?>"><?php endif; ?>
   <div style="display:flex;gap:8px;align-items:center">
     <input type="search" name="q" value="<?= h($search ?? '') ?>" placeholder="🔎 Sipariş no veya bayi adı ile ara..." class="form-control" style="flex:1;font-size:13px">
     <button type="submit" class="btn btn-primary btn-sm" style="height:38px;padding:0 18px">Ara</button>
     <?php if (!empty($search)): ?>
-      <a href="?page=orders&action=archive_list" class="btn btn-ghost btn-sm" style="height:38px;padding:0 14px">✕ Temizle</a>
+      <a href="?page=orders&action=archive_list<?= !empty($billing) ? '&billing='.urlencode($billing) : '' ?>" class="btn btn-ghost btn-sm" style="height:38px;padding:0 14px">✕ Temizle</a>
     <?php endif; ?>
   </div>
 </form>
 
+<!-- ─── ARŞİV: Fatura Kesim Durumu Filtre Tabları ─── -->
+<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+  <?php
+    $archiveBillingFilters = [
+        ''          => ['label'=>'Tümü',               'color'=>'#475569', 'bg'=>'#f1f5f9'],
+        'kesildi'   => ['label'=>'📑 Fatura Edilmiş',  'color'=>'#15803d', 'bg'=>'#d1fae5'],
+        'beklemede' => ['label'=>'📝 Fatura Bekliyor', 'color'=>'#92400e', 'bg'=>'#fef3c7'],
+    ];
+    foreach ($archiveBillingFilters as $bk => $bf):
+      $bCount = $bk === ''
+        ? (int)(($archiveBillingCounts['kesildi'] ?? 0) + ($archiveBillingCounts['beklemede'] ?? 0))
+        : (int)($archiveBillingCounts[$bk] ?? 0);
+      $bActive = ($billing ?? '') === $bk;
+      $url = '?page=orders&action=archive_list'
+           . ($search ? '&q=' . urlencode($search) : '')
+           . ($bk ? '&billing=' . urlencode($bk) : '');
+  ?>
+    <a href="<?= h($url) ?>"
+       style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:99px;text-decoration:none;font-size:12px;font-weight:600;transition:.15s;<?php
+         if ($bActive) {
+           echo "background:{$bf['color']};color:#fff;border:1px solid {$bf['color']};box-shadow:0 1px 4px rgba(0,0,0,.1)";
+         } else {
+           echo "background:{$bf['bg']};color:{$bf['color']};border:1px solid transparent";
+         }
+       ?>">
+      <?= h($bf['label']) ?>
+      <span style="<?= $bActive ? 'background:rgba(255,255,255,.25);color:#fff' : "background:#fff;color:{$bf['color']}" ?>;padding:1px 7px;border-radius:99px;font-size:10px;font-weight:700;min-width:18px;text-align:center"><?= $bCount ?></span>
+    </a>
+  <?php endforeach; ?>
+</div>
+
 <div class="card">
 <div class="table-wrap">
 <table class="table">
-  <thead><tr><th>Sipariş No</th><th>Bayi</th><th>Tarih</th><th style="text-align:right">Tutar</th><th>Durum</th><th>Fatura No</th><th>Arşivlenme</th><th></th></tr></thead>
+  <thead><tr><th>Sipariş No</th><th>Bayi</th><th>Tarih</th><th style="text-align:right">Tutar</th><th>Durum</th><th style="min-width:160px">Fatura No</th><th>Arşivlenme</th><th></th></tr></thead>
   <tbody>
   <?php foreach ($archivedOrders ?? [] as $o): ?>
   <tr>
@@ -974,12 +1027,32 @@ $completedNotArchived = (int)dbVal(
     <td style="text-align:right;font-weight:600"><?= money($o['grand_total']) ?></td>
     <td><?= orderStatusLabel($o['status']) ?></td>
     <td>
-      <?php $invNo = trim($o['invoice_no'] ?? ''); ?>
+      <?php
+        $invNo = trim($o['invoice_no'] ?? '');
+        $billingStatus = $o['invoice_billing_status'] ?? 'beklemede';
+        $isInvoiced = $billingStatus === 'kesildi';
+        $returnUrl = '?page=orders&action=archive_list'
+                   . ($search ? '&q=' . urlencode($search) : '')
+                   . (!empty($billing) ? '&billing=' . urlencode($billing) : '');
+      ?>
       <?php if ($invNo !== ''): ?>
         <span style="font-family:monospace;font-size:11px;background:#f0fdf4;color:#15803d;padding:2px 6px;border-radius:4px;font-weight:600"><?= h($invNo) ?></span>
       <?php else: ?>
         <span style="font-size:10px;color:var(--text-muted);font-style:italic">—</span>
       <?php endif; ?>
+      <!-- Toggle: Fatura Kesildi / Bekliyor -->
+      <form method="post" style="margin-top:5px">
+        <?= csrfField() ?>
+        <input type="hidden" name="form_action" value="set_invoice_billing_status">
+        <input type="hidden" name="order_id" value="<?= (int)$o['id'] ?>">
+        <input type="hidden" name="billing_status" value="<?= $isInvoiced ? 'beklemede' : 'kesildi' ?>">
+        <input type="hidden" name="return_to" value="<?= h($returnUrl) ?>">
+        <button type="submit"
+                style="background:<?= $isInvoiced ? '#dcfce7' : '#fef3c7' ?>;color:<?= $isInvoiced ? '#15803d' : '#92400e' ?>;border:1px solid <?= $isInvoiced ? '#86efac' : '#fcd34d' ?>;border-radius:99px;font-size:10px;font-weight:700;padding:3px 10px;cursor:pointer"
+                title="<?= $isInvoiced ? 'Tıkla: Bekliyor olarak değiştir' : 'Tıkla: Fatura Kesildi olarak işaretle' ?>">
+          <?= $isInvoiced ? '📑 Fatura Kesildi' : '📝 Bekliyor' ?>
+        </button>
+      </form>
     </td>
     <td style="font-size:11px;color:var(--text-muted)">
       <?= $o['archived_at'] ? date('d.m.Y', strtotime($o['archived_at'])) : '—' ?>
