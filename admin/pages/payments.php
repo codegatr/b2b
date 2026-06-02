@@ -530,23 +530,23 @@ $_tabs = ['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','reddedildi'=>'Reddedi
             </div>
 
             <!-- KREDİ KARTI özel alanları (yalnızca type=kredi_karti olunca açılır) -->
-            <div id="manual-card-fields" style="display:none;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;padding:12px;margin-bottom:12px">
-                <div style="font-weight:600;font-size:12px;color:#075985;margin-bottom:8px">💳 Kredi Kartı Detayları</div>
-                <div class="form-group" style="margin-bottom:8px">
-                    <label style="font-size:12px">Onay Kodu <span style="color:#dc2626">*</span>
+            <div id="manual-card-fields" style="display:none;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;padding:10px 12px;margin-bottom:10px">
+                <div style="font-weight:600;font-size:12px;color:#075985;margin-bottom:6px">💳 Kredi Kartı Detayları</div>
+                <div class="form-group" style="margin-bottom:6px">
+                    <label style="font-size:12px;margin-bottom:2px">Onay Kodu <span style="color:#dc2626">*</span>
                       <span style="font-size:10px;color:var(--text-muted);font-weight:400">— Slip üzerindeki kod (bayi görür)</span>
                     </label>
-                    <input type="text" name="card_auth_code" class="form-control" placeholder="örn: 123456" style="font-family:monospace;font-weight:600">
+                    <input type="text" name="card_auth_code" class="form-control" placeholder="örn: 123456" style="font-family:monospace;font-weight:600;padding:6px 10px">
                 </div>
-                <div class="form-group" style="margin-bottom:8px">
-                    <label style="font-size:12px">Nereye Çekildi
+                <div class="form-group" style="margin-bottom:6px">
+                    <label style="font-size:12px;margin-bottom:2px">Nereye Çekildi
                       <span style="font-size:10px;color:#dc2626;font-weight:600">— SADECE admin görür</span>
                     </label>
-                    <input type="text" name="card_receiver" class="form-control" placeholder="örn: XYZ Tedarikçi POS / Garanti POS">
+                    <input type="text" name="card_receiver" class="form-control" placeholder="örn: XYZ Tedarikçi POS / Garanti POS" style="padding:6px 10px">
                 </div>
                 <div class="form-group" style="margin-bottom:0">
-                    <label style="font-size:12px">Ek Kart Notu <span style="font-size:10px;color:var(--text-muted);font-weight:400">— admin görür</span></label>
-                    <textarea name="card_notes" class="form-control" rows="2" placeholder="Müşteri kartını tedarikçiye çektik vb."></textarea>
+                    <label style="font-size:12px;margin-bottom:2px">Ek Kart Notu <span style="font-size:10px;color:var(--text-muted);font-weight:400">— admin görür</span></label>
+                    <textarea name="card_notes" class="form-control" rows="2" placeholder="Müşteri kartını tedarikçiye çektik vb." style="padding:6px 10px"></textarea>
                 </div>
             </div>
 
