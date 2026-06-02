@@ -173,14 +173,28 @@ function togglePayFields(v) {
   <?php else: ?>
   <div class="table-wrap">
     <table class="table">
-      <thead><tr><th>Tarih</th><th>Tutar</th><th>Yöntem</th><th>Banka</th><th>Referans</th><th>Durum</th></tr></thead>
+      <thead><tr><th>Tarih</th><th>Tutar</th><th>Yöntem</th><th>Banka / Onay Kodu</th><th>Referans</th><th>Durum</th></tr></thead>
       <tbody>
       <?php foreach ($payments as $p): ?>
       <tr>
         <td style="font-size:12px;color:var(--text-muted)"><?= fmtDateTime($p['created_at']) ?></td>
         <td class="fw-600"><?= money((float)$p['amount']) ?></td>
-        <td><?= h($p['type'] ?? '') ?></td>
-        <td><?= h($p['bank_name'] ?? '—') ?></td>
+        <td>
+          <?= h($p['type'] ?? '') ?>
+          <?php if (($p['type'] ?? '') === 'kredi_karti' && !empty($p['card_auth_code'])): ?>
+          <!-- Bayiye SADECE onay kodu gösterilir. 'Nereye çekildi' GİZLİ. -->
+          <div style="font-size:10px;color:#075985;margin-top:3px">
+            💳 Slip Onay: <strong style="font-family:monospace"><?= h($p['card_auth_code']) ?></strong>
+          </div>
+          <?php endif; ?>
+        </td>
+        <td>
+          <?php if (!empty($p['card_auth_code']) && ($p['type'] ?? '') === 'kredi_karti'): ?>
+            <span style="font-family:monospace;font-size:11px;background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:4px;font-weight:600"><?= h($p['card_auth_code']) ?></span>
+          <?php else: ?>
+            <?= h($p['bank_name'] ?? '—') ?>
+          <?php endif; ?>
+        </td>
         <td style="font-size:12px"><?= h($p['transaction_ref'] ?? '—') ?></td>
         <td>
           <?php

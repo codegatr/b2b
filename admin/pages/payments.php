@@ -218,6 +218,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $method = $_POST['type'] ?? 'nakit';
         $note   = trim($_POST['note']);
         $date   = $_POST['payment_date'] ?: date('Y-m-d');
+
+        // Kredi kartı özel alanları (sadece kredi_karti için)
+        $cardAuth     = $method === 'kredi_karti' ? trim($_POST['card_auth_code'] ?? '') : '';
+        $cardReceiver = $method === 'kredi_karti' ? trim($_POST['card_receiver']  ?? '') : '';
+        $cardNotes    = $method === 'kredi_karti' ? trim($_POST['card_notes']     ?? '') : '';
+
         if ($did > 0 && $amount > 0) {
             $newId = dbInsertRow('b2b_payments', [
                 'dealer_id'      => $did,
@@ -226,6 +232,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'type'           => $method,
                 'payment_date'   => $date,
                 'dealer_note'    => $note,
+                'card_auth_code' => $cardAuth     ?: null,
+                'card_receiver'  => $cardReceiver ?: null,
+                'card_notes'     => $cardNotes    ?: null,
                 'status'         => 'onaylandi',
                 'approved_by'    => adminId(),
                 'approved_at'    => date('Y-m-d H:i:s'),
@@ -380,7 +389,19 @@ $_tabs = ['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','reddedildi'=>'Reddedi
             <?php endif; ?>
         </td>
         <td class="font-medium text-success"><?= money($p['amount']) ?></td>
-        <td><?= h(paymentMethodLabel($p["type"] ?? "")) ?></td>
+        <td>
+            <?= h(paymentMethodLabel($p["type"] ?? "")) ?>
+            <?php if ($p['type'] === 'kredi_karti' && (!empty($p['card_auth_code']) || !empty($p['card_receiver']))): ?>
+            <div style="margin-top:4px;font-size:10px;line-height:1.5">
+                <?php if (!empty($p['card_auth_code'])): ?>
+                <div><span style="color:#64748b">Onay:</span> <strong style="font-family:monospace;color:#075985"><?= h($p['card_auth_code']) ?></strong></div>
+                <?php endif; ?>
+                <?php if (!empty($p['card_receiver'])): ?>
+                <div><span style="color:#64748b">POS:</span> <span style="background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;font-weight:600"><?= h($p['card_receiver']) ?></span></div>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
+        </td>
         <td>
             <?php if ($p['receipt_file']): ?>
             <a href="<?= h($p['receipt_file']) ?>" target="_blank" class="btn btn-xs btn-ghost">📄 Dekont</a>
@@ -412,9 +433,13 @@ $_tabs = ['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','reddedildi'=>'Reddedi
             </form>
         </td>
     </tr>
-    <?php if ($p['dealer_note']): ?>
+    <?php if ($p['dealer_note'] || !empty($p['card_notes'])): ?>
     <tr class="row-sub">
-        <td colspan="8" class="text-sm text-muted pl-6">Not: <?= h($p['dealer_note']) ?> <?= $p['admin_note'] ? '| Red: '.h($p['admin_note']) : '' ?></td>
+        <td colspan="8" class="text-sm text-muted pl-6">
+          <?php if ($p['dealer_note']): ?>Not: <?= h($p['dealer_note']) ?><?php endif; ?>
+          <?php if (!empty($p['card_notes'])): ?><?= $p['dealer_note']?' · ':'' ?><span style="color:#075985">Kart notu: <?= h($p['card_notes']) ?></span><?php endif; ?>
+          <?php if ($p['admin_note']): ?> | Red: <?= h($p['admin_note']) ?><?php endif; ?>
+        </td>
     </tr>
     <?php endif; ?>
     <?php endforeach; ?>
@@ -457,7 +482,7 @@ $_tabs = ['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','reddedildi'=>'Reddedi
             </div>
             <div class="form-group">
                 <label>Ödeme Yöntemi</label>
-                <select name="type" class="form-control">
+                <select name="type" id="manual-type" class="form-control" onchange="toggleCardFields(this.value)">
                     <option value="havale_eft">Havale/EFT</option>
                     <option value="nakit">Nakit</option>
                     <option value="kredi_karti">Kredi Kartı</option>
@@ -465,12 +490,34 @@ $_tabs = ['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','reddedildi'=>'Reddedi
                     <option value="senet">Senet</option>
                 </select>
             </div>
+
+            <!-- KREDİ KARTI özel alanları (yalnızca type=kredi_karti olunca açılır) -->
+            <div id="manual-card-fields" style="display:none;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;padding:12px;margin-bottom:12px">
+                <div style="font-weight:600;font-size:12px;color:#075985;margin-bottom:8px">💳 Kredi Kartı Detayları</div>
+                <div class="form-group" style="margin-bottom:8px">
+                    <label style="font-size:12px">Onay Kodu <span style="color:#dc2626">*</span>
+                      <span style="font-size:10px;color:var(--text-muted);font-weight:400">— Slip üzerindeki kod (bayi görür)</span>
+                    </label>
+                    <input type="text" name="card_auth_code" class="form-control" placeholder="örn: 123456" style="font-family:monospace;font-weight:600">
+                </div>
+                <div class="form-group" style="margin-bottom:8px">
+                    <label style="font-size:12px">Nereye Çekildi
+                      <span style="font-size:10px;color:#dc2626;font-weight:600">— SADECE admin görür</span>
+                    </label>
+                    <input type="text" name="card_receiver" class="form-control" placeholder="örn: XYZ Tedarikçi POS / Garanti POS">
+                </div>
+                <div class="form-group" style="margin-bottom:0">
+                    <label style="font-size:12px">Ek Kart Notu <span style="font-size:10px;color:var(--text-muted);font-weight:400">— admin görür</span></label>
+                    <textarea name="card_notes" class="form-control" rows="2" placeholder="Müşteri kartını tedarikçiye çektik vb."></textarea>
+                </div>
+            </div>
+
             <div class="form-group">
                 <label>Ödeme Tarihi</label>
                 <input type="date" name="payment_date" value="<?= date('Y-m-d') ?>" class="form-control">
             </div>
             <div class="form-group">
-                <label>Not</label>
+                <label>Not (genel)</label>
                 <input type="text" name="note" class="form-control" placeholder="Açıklama…">
             </div>
         </form>
@@ -483,6 +530,12 @@ $_tabs = ['bekliyor'=>'Bekleyen','onaylandi'=>'Onaylanan','reddedildi'=>'Reddedi
 </div>
 
 <script>
+// Ödeme yöntemi değiştiğinde kart alanlarını göster/gizle
+function toggleCardFields(type) {
+    const box = document.getElementById('manual-card-fields');
+    if (!box) return;
+    box.style.display = (type === 'kredi_karti') ? 'block' : 'none';
+}
 // Bayi seçildiğinde o bayinin ödenmemiş siparişlerini getir
 async function loadDealerOrders(dealerId) {
     const sel = document.getElementById('manual-order-select');
