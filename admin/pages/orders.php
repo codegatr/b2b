@@ -27,6 +27,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $act = $_POST['form_action'] ?? ($_POST['act'] ?? '');
     $oid = intval($_POST['order_id'] ?? ($_POST['oid'] ?? 0));
 
+    // ─── Fatura kesim durumu (Beklemede ↔ Kesildi) ───
+    if ($act === 'set_invoice_billing_status') {
+        $oid = intval($_POST['order_id'] ?? 0);
+        $newStatus = $_POST['billing_status'] ?? 'beklemede';
+        if (!in_array($newStatus, ['beklemede', 'kesildi'], true)) {
+            $newStatus = 'beklemede';
+        }
+        if ($oid) {
+            dbExec(
+                "UPDATE b2b_orders SET invoice_billing_status=?, invoice_billing_updated_at=NOW(), invoice_billing_updated_by=? WHERE id=?",
+                [$newStatus, adminId(), $oid]
+            );
+            auditLog('invoice_billing_status_set', 'b2b_orders', $oid, ['status' => $newStatus]);
+            $success = $newStatus === 'kesildi' ? '✓ Sipariş "Fatura Kesildi" olarak işaretlendi.' : '↩ Sipariş "Fatura Bekliyor" durumuna alındı.';
+        }
+        // Geri dön
+        $back = $_POST['return_to'] ?? '?page=orders';
+        $_SESSION['flash'] = ['type'=>'success', 'msg'=>$success];
+        redirect($back);
+    }
+
     // ─── Fatura no manuel kaydetme ───
     if ($act === 'set_invoice_no') {
         $oid = intval($_POST['order_id'] ?? 0);
@@ -596,11 +617,12 @@ if ($order) {
 
 // Liste
 if ($action === 'list') {
-    $search  = trim($_GET['q'] ?? '');
-    $status  = $_GET['status'] ?? '';
-    $perPage = 25;
-    $page    = max(1, intval($_GET['p'] ?? 1));
-    $offset  = ($page-1)*$perPage;
+    $search   = trim($_GET['q'] ?? '');
+    $status   = $_GET['status'] ?? '';
+    $billing  = $_GET['billing'] ?? ''; // 'kesildi' | 'beklemede' | ''
+    $perPage  = 25;
+    $page     = max(1, intval($_GET['p'] ?? 1));
+    $offset   = ($page-1)*$perPage;
 
     $where = ['1=1', 'o.is_archived=0']; $params = [];
     if ($search) {
@@ -609,6 +631,11 @@ if ($action === 'list') {
     }
     if ($status)   { $where[] = 'o.status=?'; $params[] = $status; }
     if ($dealerId) { $where[] = 'o.dealer_id=?'; $params[] = $dealerId; }
+    if ($billing === 'kesildi') {
+        $where[] = "o.invoice_billing_status='kesildi'";
+    } elseif ($billing === 'beklemede') {
+        $where[] = "(o.invoice_billing_status='beklemede' OR o.invoice_billing_status IS NULL)";
+    }
 
     $w = implode(' AND ', $where);
     $total  = dbVal("SELECT COUNT(*) FROM b2b_orders o JOIN b2b_dealers d ON d.id=o.dealer_id WHERE $w", $params);
@@ -616,7 +643,7 @@ if ($action === 'list') {
         "SELECT o.*, d.company_name FROM b2b_orders o JOIN b2b_dealers d ON d.id=o.dealer_id WHERE $w ORDER BY o.created_at DESC LIMIT $perPage OFFSET $offset",
         $params
     );
-    $pager  = pagination($total, $perPage, $page, "?page=orders&q=".urlencode($search)."&status=$status&dealer_id=$dealerId&p=");
+    $pager  = pagination($total, $perPage, $page, "?page=orders&q=".urlencode($search)."&status=$status&billing=$billing&dealer_id=$dealerId&p=");
     $pendingCount  = dbVal("SELECT COUNT(*) FROM b2b_orders WHERE status='bekliyor' AND is_archived=0", []);
     $archiveCount  = dbVal("SELECT COUNT(*) FROM b2b_orders WHERE is_archived=1", []);
     $archivableCount = dbVal("SELECT COUNT(*) FROM b2b_orders WHERE is_archived=0 AND status IN('iptal','teslim_edildi','iade')", []);
@@ -630,6 +657,21 @@ if ($action === 'list') {
     );
     $statusCounts = ['_all' => 0];
     foreach ($statusCountsRaw as $r) { $statusCounts[$r['status']] = (int)$r['c']; $statusCounts['_all'] += (int)$r['c']; }
+
+    // Fatura kesim durumu counts (search query'sini de hesaba kat)
+    $billingCountsRaw = dbRows(
+        "SELECT
+           SUM(CASE WHEN o.invoice_billing_status='kesildi' THEN 1 ELSE 0 END) AS kesildi,
+           SUM(CASE WHEN o.invoice_billing_status='beklemede' OR o.invoice_billing_status IS NULL THEN 1 ELSE 0 END) AS beklemede
+         FROM b2b_orders o JOIN b2b_dealers d ON d.id=o.dealer_id
+         WHERE o.is_archived=0 "
+        . ($search ? " AND (o.order_no LIKE ? OR d.company_name LIKE ?)" : ''),
+        $search ? ["%$search%", "%$search%"] : []
+    );
+    $billingCounts = [
+        'kesildi'   => (int)($billingCountsRaw[0]['kesildi']   ?? 0),
+        'beklemede' => (int)($billingCountsRaw[0]['beklemede'] ?? 0),
+    ];
 }
 
 if ($action === 'archive_list') {
@@ -704,10 +746,10 @@ $completedNotArchived = (int)dbVal(
       'iptal'        => ['label'=>'İptal',          'color'=>'#b91c1c', 'bg'=>'#fee2e2'],
   ];
   ?>
-  <div style="display:flex;gap:6px;flex-wrap:wrap">
+  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
     <?php foreach ($statusFilters as $sk => $sf):
       $count = $sk === '' ? ($statusCounts['_all'] ?? 0) : ($statusCounts[$sk] ?? 0);
-      $active = ($status ?? '') === $sk;
+      $active = ($status ?? '') === $sk && ($billing ?? '') === '';
       $url = '?page=orders' . ($search ? '&q='.urlencode($search) : '') . ($sk ? '&status='.urlencode($sk) : '');
     ?>
       <a href="<?= h($url) ?>"
@@ -720,6 +762,33 @@ $completedNotArchived = (int)dbVal(
          ?>">
         <?= h($sf['label']) ?>
         <span style="<?= $active ? 'background:rgba(255,255,255,.25);color:#fff' : "background:#fff;color:{$sf['color']}" ?>;padding:1px 7px;border-radius:99px;font-size:10px;font-weight:700;min-width:18px;text-align:center"><?= $count ?></span>
+      </a>
+    <?php endforeach; ?>
+
+    <!-- Dikey ayraç -->
+    <span style="display:inline-block;width:1px;height:28px;background:#cbd5e1;margin:0 4px"></span>
+
+    <!-- ─── FATURA KESIM DURUMU TABLARI ─── -->
+    <?php
+      $billingFilters = [
+          'kesildi'   => ['label'=>'📑 Fatura Edilmiş',   'color'=>'#15803d', 'bg'=>'#d1fae5'],
+          'beklemede' => ['label'=>'📝 Fatura Bekliyor',  'color'=>'#92400e', 'bg'=>'#fef3c7'],
+      ];
+      foreach ($billingFilters as $bk => $bf):
+        $bCount = $billingCounts[$bk] ?? 0;
+        $bActive = ($billing ?? '') === $bk;
+        $url = '?page=orders' . ($search ? '&q='.urlencode($search) : '') . '&billing=' . urlencode($bk);
+    ?>
+      <a href="<?= h($url) ?>"
+         style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:99px;text-decoration:none;font-size:12px;font-weight:600;transition:.15s;<?php
+           if ($bActive) {
+             echo "background:{$bf['color']};color:#fff;border:1px solid {$bf['color']};box-shadow:0 1px 4px rgba(0,0,0,.1)";
+           } else {
+             echo "background:{$bf['bg']};color:{$bf['color']};border:1px solid transparent";
+           }
+         ?>">
+        <?= h($bf['label']) ?>
+        <span style="<?= $bActive ? 'background:rgba(255,255,255,.25);color:#fff' : "background:#fff;color:{$bf['color']}" ?>;padding:1px 7px;border-radius:99px;font-size:10px;font-weight:700;min-width:18px;text-align:center"><?= $bCount ?></span>
       </a>
     <?php endforeach; ?>
   </div>
@@ -813,6 +882,28 @@ $completedNotArchived = (int)dbVal(
         <?= $invSrc==='parasut'?'· Paraşüt':'· Manuel' ?>
       </div>
       <?php endif; ?>
+
+      <!-- ─── FATURA KESİM DURUMU TOGGLE ─── -->
+      <?php
+        $billingStatus = $o['invoice_billing_status'] ?? 'beklemede';
+        $isInvoiced = $billingStatus === 'kesildi';
+        $returnUrl = '?page=orders'
+                   . ($search ? '&q=' . urlencode($search) : '')
+                   . (!empty($status) ? '&status=' . urlencode($status) : '')
+                   . (!empty($billing) ? '&billing=' . urlencode($billing) : '');
+      ?>
+      <form method="post" style="margin-top:5px">
+        <?= csrfField() ?>
+        <input type="hidden" name="form_action" value="set_invoice_billing_status">
+        <input type="hidden" name="order_id" value="<?= (int)$o['id'] ?>">
+        <input type="hidden" name="billing_status" value="<?= $isInvoiced ? 'beklemede' : 'kesildi' ?>">
+        <input type="hidden" name="return_to" value="<?= h($returnUrl) ?>">
+        <button type="submit"
+                style="background:<?= $isInvoiced ? '#dcfce7' : '#fef3c7' ?>;color:<?= $isInvoiced ? '#15803d' : '#92400e' ?>;border:1px solid <?= $isInvoiced ? '#86efac' : '#fcd34d' ?>;border-radius:99px;font-size:10px;font-weight:700;padding:3px 10px;cursor:pointer;display:inline-flex;align-items:center;gap:4px"
+                title="<?= $isInvoiced ? 'Tıkla: Fatura Bekliyor olarak değiştir' : 'Tıkla: Fatura Kesildi olarak işaretle' ?>">
+          <?= $isInvoiced ? '📑 Fatura Kesildi' : '📝 Bekliyor' ?>
+        </button>
+      </form>
     </td>
     <td>
       <?php $ps = $o['payment_status'] ?? 'odenmedi';
@@ -1209,6 +1300,27 @@ $completedNotArchived = (int)dbVal(
           Henüz fatura numarası girilmedi. Aşağıdan manuel girebilir veya Paraşüt'ten otomatik fatura kestirebilirsiniz.
         </div>
       <?php endif; ?>
+
+      <!-- ─── Fatura Kesim Durumu Toggle ─── -->
+      <?php
+        $billingStatus = $order['invoice_billing_status'] ?? 'beklemede';
+        $isInvoiced = $billingStatus === 'kesildi';
+      ?>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;padding:10px 14px;background:<?= $isInvoiced ? '#f0fdf4' : '#fffbeb' ?>;border:1px solid <?= $isInvoiced ? '#86efac' : '#fcd34d' ?>;border-radius:6px">
+        <span style="font-size:13px;color:<?= $isInvoiced ? '#15803d' : '#92400e' ?>;font-weight:600">
+          <?= $isInvoiced ? '📑 Fatura Kesildi' : '📝 Fatura Bekliyor' ?>
+        </span>
+        <form method="post" style="margin-left:auto">
+          <?= csrfField() ?>
+          <input type="hidden" name="form_action" value="set_invoice_billing_status">
+          <input type="hidden" name="order_id" value="<?= (int)$order['id'] ?>">
+          <input type="hidden" name="billing_status" value="<?= $isInvoiced ? 'beklemede' : 'kesildi' ?>">
+          <input type="hidden" name="return_to" value="?page=orders&action=detail&id=<?= (int)$order['id'] ?>">
+          <button type="submit" class="btn btn-sm" style="background:<?= $isInvoiced ? '#fef3c7' : '#dcfce7' ?>;color:<?= $isInvoiced ? '#92400e' : '#15803d' ?>;border:1px solid <?= $isInvoiced ? '#fcd34d' : '#86efac' ?>;font-size:11px;padding:5px 12px;font-weight:600">
+            <?= $isInvoiced ? '↩ Bekliyor olarak işaretle' : '✓ Fatura Kesildi olarak işaretle' ?>
+          </button>
+        </form>
+      </div>
 
       <form method="post" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
         <?= csrfField() ?>
