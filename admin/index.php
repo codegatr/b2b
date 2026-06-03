@@ -188,6 +188,12 @@ $pageTitle = match($page) {
 
 function renderAdminPage(string $page, array $vars = []): void {
     extract($vars);
+    // Özel route: invoice-pdf hem admin hem bayi tarafından kullanılır,
+    // dosya pages/ klasöründedir (DRY).
+    if ($page === 'invoice-pdf') {
+        $file = B2B_ROOT . '/pages/invoice-pdf.php';
+        if (file_exists($file)) { require $file; return; }
+    }
     $file = B2B_ROOT . '/admin/pages/' . $page . '.php';
     if (file_exists($file)) {
         require $file;

@@ -27,6 +27,93 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $act = $_POST['form_action'] ?? ($_POST['act'] ?? '');
     $oid = intval($_POST['order_id'] ?? ($_POST['oid'] ?? 0));
 
+    // ─── Fatura PDF Yükleme ───
+    if ($act === 'upload_invoice_pdf') {
+        $oid = intval($_POST['order_id'] ?? 0);
+        $order = dbRow("SELECT id, order_no, invoice_pdf_path FROM b2b_orders WHERE id=?", [$oid]);
+        if (!$order) {
+            $_SESSION['flash'] = ['type'=>'danger', 'msg'=>'Sipariş bulunamadı.'];
+            redirect("?page=orders&action=detail&id=$oid");
+        }
+
+        if (empty($_FILES['invoice_pdf']) || $_FILES['invoice_pdf']['error'] !== UPLOAD_ERR_OK) {
+            $_SESSION['flash'] = ['type'=>'danger', 'msg'=>'Dosya yüklenemedi (boş veya hata).'];
+            redirect("?page=orders&action=detail&id=$oid");
+        }
+
+        $tmpFile = $_FILES['invoice_pdf']['tmp_name'];
+        $origName = $_FILES['invoice_pdf']['name'];
+        $size = (int)$_FILES['invoice_pdf']['size'];
+
+        // 10 MB max
+        if ($size > 10 * 1024 * 1024) {
+            $_SESSION['flash'] = ['type'=>'danger', 'msg'=>'Dosya çok büyük (max 10 MB).'];
+            redirect("?page=orders&action=detail&id=$oid");
+        }
+
+        // MIME tip kontrol - sadece PDF
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mime = finfo_file($finfo, $tmpFile);
+        finfo_close($finfo);
+        if ($mime !== 'application/pdf') {
+            $_SESSION['flash'] = ['type'=>'danger', 'msg'=>'Sadece PDF dosyası kabul edilir (algılanan: ' . h($mime) . ').'];
+            redirect("?page=orders&action=detail&id=$oid");
+        }
+
+        // Hedef klasör
+        $uploadDir = B2B_ROOT . '/uploads/invoices';
+        if (!is_dir($uploadDir)) {
+            @mkdir($uploadDir, 0755, true);
+        }
+        // .htaccess: direkt erişimi kapat (sadece script üzerinden indirilebilir)
+        $htaccessPath = $uploadDir . '/.htaccess';
+        if (!file_exists($htaccessPath)) {
+            @file_put_contents($htaccessPath, "Order Deny,Allow\nDeny from all\n");
+        }
+
+        // Güvenli dosya adı
+        $safeName = 'invoice-' . preg_replace('/[^a-zA-Z0-9_-]/', '', $order['order_no'])
+                  . '-' . date('YmdHis') . '-' . bin2hex(random_bytes(4)) . '.pdf';
+        $destPath = $uploadDir . '/' . $safeName;
+
+        if (!move_uploaded_file($tmpFile, $destPath)) {
+            $_SESSION['flash'] = ['type'=>'danger', 'msg'=>'Dosya kaydedilemedi.'];
+            redirect("?page=orders&action=detail&id=$oid");
+        }
+
+        // Eski PDF varsa sil
+        if (!empty($order['invoice_pdf_path'])) {
+            $oldPath = B2B_ROOT . '/' . ltrim($order['invoice_pdf_path'], '/');
+            if (file_exists($oldPath)) @unlink($oldPath);
+        }
+
+        $relPath = 'uploads/invoices/' . $safeName;
+        dbExec(
+            "UPDATE b2b_orders
+                SET invoice_pdf_path=?, invoice_pdf_uploaded_at=NOW(), invoice_pdf_uploaded_by=?
+              WHERE id=?",
+            [$relPath, adminId(), $oid]
+        );
+        auditLog('invoice_pdf_uploaded', 'b2b_orders', $oid, ['file'=>$relPath, 'orig'=>$origName, 'size'=>$size]);
+
+        $_SESSION['flash'] = ['type'=>'success', 'msg'=>'✓ Fatura PDF yüklendi. Bayi panelinde görünür.'];
+        redirect("?page=orders&action=detail&id=$oid");
+    }
+
+    // ─── Fatura PDF Silme ───
+    if ($act === 'delete_invoice_pdf') {
+        $oid = intval($_POST['order_id'] ?? 0);
+        $order = dbRow("SELECT invoice_pdf_path FROM b2b_orders WHERE id=?", [$oid]);
+        if ($order && !empty($order['invoice_pdf_path'])) {
+            $path = B2B_ROOT . '/' . ltrim($order['invoice_pdf_path'], '/');
+            if (file_exists($path)) @unlink($path);
+            dbExec("UPDATE b2b_orders SET invoice_pdf_path=NULL, invoice_pdf_uploaded_at=NULL, invoice_pdf_uploaded_by=NULL WHERE id=?", [$oid]);
+            auditLog('invoice_pdf_deleted', 'b2b_orders', $oid, []);
+            $_SESSION['flash'] = ['type'=>'success', 'msg'=>'Fatura PDF silindi.'];
+        }
+        redirect("?page=orders&action=detail&id=$oid");
+    }
+
     // ─── Fatura kesim durumu (Beklemede ↔ Kesildi) ───
     if ($act === 'set_invoice_billing_status') {
         $oid = intval($_POST['order_id'] ?? 0);
@@ -1393,6 +1480,49 @@ $completedNotArchived = (int)dbVal(
             <?= $isInvoiced ? '↩ Bekliyor olarak işaretle' : '✓ Fatura Kesildi olarak işaretle' ?>
           </button>
         </form>
+      </div>
+
+      <!-- ─── Fatura PDF Yükleme ─── -->
+      <?php $invoicePdf = $order['invoice_pdf_path'] ?? ''; ?>
+      <div style="margin-bottom:14px;padding:12px 14px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:6px">
+        <div style="font-size:12px;font-weight:600;color:#475569;margin-bottom:8px">📎 Fatura PDF Dosyası
+          <span style="font-size:10px;color:var(--text-muted);font-weight:400">— bayinin panelinden indirebilmesi için</span>
+        </div>
+        <?php if ($invoicePdf): ?>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <a href="?page=invoice-pdf&order_id=<?= (int)$order['id'] ?>" target="_blank"
+               class="btn btn-sm" style="background:#dcfce7;color:#15803d;border:1px solid #86efac;font-weight:600">
+              📄 PDF'i Görüntüle
+            </a>
+            <span style="font-size:11px;color:var(--text-muted)">
+              Yüklendi: <?= $order['invoice_pdf_uploaded_at'] ? date('d.m.Y H:i', strtotime($order['invoice_pdf_uploaded_at'])) : '—' ?>
+            </span>
+            <form method="post" style="display:inline;margin-left:auto" onsubmit="return confirm('PDF dosyası silinecek. Devam?');">
+              <?= csrfField() ?>
+              <input type="hidden" name="form_action" value="delete_invoice_pdf">
+              <input type="hidden" name="order_id" value="<?= (int)$order['id'] ?>">
+              <button type="submit" class="btn btn-sm" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5">🗑 Sil</button>
+            </form>
+          </div>
+          <div style="margin-top:8px">
+            <form method="post" enctype="multipart/form-data" style="display:flex;gap:6px;align-items:center">
+              <?= csrfField() ?>
+              <input type="hidden" name="form_action" value="upload_invoice_pdf">
+              <input type="hidden" name="order_id" value="<?= (int)$order['id'] ?>">
+              <input type="file" name="invoice_pdf" accept="application/pdf" required style="flex:1;font-size:12px">
+              <button type="submit" class="btn btn-sm btn-primary">↻ Değiştir</button>
+            </form>
+          </div>
+        <?php else: ?>
+          <form method="post" enctype="multipart/form-data" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <?= csrfField() ?>
+            <input type="hidden" name="form_action" value="upload_invoice_pdf">
+            <input type="hidden" name="order_id" value="<?= (int)$order['id'] ?>">
+            <input type="file" name="invoice_pdf" accept="application/pdf" required style="flex:1;min-width:200px;font-size:12px">
+            <button type="submit" class="btn btn-sm btn-primary">⬆️ PDF Yükle</button>
+          </form>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:6px">Sadece PDF, max 10 MB</div>
+        <?php endif; ?>
       </div>
 
       <form method="post" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
