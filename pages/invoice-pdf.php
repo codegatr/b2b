@@ -30,13 +30,13 @@ if (!$order) {
 }
 
 // ─── Yetki Kontrolü ───
-$isAdmin  = function_exists('isAdminLoggedIn') && isAdminLoggedIn();
-$isDealer = function_exists('isDealerLoggedIn') && isDealerLoggedIn();
+$isAdminUser  = function_exists('isAdmin')  && isAdmin();
+$isDealerUser = function_exists('isDealer') && isDealer();
 $allowed  = false;
 
-if ($isAdmin) {
+if ($isAdminUser) {
     $allowed = true;
-} elseif ($isDealer) {
+} elseif ($isDealerUser) {
     $dealer = currentDealer();
     if ($dealer && (int)$dealer['id'] === (int)$order['dealer_id']) {
         $allowed = true;
@@ -44,13 +44,13 @@ if ($isAdmin) {
 }
 
 if (!$allowed) {
-    http_response_code(403);
+    if (!headers_sent()) http_response_code(403);
     die('Bu faturaya erişim yetkiniz yok.');
 }
 
 // Audit log helper
-$logDownload = function() use ($isDealer, $order) {
-    if ($isDealer) {
+$logDownload = function() use ($isDealerUser, $order) {
+    if ($isDealerUser) {
         try {
             auditLog('invoice_pdf_downloaded_by_dealer', 'b2b_orders', (int)$order['id'], [
                 'dealer_id' => $order['dealer_id'],

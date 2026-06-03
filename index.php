@@ -46,6 +46,13 @@ if ($page === 'logout') {
     exit;
 }
 
+// ── ÖZEL ROUTE: invoice-pdf ──
+// HTML layout'tan ÖNCE çalışmalı (header/redirect/stream için)
+if ($page === 'invoice-pdf') {
+    require __DIR__ . '/pages/invoice-pdf.php';
+    exit;
+}
+
 // Bayi sitemi adı & ayarlar
 $siteName = setting('site_name', 'B2B Bayi Portalı');
 $currency = setting('currency', 'TRY');
