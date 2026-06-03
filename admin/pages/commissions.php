@@ -477,6 +477,30 @@ $printMode = isset($_GET['print']) && $_GET['print'] === '1';
                 <button type="submit" class="btn btn-sm btn-success">✓ Yansıt</button>
               </form>
             <?php elseif ($c['status'] === 'yansitildi'): ?>
+              <?php
+                // Bu prim için zaten manuel fatura kaydedildi mi?
+                $linkedInvoice = null;
+                try {
+                  $linkedInvoice = dbRow(
+                    "SELECT id, invoice_no, amount_gross, status FROM b2b_manual_invoices
+                     WHERE related_commission_id=? AND status!='iptal' LIMIT 1",
+                    [(int)$c['id']]
+                  );
+                } catch (\Throwable $e) {}
+              ?>
+              <?php if ($linkedInvoice): ?>
+                <a href="?page=manual-invoices&action=detail&id=<?= (int)$linkedInvoice['id'] ?>"
+                   class="btn btn-sm" style="background:#dcfce7;color:#15803d;border:1px solid #86efac"
+                   title="Bayinin kestiği fatura kaydı">
+                  📥 Fatura: <?= h($linkedInvoice['invoice_no'] ?: '#'.$linkedInvoice['id']) ?>
+                </a>
+              <?php else: ?>
+                <a href="?page=manual-invoices&action=new&direction=ALIS&dealer_id=<?= (int)$c['dealer_id'] ?>&commission_id=<?= (int)$c['id'] ?>"
+                   class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d"
+                   title="Bayi bu prim için fatura kestiğinde tıkla">
+                  📥 Bayi Fatura Kesti
+                </a>
+              <?php endif; ?>
               <form method="post" style="display:inline" onsubmit="return confirm('Yansıtılan prim iptal edilecek ve cari hesaba TERS hareket eklenecek. Devam?');">
                 <?= csrfField() ?>
                 <input type="hidden" name="form_action" value="cancel">
