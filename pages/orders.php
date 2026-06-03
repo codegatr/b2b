@@ -117,20 +117,18 @@ if ($action === 'list') {
         <td>
           <?php
             $invNo  = trim($o['invoice_no'] ?? '');
-            $hasPdf = !empty($o['invoice_pdf_path']);
+            // Tıklanabilir koşul: fatura no var VEYA paraşüt fatura id var
+            $clickable = ($invNo !== '') || !empty($o['parasut_invoice_id']) || !empty($o['invoice_pdf_path']);
           ?>
-          <?php if ($invNo === '' && !$hasPdf): ?>
+          <?php if (!$clickable): ?>
             <span style="font-size:10px;color:var(--text-muted)">—</span>
-          <?php elseif ($hasPdf): ?>
+          <?php else: ?>
             <a href="?page=invoice-pdf&order_id=<?= (int)$o['id'] ?>" target="_blank"
                class="btn btn-xs"
-               style="background:#dcfce7;color:#15803d;border:1px solid #86efac;font-weight:600;font-family:monospace;font-size:11px;padding:3px 8px"
-               title="Fatura PDF'ini görüntüle / indir">
-              📄 <?= h($invNo ?: 'Fatura') ?>
+               style="background:#dcfce7;color:#15803d;border:1px solid #86efac;font-weight:600;font-family:monospace;font-size:11px;padding:3px 8px;text-decoration:none"
+               title="Fatura PDF'i Paraşüt'ten çekilir ve yeni sekmede açılır">
+              📄 <?= h($invNo ?: 'Faturayı Aç') ?>
             </a>
-          <?php else: ?>
-            <span style="font-family:monospace;font-size:11px;background:#f1f5f9;color:#475569;padding:2px 8px;border-radius:4px"
-                  title="PDF henüz yüklenmedi"><?= h($invNo) ?></span>
           <?php endif; ?>
         </td>
         <td class="text-sm"><?= fmtDate($o['created_at']) ?></td>
@@ -212,16 +210,14 @@ $isAuto = ($order['status'] === 'onaylandi');
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap">
     <a href="?page=orders" class="btn btn-secondary">← Geri</a>
-    <?php if (!empty($order['invoice_pdf_path'])): ?>
+    <?php
+      $hasFatura = !empty($order['invoice_no']) || !empty($order['parasut_invoice_id']) || !empty($order['invoice_pdf_path']);
+    ?>
+    <?php if ($hasFatura): ?>
     <a href="?page=invoice-pdf&order_id=<?= (int)$order['id'] ?>" target="_blank"
        class="btn" style="background:#dcfce7;color:#15803d;border:1px solid #86efac;font-weight:600">
       📄 Faturayı Görüntüle <?php if (!empty($order['invoice_no'])): ?><span style="font-family:monospace;opacity:.85;font-weight:500">(<?= h($order['invoice_no']) ?>)</span><?php endif; ?>
     </a>
-    <?php elseif (!empty($order['invoice_no'])): ?>
-    <span style="background:#f1f5f9;color:#475569;padding:8px 14px;border-radius:6px;font-size:13px;display:inline-flex;align-items:center;gap:6px">
-      📑 Fatura: <strong style="font-family:monospace"><?= h($order['invoice_no']) ?></strong>
-      <span style="font-size:10px;color:var(--text-muted)">— PDF henüz yüklenmedi</span>
-    </span>
     <?php endif; ?>
     <?php
     $payable = ($order['payment_status'] ?? '') !== 'odendi'

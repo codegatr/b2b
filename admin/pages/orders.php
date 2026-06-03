@@ -1482,11 +1482,27 @@ $completedNotArchived = (int)dbVal(
         </form>
       </div>
 
-      <!-- ─── Fatura PDF Yükleme ─── -->
-      <?php $invoicePdf = $order['invoice_pdf_path'] ?? ''; ?>
+      <!-- ─── Fatura PDF (Paraşüt öncelikli + manuel fallback) ─── -->
+      <?php
+        $invoicePdf = $order['invoice_pdf_path'] ?? '';
+        $parasutId  = $order['parasut_invoice_id'] ?? '';
+      ?>
+      <?php if (!empty($parasutId)): ?>
+      <!-- Paraşüt entegre - bayi tıkladığında otomatik çekilir -->
+      <div style="margin-bottom:14px;padding:10px 14px;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="font-size:20px">📄</div>
+        <div style="flex:1;font-size:12px;color:#15803d">
+          <strong>Paraşüt'ten Otomatik PDF</strong><br>
+          <span style="color:#475569;font-size:11px">Bayi panelinden tıklandığında PDF Paraşüt'ten otomatik çekilir. Manuel yüklemeye gerek yok.</span>
+        </div>
+        <a href="?page=invoice-pdf&order_id=<?= (int)$order['id'] ?>" target="_blank"
+           class="btn btn-sm" style="background:#16a34a;color:#fff">📄 PDF'i Test Et</a>
+      </div>
+      <?php else: ?>
+      <!-- Paraşüt yok - manuel PDF yükleme alanı -->
       <div style="margin-bottom:14px;padding:12px 14px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:6px">
-        <div style="font-size:12px;font-weight:600;color:#475569;margin-bottom:8px">📎 Fatura PDF Dosyası
-          <span style="font-size:10px;color:var(--text-muted);font-weight:400">— bayinin panelinden indirebilmesi için</span>
+        <div style="font-size:12px;font-weight:600;color:#475569;margin-bottom:8px">📎 Manuel Fatura PDF (opsiyonel)
+          <span style="font-size:10px;color:var(--text-muted);font-weight:400">— Paraşüt'le ilişkilendirilmemiş faturalar için</span>
         </div>
         <?php if ($invoicePdf): ?>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -1521,9 +1537,10 @@ $completedNotArchived = (int)dbVal(
             <input type="file" name="invoice_pdf" accept="application/pdf" required style="flex:1;min-width:200px;font-size:12px">
             <button type="submit" class="btn btn-sm btn-primary">⬆️ PDF Yükle</button>
           </form>
-          <div style="font-size:10px;color:var(--text-muted);margin-top:6px">Sadece PDF, max 10 MB</div>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:6px">Sadece PDF, max 10 MB · Sadece Paraşüt entegrasyonu yoksa kullan</div>
         <?php endif; ?>
       </div>
+      <?php endif; ?>
 
       <form method="post" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
         <?= csrfField() ?>
