@@ -289,6 +289,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else { $error = 'Tutar ve bayi zorunludur.'; }
     }
 
+    // Kaydı düzenle — yanlış girilen tahsilat/tediye/sipariş kayıtlarını düzeltmek için.
+    // KORUMA: Sadece manuel kayıtlar (reference_type='manuel' veya 'commission') düzenlenebilir.
+    // Sipariş/ödeme bağlı kayıtlar (reference_type='order','payment') ana tablodan değişmeli.
+    if ($act === 'edit_entry') {
+        $eid       = intval($_POST['entry_id']);
+        $entry     = dbRow("SELECT * FROM b2b_ledger WHERE id=?", [$eid]);
+
+        if (!$entry) {
+            $error = 'Kayıt bulunamadı.';
+        } else {
+            $refType = $entry['reference_type'] ?? '';
+            // Sadece manuel veya commission kayıtlarını düzenle
+            if (!in_array($refType, ['manuel', 'commission', 'commission_cancel', ''], true)) {
+                $error = 'Bu kayıt otomatik oluşturulmuş (sipariş/ödeme bağlı). Düzenlemek için kaynak modülden (Sipariş veya Tahsilat sayfası) düzenleyin.';
+            } else {
+                $newAmount = floatval($_POST['amount']);
+                $newDesc   = trim($_POST['description']);
+                $newDue    = $_POST['due_date'] ?: null;
+                $newDate   = $_POST['entry_date'] ?? '';
+
+                if ($newAmount <= 0) {
+                    $error = 'Tutar 0\'dan büyük olmalı.';
+                } else {
+                    // Eski değerleri sakla (audit için)
+                    $oldData = [
+                        'amount'      => $entry['amount'],
+                        'description' => $entry['description'],
+                        'due_date'    => $entry['due_date'],
+                        'created_at'  => $entry['created_at'],
+                    ];
+
+                    // Eğer tarih de değiştirilmek isteniyorsa
+                    if ($newDate && $newDate !== date('Y-m-d', strtotime($entry['created_at']))) {
+                        // Yeni tarih + eski saat
+                        $oldTime = date('H:i:s', strtotime($entry['created_at']));
+                        $newCreatedAt = $newDate . ' ' . $oldTime;
+                        dbExec(
+                            "UPDATE b2b_ledger
+                                SET amount=?, description=?, due_date=?, created_at=?
+                              WHERE id=?",
+                            [$newAmount, $newDesc, $newDue, $newCreatedAt, $eid]
+                        );
+                    } else {
+                        dbExec(
+                            "UPDATE b2b_ledger
+                                SET amount=?, description=?, due_date=?
+                              WHERE id=?",
+                            [$newAmount, $newDesc, $newDue, $eid]
+                        );
+                    }
+
+                    auditLog('ledger_entry_edited', 'b2b_ledger', $eid, $oldData, [
+                        'amount'      => $newAmount,
+                        'description' => $newDesc,
+                        'due_date'    => $newDue,
+                    ]);
+
+                    $success = 'Cari hareket güncellendi.';
+                }
+            }
+        }
+    }
+
     // Kaydı kapat
     if ($act === 'close_entry') {
         $eid = intval($_POST['entry_id']);
@@ -629,6 +692,21 @@ $genelAlacak = array_sum(array_column($cariList, 'toplam_alacak'));
         </td>
         <td>
           <div style="display:inline-flex;gap:4px">
+            <?php
+              $refType = $e['reference_type'] ?? '';
+              $isEditable = in_array($refType, ['manuel', 'commission', 'commission_cancel', ''], true);
+            ?>
+            <?php if ($isEditable): ?>
+            <button type="button" class="btn btn-ghost btn-sm" title="Düzenle" style="padding:3px 8px;color:#0e7490"
+                    onclick='openLedgerEdit(<?= json_encode([
+                      "id"          => (int)$e["id"],
+                      "amount"      => (float)$e["amount"],
+                      "description" => $e["description"],
+                      "due_date"    => $e["due_date"],
+                      "entry_date"  => date("Y-m-d", strtotime($e["created_at"])),
+                      "type_label"  => $e["type"] === "borc" ? "Borç (Tediye)" : "Alacak (Tahsilat)",
+                    ], JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'>✏️</button>
+            <?php endif; ?>
             <?php if (!$e['is_closed']): ?>
             <form method="post" style="display:inline" onsubmit="return confirm('Bu hareketi KAPALI olarak işaretle?');">
               <?= csrfField() ?>
@@ -738,3 +816,66 @@ $genelAlacak = array_sum(array_column($cariList, 'toplam_alacak'));
 .hover-row { cursor:pointer; transition:filter .1s; }
 .hover-row:hover { filter:brightness(.97); }
 </style>
+
+<!-- ─── Cari Hareket Düzenleme Modal ─── -->
+<div class="modal-overlay" id="modal-ledger-edit">
+  <div class="modal" style="max-width:520px">
+    <form method="post" id="form-ledger-edit">
+      <?= csrfField() ?>
+      <input type="hidden" name="form_action" value="edit_entry">
+      <input type="hidden" name="entry_id" id="lge-id">
+
+      <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between">
+        <span>✏️ Cari Hareket Düzenle</span>
+        <span id="lge-type-label" style="font-size:12px;color:var(--text-muted);font-weight:500"></span>
+      </div>
+
+      <div class="modal-body">
+        <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:10px 12px;margin-bottom:14px;font-size:11px;color:#92400e;line-height:1.5">
+          ⚠️ <strong>Dikkat:</strong> Bu işlem cari bakiyeyi etkiler. Yanlış değişiklik bakiyeyi bozar.
+          Mevcut tutarın ve açıklamanın doğru olduğundan emin olun.
+        </div>
+
+        <div class="form-group">
+          <label>Tutar (₺) *</label>
+          <input type="number" step="0.01" min="0.01" name="amount" id="lge-amount" class="form-control" required>
+        </div>
+
+        <div class="form-group">
+          <label>Açıklama</label>
+          <input type="text" name="description" id="lge-description" class="form-control" maxlength="255">
+        </div>
+
+        <div class="form-grid form-grid-2">
+          <div class="form-group">
+            <label>Hareket Tarihi
+              <span style="font-size:10px;color:var(--text-muted);font-weight:400">— yanlış girilen tarihi düzelt</span>
+            </label>
+            <input type="date" name="entry_date" id="lge-entry-date" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>Vade Tarihi (opsiyonel)</label>
+            <input type="date" name="due_date" id="lge-due-date" class="form-control">
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('modal-ledger-edit')">İptal</button>
+        <button type="submit" class="btn btn-primary">💾 Güncelle</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openLedgerEdit(data) {
+  document.getElementById('lge-id').value           = data.id;
+  document.getElementById('lge-amount').value       = data.amount;
+  document.getElementById('lge-description').value  = data.description || '';
+  document.getElementById('lge-entry-date').value   = data.entry_date || '';
+  document.getElementById('lge-due-date').value     = data.due_date || '';
+  document.getElementById('lge-type-label').textContent = data.type_label || '';
+  document.getElementById('modal-ledger-edit').classList.add('open');
+}
+</script>
