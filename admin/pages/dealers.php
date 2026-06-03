@@ -36,6 +36,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'price_list_id'      => intval($_POST['price_list_id']) ?: null,
             'credit_limit'       => floatval($_POST['credit_limit'] ?? 0),
             'payment_term_days'  => intval($_POST['payment_term_days'] ?? 30),
+            'commission_rate'       => floatval($_POST['commission_rate'] ?? 0),
+            'commission_min_amount' => floatval($_POST['commission_min_amount'] ?? 0),
+            'commission_notes'      => trim($_POST['commission_notes'] ?? ''),
             'order_approval'     => $_POST['order_approval'] ?? 'manual',
             'payment_methods'    => implode(',', array_filter((array)($_POST['payment_methods'] ?? ['havale']))),
             'notes'              => trim($_POST['notes'] ?? ''),
@@ -553,6 +556,41 @@ $isActive = ($dealer['is_active'] ?? 1);
                 <option value="auto"   <?= ($dealer['order_approval']??'')==='auto'?'selected':'' ?>>Otomatik Onay</option>
             </select>
         </div>
+    </div>
+
+    <!-- ─── Ciro Primi (Aylık Komisyon) ─── -->
+    <div style="margin-top:18px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <h4 style="margin:0;color:#92400e;font-size:13px;font-weight:700">💰 Ciro Primi (Aylık Komisyon)</h4>
+        <a href="?page=commissions&dealer_id=<?= (int)($dealer['id']??0) ?>" style="font-size:11px;color:#92400e;text-decoration:underline">Geçmiş primler →</a>
+      </div>
+      <div class="form-grid form-grid-2">
+        <div class="form-group">
+          <label style="font-size:12px">Prim Oranı (%)
+            <span style="font-size:10px;color:var(--text-muted);font-weight:400">— örn: 2.50</span>
+          </label>
+          <input type="number" step="0.01" min="0" max="100" name="commission_rate"
+                 value="<?= htmlspecialchars($dealer['commission_rate']??0) ?>"
+                 placeholder="0.00"
+                 class="form-control">
+        </div>
+        <div class="form-group">
+          <label style="font-size:12px">Min. Alış Tutarı (₺)
+            <span style="font-size:10px;color:var(--text-muted);font-weight:400">— bu tutar altında prim hesaplanmaz</span>
+          </label>
+          <input type="number" step="0.01" min="0" name="commission_min_amount"
+                 value="<?= htmlspecialchars($dealer['commission_min_amount']??0) ?>"
+                 placeholder="0.00"
+                 class="form-control">
+        </div>
+      </div>
+      <div class="form-group" style="margin-top:8px;margin-bottom:0">
+        <label style="font-size:12px">Prim Notu (admin)</label>
+        <input type="text" name="commission_notes"
+               value="<?= htmlspecialchars($dealer['commission_notes']??'') ?>"
+               placeholder="örn: 6 aylık özel anlaşma, Q1 sonu yeniden değerlendirilecek"
+               class="form-control">
+      </div>
     </div>
 
     <!-- Ödeme Yöntemleri -->

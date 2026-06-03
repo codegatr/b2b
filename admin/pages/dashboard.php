@@ -70,6 +70,53 @@ $trDate   = date('j') . ' ' . $trMonths[(int)date('n')-1] . ' ' . date('Y') . ',
   </div>
 </div>
 
+<?php
+// ─── CIRO PRIMI UYARISI ───
+// Geçen ay için, ciro primi tanımlı bayilerden henüz hesaplanmamış olanlar var mı?
+try {
+    $prevMonth = (int)date('n') - 1;
+    $prevYear  = (int)date('Y');
+    if ($prevMonth < 1) { $prevMonth = 12; $prevYear--; }
+    $trMonthsLong = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+
+    $commDealerCount = (int)dbVal("SELECT COUNT(*) FROM b2b_dealers WHERE is_active=1 AND commission_rate > 0");
+    if ($commDealerCount > 0) {
+        $commCalculated = (int)dbVal(
+            "SELECT COUNT(*) FROM b2b_dealer_commissions WHERE period_year=? AND period_month=?",
+            [$prevYear, $prevMonth]
+        );
+        $commDraft = (int)dbVal(
+            "SELECT COUNT(*) FROM b2b_dealer_commissions WHERE period_year=? AND period_month=? AND status='taslak'",
+            [$prevYear, $prevMonth]
+        );
+        if ($commCalculated === 0):
+?>
+<div style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:1px solid #f59e0b;border-radius:10px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+  <div style="font-size:28px">💰</div>
+  <div style="flex:1;min-width:200px">
+    <div style="font-weight:700;color:#78350f;font-size:14px"><?= $trMonthsLong[$prevMonth-1] ?> <?= $prevYear ?> Ciro Primleri Hesaplanmadı</div>
+    <div style="font-size:12px;color:#92400e;margin-top:2px">
+      <strong><?= $commDealerCount ?></strong> bayi için ciro primi oranı tanımlı. Geçen ayın aylık primlerini hesaplayıp cari hesaplara yansıtmayı unutmayın.
+    </div>
+  </div>
+  <a href="?page=commissions&year=<?= $prevYear ?>&month=<?= $prevMonth ?>" class="btn btn-primary" style="background:#f59e0b;border-color:#f59e0b">🧮 Şimdi Hesapla</a>
+</div>
+<?php       elseif ($commDraft > 0): ?>
+<div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+  <div style="font-size:24px">📝</div>
+  <div style="flex:1;min-width:200px">
+    <div style="font-weight:600;color:#1e40af;font-size:13px"><?= $trMonthsLong[$prevMonth-1] ?> <?= $prevYear ?> · <?= $commDraft ?> taslak ciro primi yansıtılmayı bekliyor</div>
+  </div>
+  <a href="?page=commissions&year=<?= $prevYear ?>&month=<?= $prevMonth ?>" class="btn btn-sm btn-primary">İncele →</a>
+</div>
+<?php
+        endif;
+    }
+} catch (\Throwable $e) {
+    // migration_027 henüz koşmadıysa sessiz geç
+}
+?>
+
 <!-- İstatistikler -->
 <div class="stats-grid">
   <div class="stat-card">

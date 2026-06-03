@@ -349,6 +349,20 @@ function renderAdminPage(string $page, array $vars = []): void {
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
           Fiyat Listeleri
         </a>
+        <a href="?page=commissions" class="nav-item <?= $page==='commissions'?'active':'' ?>">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+          Ciro Primleri
+          <?php
+            // Geçen ay için taslak prim var mı?
+            $prevMonth = (int)date('n') - 1;
+            $prevYear  = (int)date('Y');
+            if ($prevMonth < 1) { $prevMonth = 12; $prevYear--; }
+            try {
+              $draftCount = (int)dbVal("SELECT COUNT(*) FROM b2b_dealer_commissions WHERE status='taslak' AND period_year=? AND period_month=?", [$prevYear, $prevMonth]);
+              if ($draftCount > 0) echo '<span class="nav-badge">' . $draftCount . '</span>';
+            } catch (\Throwable $e) {}
+          ?>
+        </a>
       </div>
 
       <div class="nav-section">
